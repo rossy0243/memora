@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Connexion - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="section__label">Espace organisateur</p>
+    <h1>Connexion</h1>
+    <form method="post" class="form-stack">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label>
+        Identifiant
+        {{ form.username }}
+        {{ form.username.errors }}
+      </label>
+      <label>
+        Mot de passe
+        {{ form.password }}
+        {{ form.password.errors }}
+      </label>
+      <button class="button button--primary" type="submit">Se connecter</button>
+    </form>
+    <p class="form-note">Pas encore de compte ? <a href="{% url 'accounts:signup' %}">Creer un espace organisateur</a></p>
+  </div>
+</section>
+{% endblock %}

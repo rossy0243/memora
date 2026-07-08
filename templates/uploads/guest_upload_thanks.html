@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Souvenir envoye - {{ event.title }}{% endblock %}
+{% block body_class %}guest-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="guest-confirmation">
+  <div>
+    <p class="section__label">Merci</p>
+    <h1>Votre souvenir a bien ete envoye.</h1>
+    <p>{{ event.title }}</p>
+    <div class="confirmation-actions">
+      <a class="button button--primary" href="{% url 'uploads:create' event.slug %}">Ajouter un autre souvenir</a>
+      <a class="button button--secondary" href="{{ event.get_public_url }}">Retour a l'evenement</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

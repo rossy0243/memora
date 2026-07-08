@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event.title }} - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Evenement</p>
+      <h1>{{ event.title }}</h1>
+      <p class="page-heading__meta">{{ event.event_date }}{% if event.location %} - {{ event.location }}{% endif %}</p>
+    </div>
+    <a class="button button--primary" href="{% url 'events:update' event.pk %}">Modifier</a>
+  </div>
+
+  <div class="detail-layout">
+    <article class="detail-panel">
+      {% if event.cover_image %}
+        <img class="detail-cover" src="{{ event.cover_image.url }}" alt="">
+      {% endif %}
+      <dl class="detail-list">
+        <div>
+          <dt>Nom public</dt>
+          <dd>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd>{{ event.get_event_type_display }}</dd>
+        </div>
+        <div>
+          <dt>Conservation</dt>
+          <dd>{{ event.media_retention_days }} jours</dd>
+        </div>
+        <div>
+          <dt>Statut</dt>
+          <dd>{% if event.is_active %}Actif{% else %}Inactif{% endif %}</dd>
+        </div>
+      </dl>
+    </article>
+
+    <aside class="detail-panel public-link-panel">
+      <p class="section__label">Lien invite</p>
+      <h2>Page publique</h2>
+      <p>Cette URL servira de destination au QR code de l'evenement.</p>
+      <code>{{ request.scheme }}://{{ request.get_host }}{{ event.get_public_url }}</code>
+      {% if event.qr_code_image %}
+        <img class="qr-code" src="{{ event.qr_code_image.url }}" alt="QR code de {{ event.title }}">
+        <a class="button button--secondary" href="{{ event.qr_code_image.url }}" download>Telecharger le QR code</a>
+      {% endif %}
+      <a class="button button--secondary" href="{{ event.get_public_url }}">Voir la page publique</a>
+    </aside>
+  </div>
+
+  <section class="media-dashboard">
+    <div class="section-heading">
+      <div>
+        <p class="section__label">Souvenirs recus</p>
+        <h2>Medias invites</h2>
+      </div>
+      <div class="section-actions">
+        <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}">Telecharger ZIP</a>
+        <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
+          {% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <article class="stat-card">
+        <span>Total</span>
+        <strong>{{ media_stats.total|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Photos</span>
+        <strong>{{ media_stats.photos|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Videos</span>
+        <strong>{{ media_stats.videos|default:0 }}</strong>
+      </article>
+    </div>
+
+    <div class="media-panels">
+      <article class="detail-panel">
+        <h3>Repartition par moment</h3>
+        <div class="category-list">
+          {% for item in category_stats %}
+            <div class="category-row">
+              <span>{{ item.category.label }}</span>
+              <strong>{{ item.count }}</strong>
+            </div>
+          {% endfor %}
+        </div>
+      </article>
+
+      <article class="detail-panel">
+        <h3>Derniers souvenirs</h3>
+        {% if latest_uploads %}
+          <div class="latest-media-list">
+            {% for upload in latest_uploads %}
+              <a class="latest-media-row" href="{{ upload.media_file.url }}">
+                <span>{{ upload.category.label }}</span>
+                <strong>{{ upload.original_filename }}</strong>
+                <small>{{ upload.get_media_type_display }} - {{ upload.uploaded_at }}</small>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted-copy">Aucun souvenir recu pour le moment.</p>
+        {% endif %}
+      </article>
+    </div>
+
+    {% if latest_uploads %}
+      <div class="media-grid">
+        {% for upload in latest_uploads %}
+          <article class="media-tile">
+            {% if upload.media_type == "image" %}
+              <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
+            {% else %}
+              <div class="media-tile__video">
+                <span>Video</span>
+              </div>
+            {% endif %}
+            <div>
+              <span>{{ upload.category.label }}</span>
+              <strong>{{ upload.original_filename }}</strong>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

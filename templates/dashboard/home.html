@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Mes evenements - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Espace organisateur</p>
+      <h1>Mes evenements</h1>
+    </div>
+    <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+  </div>
+
+  {% if events %}
+    <div class="event-grid">
+      {% for event in events %}
+        <article class="event-card">
+          {% if event.cover_image %}
+            <img src="{{ event.cover_image.url }}" alt="">
+          {% else %}
+            <div class="event-card__placeholder"></div>
+          {% endif %}
+          <div class="event-card__body">
+            <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
+              {% if event.is_active %}Actif{% else %}Inactif{% endif %}
+            </span>
+            <h2>{{ event.title }}</h2>
+            <p>{{ event.event_date }}{% if event.location %} - {{ event.location }}{% endif %}</p>
+            <a href="{% url 'events:detail' event.pk %}">Ouvrir</a>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>Votre premier evenement commence ici.</h2>
+      <p>Creez une page publique simple, puis vous pourrez y connecter le QR code et l'upload invite.</p>
+      <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

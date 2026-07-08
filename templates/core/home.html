@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Memora - souvenirs d'evenement{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <img class="hero__image" src="{% static 'img/memora-hero.png' %}" alt="Invite filmant un moment de fete pendant une reception">
+  <div class="hero__shade" aria-hidden="true"></div>
+  <div class="hero__content">
+    <p class="eyebrow">Mariages et evenements prives</p>
+    <h1>Memora</h1>
+    <p class="tagline">Revivez votre evenement a travers les yeux de vos invites.</p>
+    <p class="promise">Vous avez vecu votre evenement. Decouvrez maintenant tout ce que vous n'avez pas vu.</p>
+    <div class="hero__actions">
+      <a class="button button--primary" href="{% url 'events:create' %}">Creer mon evenement</a>
+      <span class="microcopy">Aucun compte invite. Aucune application a installer.</span>
+    </div>
+  </div>
+</section>
+
+<section class="flow" aria-label="Experience invite">
+  <div class="flow__inner">
+    <p class="section__label">Experience invite</p>
+    <ol class="steps">
+      <li>Scanner</li>
+      <li>Filmer</li>
+      <li>Choisir le moment</li>
+      <li>Envoyer</li>
+    </ol>
+  </div>
+</section>
+
+<section id="foundation" class="foundation">
+  <div class="foundation__inner">
+    <div class="foundation__copy">
+      <p class="section__label">MVP en construction</p>
+      <h2>Une base claire pour collecter les souvenirs sans friction.</h2>
+      <p>Memora commence par une architecture Django propre, prete pour les evenements, les pages invitees, les medias et le futur dashboard organisateur.</p>
+    </div>
+
+    <div class="foundation__preview" aria-label="Apercu du futur parcours invite">
+      <div class="phone-preview">
+        <div class="phone-preview__media"></div>
+        <div class="phone-preview__body">
+          <span class="phone-preview__label">Mariage de Camille &amp; Noe</span>
+          <strong>Ajouter un souvenir</strong>
+          <span>Ceremonie</span>
+          <span>Piste de danse</span>
+          <span>Moment drole</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

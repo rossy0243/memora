@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Inscription - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="section__label">Nouvel organisateur</p>
+    <h1>Creer votre espace</h1>
+    <form method="post" class="form-stack">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% for field in form %}
+        <label>
+          {{ field.label }}
+          {{ field }}
+          {{ field.errors }}
+        </label>
+      {% endfor %}
+      <button class="button button--primary" type="submit">Commencer</button>
+    </form>
+    <p class="form-note">Deja inscrit ? <a href="{% url 'accounts:login' %}">Se connecter</a></p>
+  </div>
+</section>
+{% endblock %}

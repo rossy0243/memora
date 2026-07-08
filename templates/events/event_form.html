@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Modifier{% else %}Creer{% endif %} un evenement - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell app-shell--narrow">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Evenement</p>
+      <h1>{% if object %}Modifier l'evenement{% else %}Creer un evenement{% endif %}</h1>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="form-card form-stack">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <label class="{% if field.field.widget.input_type == 'checkbox' %}checkbox-row{% endif %}">
+        <span>{{ field.label }}</span>
+        {{ field }}
+        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+        {{ field.errors }}
+      </label>
+    {% endfor %}
+    <div class="form-actions">
+      <button class="button button--primary" type="submit">Enregistrer</button>
+      <a class="button button--secondary" href="{% if object %}{% url 'events:detail' object.pk %}{% else %}{% url 'dashboard:home' %}{% endif %}">Annuler</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
