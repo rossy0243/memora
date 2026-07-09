@@ -10,7 +10,7 @@
   <div class="guest-upload-heading">
     <p class="section__label">{{ event.get_event_type_display }}</p>
     <h1>Prendre une photo ou filmer</h1>
-    <p>Selfie, camera arriere, filtres, puis envoi direct.</p>
+    <p>Selfie, camera arriere, filtres, video 10 secondes max.</p>
   </div>
 
   <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}">
@@ -52,7 +52,7 @@
       <span class="file-drop__action">Ouvrir l'appareil natif</span>
       {{ form.media_file }}
       {{ form.media_file.errors }}
-      <small id="selected-file-name">JPG, PNG, WEBP, MP4, MOV ou WEBM.</small>
+      <small id="selected-file-name">JPG, PNG, WEBP, MP4, MOV ou WEBM. Video 10 s max.</small>
     </label>
 
     <div class="capture-preview" id="capture-preview" hidden>

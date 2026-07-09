@@ -1,9 +1,19 @@
+from datetime import datetime, time, timedelta
 from io import BytesIO
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from django.conf import settings
+from django.core.files.base import File
 from django.utils import timezone
 from django.utils.text import slugify
+
+from uploads.models import GuestUpload
+
+from .models import GeneratedMovie
 
 
 DEFAULT_ZIP_CATEGORY_FOLDERS = {
@@ -17,6 +27,15 @@ DEFAULT_ZIP_CATEGORY_FOLDERS = {
     "funny": "08_Moment_drole",
     "emotional": "09_Moment_emouvant",
     "other": "10_Autre",
+}
+
+MOVIE_CATEGORY_SCORE_BOOSTS = {
+    "ceremony": 16,
+    "speech": 14,
+    "dancefloor": 18,
+    "cake": 12,
+    "funny": 18,
+    "emotional": 20,
 }
 
 
@@ -64,9 +83,259 @@ def build_event_zip(event):
     return filename, buffer.getvalue()
 
 
+def get_movie_candidate_uploads(event):
+    uploads = list(
+        event.guest_uploads.filter(
+            is_deleted=False,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        .select_related("category")
+        .order_by("uploaded_at", "pk")
+    )
+
+    videos = [upload for upload in uploads if upload.media_type == GuestUpload.MediaType.VIDEO]
+    candidate_pool = videos or uploads
+    candidate_pool.sort(
+        key=lambda upload: (
+            score_movie_candidate(upload),
+            upload.uploaded_at,
+            upload.pk,
+        ),
+        reverse=True,
+    )
+
+    selected_uploads = []
+    total_duration = 0
+    max_duration = settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
+
+    for upload in candidate_pool:
+        estimated_duration = _estimated_movie_clip_duration(upload)
+        if total_duration + estimated_duration > max_duration:
+            continue
+        selected_uploads.append(upload)
+        total_duration += estimated_duration
+        if total_duration >= max_duration:
+            break
+
+    return selected_uploads
+
+
+def score_movie_candidate(upload):
+    score = 100 if upload.media_type == GuestUpload.MediaType.VIDEO else 35
+    score += MOVIE_CATEGORY_SCORE_BOOSTS.get(upload.category.code, 0)
+
+    if upload.is_selected_for_movie:
+        score += 8
+
+    if upload.file_size:
+        score += min(upload.file_size / (8 * 1024 * 1024), 10)
+
+    if upload.duration:
+        seconds = upload.duration.total_seconds()
+        if 3 <= seconds <= settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
+            score += 8
+        elif seconds < 3:
+            score -= 10
+
+    return score
+
+
+def get_event_movie_schedule_at(event):
+    scheduled_date = event.event_date + timedelta(days=1)
+    scheduled_time = time(hour=settings.MEMORA_MOVIE_AUTOGENERATE_HOUR)
+    scheduled_at = datetime.combine(scheduled_date, scheduled_time)
+    return timezone.make_aware(scheduled_at, timezone.get_current_timezone())
+
+
+def get_scheduled_movie_events(now=None):
+    from events.models import Event
+
+    now = timezone.localtime(now or timezone.now())
+    events = Event.objects.filter(is_active=True).order_by("event_date", "pk")
+
+    scheduled_events = []
+    for event in events:
+        if get_event_movie_schedule_at(event) > now:
+            continue
+
+        has_existing_movie = event.generated_movies.filter(
+            status__in=[
+                GeneratedMovie.Status.PENDING,
+                GeneratedMovie.Status.PROCESSING,
+                GeneratedMovie.Status.COMPLETED,
+            ]
+        ).exists()
+        if has_existing_movie:
+            continue
+
+        if not get_movie_candidate_uploads(event):
+            continue
+
+        scheduled_events.append(event)
+
+    return scheduled_events
+
+
+def generate_event_movie(event):
+    movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PENDING)
+    uploads = list(get_movie_candidate_uploads(event))
+
+    if not uploads:
+        movie.status = GeneratedMovie.Status.FAILED
+        movie.error_logs = "Aucun media accepte disponible pour generer le film souvenir."
+        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        return movie
+
+    ffmpeg_binary = settings.MEMORA_FFMPEG_BINARY
+    if shutil.which(ffmpeg_binary) is None and not Path(ffmpeg_binary).exists():
+        movie.status = GeneratedMovie.Status.FAILED
+        movie.error_logs = f"FFmpeg introuvable: {ffmpeg_binary}"
+        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        return movie
+
+    movie.status = GeneratedMovie.Status.PROCESSING
+    movie.save(update_fields=["status", "updated_at"])
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="memora_movie_") as temp_dir:
+            temp_path = Path(temp_dir)
+            clip_paths = []
+            total_duration = 0
+            for index, upload in enumerate(uploads, start=1):
+                clip_path = temp_path / f"clip_{index:04d}.mp4"
+                _build_movie_clip(upload, clip_path, ffmpeg_binary)
+                clip_paths.append(clip_path)
+                total_duration += _estimated_movie_clip_duration(upload)
+
+            concat_file = temp_path / "clips.txt"
+            concat_file.write_text(
+                "".join(f"file '{path.as_posix()}'\n" for path in clip_paths),
+                encoding="utf-8",
+            )
+            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+            _run_ffmpeg(
+                [
+                    ffmpeg_binary,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_file),
+                    "-c",
+                    "copy",
+                    str(output_path),
+                ]
+            )
+
+            with output_path.open("rb") as output_file:
+                movie.final_file.save(output_path.name, File(output_file), save=False)
+
+        movie.status = GeneratedMovie.Status.COMPLETED
+        movie.generated_at = timezone.now()
+        movie.duration = timedelta(seconds=min(total_duration, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS))
+        movie.error_logs = ""
+        movie.save(
+            update_fields=[
+                "final_file",
+                "status",
+                "generated_at",
+                "duration",
+                "error_logs",
+                "updated_at",
+            ]
+        )
+    except Exception as exc:
+        movie.status = GeneratedMovie.Status.FAILED
+        movie.error_logs = str(exc)
+        movie.save(update_fields=["status", "error_logs", "updated_at"])
+
+    return movie
+
+
 def _clean_name(value):
     cleaned = slugify(value).replace("-", "_")
     return cleaned or "Evenement"
+
+
+def _estimated_movie_clip_duration(upload):
+    if upload.media_type == GuestUpload.MediaType.IMAGE:
+        return settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+
+    if upload.duration:
+        return min(
+            int(upload.duration.total_seconds()),
+            settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS,
+        )
+
+    return settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
+
+
+def _build_movie_clip(upload, output_path, ffmpeg_binary):
+    if not upload.media_file:
+        raise ValueError(f"Media sans fichier: {upload.pk}")
+
+    input_path = Path(upload.media_file.path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Fichier introuvable: {input_path}")
+
+    video_filter = (
+        f"scale={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:"
+        "force_original_aspect_ratio=decrease,"
+        f"pad={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
+        "fps=30,format=yuv420p"
+    )
+
+    if upload.media_type == GuestUpload.MediaType.IMAGE:
+        command = [
+            ffmpeg_binary,
+            "-y",
+            "-loop",
+            "1",
+            "-t",
+            str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS),
+            "-i",
+            str(input_path),
+            "-vf",
+            video_filter,
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+    else:
+        command = [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(input_path),
+            "-t",
+            str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS),
+            "-vf",
+            video_filter,
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+
+    _run_ffmpeg(command)
+
+
+def _run_ffmpeg(command):
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        details = "\n".join(part for part in [result.stdout, result.stderr] if part)
+        raise RuntimeError(details or f"FFmpeg a echoue avec le code {result.returncode}")
 
 
 def _category_folder_name(category):

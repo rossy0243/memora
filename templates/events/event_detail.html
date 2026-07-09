@@ -85,6 +85,35 @@
     </aside>
   </div>
 
+  <section class="movie-panel detail-panel">
+    <div class="section-heading">
+      <div>
+        <p class="section__label">Film souvenir</p>
+        <h2>Video automatique</h2>
+      </div>
+      <form method="post" action="{% url 'events:generate_movie' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--primary" type="submit">Generer le film</button>
+      </form>
+    </div>
+    {% if latest_movie %}
+      <div class="movie-status">
+        <span class="status-pill {% if latest_movie.status == 'completed' %}status-pill--active{% endif %}">{{ latest_movie.get_status_display }}</span>
+        {% if latest_movie.generated_at %}
+          <p>Genere le {{ latest_movie.generated_at }}</p>
+        {% endif %}
+        {% if latest_movie.final_file %}
+          <a class="button button--secondary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
+        {% endif %}
+        {% if latest_movie.error_logs %}
+          <p class="muted-copy">{{ latest_movie.error_logs }}</p>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="muted-copy">Memora utilisera les medias acceptes, ou seulement ceux gardes pour le film si une selection existe.</p>
+    {% endif %}
+  </section>
+
   <section class="media-dashboard">
     <div class="section-heading">
       <div>

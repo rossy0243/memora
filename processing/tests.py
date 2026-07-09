@@ -1,15 +1,24 @@
 from datetime import date, timedelta
 from io import StringIO
+from pathlib import Path
+import shutil
+import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from events.models import Event, EventType
 from uploads.models import GuestUpload
 
 from .models import GeneratedMovie
+from .services import generate_event_movie, get_event_movie_schedule_at, get_movie_candidate_uploads
+
+
+TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
 
 class GeneratedMovieModelTests(TestCase):
@@ -30,6 +39,189 @@ class GeneratedMovieModelTests(TestCase):
 
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         self.assertIsNone(movie.final_file.name or None)
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class MovieGenerationServiceTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="organizer",
+            password="secret",
+        )
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Film",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.category = self.event.upload_categories.get(code="ceremony")
+
+    def create_upload(
+        self,
+        filename,
+        media_type,
+        selected=False,
+        rejected=False,
+        category_code="ceremony",
+        file_size=11,
+        duration=None,
+    ):
+        category = self.event.upload_categories.get(code=category_code)
+        return GuestUpload.objects.create(
+            event=self.event,
+            category=category,
+            media_file=SimpleUploadedFile(filename, b"media-bytes", content_type="image/jpeg"),
+            media_type=media_type,
+            original_filename=filename,
+            file_size=file_size,
+            duration=duration,
+            is_selected_for_movie=selected,
+            moderation_status=(
+                GuestUpload.ModerationStatus.REJECTED
+                if rejected
+                else GuestUpload.ModerationStatus.APPROVED
+            ),
+        )
+
+    @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
+    def test_movie_candidates_select_best_videos_automatically(self):
+        self.create_upload("selected-photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+        best_video = self.create_upload(
+            "best.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="emotional",
+            file_size=40_000_000,
+            duration=timedelta(seconds=8),
+        )
+        second_video = self.create_upload(
+            "second.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="dancefloor",
+            file_size=20_000_000,
+            duration=timedelta(seconds=9),
+        )
+        self.create_upload("rejected.mp4", GuestUpload.MediaType.VIDEO, rejected=True)
+
+        candidates = list(get_movie_candidate_uploads(self.event))
+
+        self.assertEqual(candidates, [best_video, second_video])
+
+    @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
+    def test_movie_candidates_never_exceed_movie_duration_cap(self):
+        for index in range(4):
+            self.create_upload(
+                f"video-{index}.mp4",
+                GuestUpload.MediaType.VIDEO,
+                file_size=10_000_000 + index,
+                duration=timedelta(seconds=10),
+            )
+
+        candidates = list(get_movie_candidate_uploads(self.event))
+
+        self.assertEqual(len(candidates), 2)
+
+    def test_generate_event_movie_fails_without_media(self):
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
+        self.assertIn("Aucun media", movie.error_logs)
+
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    def test_generate_event_movie_creates_completed_movie(self, run_ffmpeg, _which):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        run_ffmpeg.side_effect = create_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertTrue(movie.final_file.name.endswith(".mp4"))
+        self.assertIsNotNone(movie.generated_at)
+        self.assertLessEqual(movie.duration.total_seconds(), 300)
+        self.assertGreaterEqual(run_ffmpeg.call_count, 2)
+
+
+class GenerateScheduledMoviesCommandTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="organizer",
+            password="secret",
+        )
+        self.event_type = EventType.objects.get(code="wedding")
+
+    def create_event_with_video(self, event_date, title="Mariage planifie"):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title=title,
+            event_type=self.event_type,
+            event_date=event_date,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=event.upload_categories.get(code="dancefloor"),
+            media_file="events/test/uploads/dancefloor/video.mp4",
+            media_type=GuestUpload.MediaType.VIDEO,
+            original_filename="video.mp4",
+            file_size=10_000_000,
+            duration=timedelta(seconds=8),
+        )
+        return event
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=12)
+    def test_movie_schedule_is_day_after_event_at_noon(self):
+        event = self.create_event_with_video(date(2026, 7, 8))
+
+        scheduled_at = timezone.localtime(get_event_movie_schedule_at(event))
+
+        self.assertEqual(scheduled_at.date(), date(2026, 7, 9))
+        self.assertEqual(scheduled_at.hour, 12)
+        self.assertEqual(scheduled_at.minute, 0)
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
+    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
+    def test_generates_due_movies(self, generate_movie):
+        event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
+        generate_movie.return_value = GeneratedMovie(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+        )
+        output = StringIO()
+
+        call_command("generate_scheduled_movies", stdout=output)
+
+        generate_movie.assert_called_once_with(event)
+        self.assertIn("Mariage planifie", output.getvalue())
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
+    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
+    def test_dry_run_does_not_generate_movie(self, generate_movie):
+        self.create_event_with_video(timezone.localdate() - timedelta(days=1))
+        output = StringIO()
+
+        call_command("generate_scheduled_movies", "--dry-run", stdout=output)
+
+        generate_movie.assert_not_called()
+        self.assertIn("[dry-run]", output.getvalue())
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
+    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
+    def test_completed_movie_is_not_generated_again(self, generate_movie):
+        event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
+        GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.COMPLETED)
+
+        call_command("generate_scheduled_movies")
+
+        generate_movie.assert_not_called()
 
 
 class CleanupExpiredMediaCommandTests(TestCase):

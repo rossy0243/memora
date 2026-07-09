@@ -806,6 +806,19 @@ h2 {
   margin-top: 28px;
 }
 
+.movie-panel {
+  margin-top: 18px;
+}
+
+.movie-status {
+  display: grid;
+  gap: 12px;
+}
+
+.movie-status p {
+  margin: 0;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: 1fr;

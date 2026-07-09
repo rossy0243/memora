@@ -32,6 +32,8 @@
   let activeFilter = "none";
   let recorder = null;
   let recordedChunks = [];
+  let recordingTimeout = null;
+  const maxRecordingSeconds = 10;
 
   const cameraFilters = {
     none: "none",
@@ -70,6 +72,13 @@
   }
 
   function stopCamera() {
+    if (recordingTimeout) {
+      clearTimeout(recordingTimeout);
+      recordingTimeout = null;
+    }
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
     if (cameraStream) {
       cameraStream.getTracks().forEach(function (track) {
         track.stop();
@@ -182,6 +191,10 @@
       }
     });
     recorder.addEventListener("stop", function () {
+      if (recordingTimeout) {
+        clearTimeout(recordingTimeout);
+        recordingTimeout = null;
+      }
       const recordedType = recorder.mimeType || mimeType || "video/webm";
       const extension = recordedType.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(recordedChunks, { type: recordedType });
@@ -189,7 +202,8 @@
       recordedChunks = [];
     });
     recorder.start();
-    setCameraStatus("Enregistrement video...");
+    recordingTimeout = setTimeout(stopVideoRecording, maxRecordingSeconds * 1000);
+    setCameraStatus("Enregistrement video... 10 secondes max");
     if (recordVideoButton) {
       recordVideoButton.hidden = true;
     }
@@ -199,6 +213,10 @@
   }
 
   function stopVideoRecording() {
+    if (recordingTimeout) {
+      clearTimeout(recordingTimeout);
+      recordingTimeout = null;
+    }
     if (recorder && recorder.state !== "inactive") {
       recorder.stop();
     }

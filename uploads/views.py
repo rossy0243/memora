@@ -29,6 +29,7 @@ def guest_upload_create(request, slug, access_key):
                 upload.media_type = GuestUploadForm.get_media_type(media_file.name)
                 upload.original_filename = media_file.name
                 upload.file_size = media_file.size
+                upload.duration = form.media_duration
                 upload.ip_address = ip_address
                 upload.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
                 upload.session_key = session_key

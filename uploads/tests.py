@@ -1,6 +1,7 @@
 from datetime import date
 import shutil
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -346,6 +347,39 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cette video est trop lourde.")
         self.assertEqual(GuestUpload.objects.count(), 0)
+
+    @patch("uploads.forms._probe_video_duration", return_value=11)
+    def test_rejects_video_longer_than_ten_seconds(self, _probe_video_duration):
+        media = SimpleUploadedFile("video.mp4", b"video", content_type="video/mp4")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cette video depasse 10 secondes.")
+        self.assertEqual(GuestUpload.objects.count(), 0)
+
+    @patch("uploads.forms._probe_video_duration", return_value=9.5)
+    def test_stores_video_duration_when_upload_is_allowed(self, _probe_video_duration):
+        media = SimpleUploadedFile("video.mp4", b"video", content_type="video/mp4")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertRedirects(response, self.thanks_url())
+        upload = GuestUpload.objects.get(event=self.event)
+        self.assertEqual(upload.media_type, GuestUpload.MediaType.VIDEO)
+        self.assertEqual(upload.duration.total_seconds(), 9.5)
 
     @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
     def test_limits_uploads_by_session(self):

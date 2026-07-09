@@ -2,6 +2,7 @@ from datetime import date
 from io import BytesIO
 import shutil
 import tempfile
+from unittest.mock import patch
 from zipfile import ZipFile
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, UploadCategory
 
 from .models import Event, EventType
@@ -262,6 +264,56 @@ class EventViewTests(TestCase):
         self.assertEqual(response.context["media_stats"]["photos"], 1)
         self.assertEqual(response.context["media_stats"]["videos"], 1)
         self.assertEqual(response.context["media_stats"]["selected_for_movie"], 1)
+
+    def test_event_detail_displays_latest_generated_movie(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/reception-film/movies/memora_reception_film.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Video automatique")
+        self.assertContains(response, "Telecharger la video")
+        self.assertContains(response, "Generer le film")
+
+    @patch("events.views.generate_event_movie")
+    def test_owner_can_generate_event_movie(self, generate_event_movie):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Auto",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        generate_event_movie.assert_called_once_with(event)
+
+    @patch("events.views.generate_event_movie")
+    def test_other_organizer_cannot_generate_event_movie(self, generate_event_movie):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Film Prive",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
+        generate_event_movie.assert_not_called()
 
     def test_event_detail_links_to_full_media_library(self):
         event = Event.objects.create(

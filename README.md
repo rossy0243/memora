@@ -32,9 +32,12 @@ Etapes realisees du MVP :
 - dashboard media evenement avec compteurs photos/videos, repartition par moment et derniers souvenirs ;
 - medias acceptes automatiquement, avec rejet/restauration manuel par l'organisateur en cas de probleme ;
 - telechargement ZIP des medias d'un evenement, organises par moments ;
+- videos invitees limitees a 10 secondes avec verification serveur via FFprobe ;
+- generation automatique d'un premier film souvenir avec FFmpeg, planifiable a J+1 12h ;
+- selection automatique des meilleurs medias pour le film, avec scoring pret a etre remplace par une vraie analyse IA ;
 - suppression automatique preparee : les medias sont marques supprimes 7 jours apres la date de l'evenement.
 
-Les fonctionnalites de suppression physique des fichiers et traitement media avance ne sont pas encore implementees.
+Les fonctionnalites de suppression physique des fichiers et traitement media avance asynchrone ne sont pas encore implementees.
 
 ## Installation locale
 
@@ -59,6 +62,36 @@ Puis lancer les migrations Django initiales :
 ```bash
 python manage.py migrate
 python manage.py runserver
+```
+
+## Film souvenir
+
+La generation du film souvenir necessite FFmpeg et FFprobe disponibles dans le `PATH` ou configures via :
+
+```env
+MEMORA_FFMPEG_BINARY=ffmpeg
+MEMORA_FFPROBE_BINARY=ffprobe
+MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS=10
+MEMORA_MOVIE_IMAGE_DURATION_SECONDS=3
+MEMORA_MOVIE_VIDEO_MAX_SECONDS=10
+MEMORA_MOVIE_MAX_DURATION_SECONDS=300
+MEMORA_MOVIE_AUTOGENERATE_HOUR=12
+MEMORA_MOVIE_WIDTH=1280
+MEMORA_MOVIE_HEIGHT=720
+```
+
+Memora selectionne automatiquement les videos acceptees les mieux scorees, limite le film final a 5 minutes, puis ignore les medias rejetes ou supprimes.
+
+Generation planifiee a lancer via cron, worker planifie ou ordonnanceur :
+
+```bash
+python manage.py generate_scheduled_movies
+```
+
+Verifier sans lancer FFmpeg :
+
+```bash
+python manage.py generate_scheduled_movies --dry-run
 ```
 
 ## Nettoyage des medias

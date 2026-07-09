@@ -7,7 +7,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
-from processing.services import build_event_zip
+from processing.services import build_event_zip, generate_event_movie
 from uploads.models import GuestUpload, UploadCategory
 
 from .forms import EventForm
@@ -106,6 +106,7 @@ class EventDetailView(OrganizerEventMixin, DetailView):
                 "media_stats": stats,
                 "category_stats": category_stats,
                 "latest_uploads": uploads[:8],
+                "latest_movie": self.object.generated_movies.order_by("-created_at").first(),
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
             }
         )
@@ -230,6 +231,14 @@ def set_media_moderation_status(request, pk, upload_pk):
 
     next_url = request.POST.get("next") or reverse("events:media_list", kwargs={"pk": event.pk})
     return redirect(next_url)
+
+
+@login_required
+@require_POST
+def generate_movie(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    generate_event_movie(event)
+    return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
 
 
 @login_required
