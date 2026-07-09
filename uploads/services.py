@@ -1,9 +1,10 @@
 from django.conf import settings
+from django.utils import timezone
 
-from .models import GuestUpload, UploadCategory
+from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
 
 
-DEFAULT_UPLOAD_CATEGORIES = [
+FALLBACK_UPLOAD_CATEGORIES = [
     ("ceremony", "Ceremonie", 1),
     ("arrival", "Arrivee", 2),
     ("cocktail", "Cocktail", 3),
@@ -18,13 +19,33 @@ DEFAULT_UPLOAD_CATEGORIES = [
 
 
 def create_default_categories_for_event(event):
-    for code, label, sort_order in DEFAULT_UPLOAD_CATEGORIES:
+    templates = list(
+        UploadCategoryTemplate.objects.filter(
+            event_type=event.event_type,
+            is_active=True,
+        ).order_by("sort_order", "label")
+    )
+
+    if not templates:
+        templates = list(
+            UploadCategoryTemplate.objects.filter(
+                event_type__code="other",
+                is_active=True,
+            ).order_by("sort_order", "label")
+        )
+
+    categories = templates or [
+        type("CategorySeed", (), {"code": code, "label": label, "sort_order": sort_order})
+        for code, label, sort_order in FALLBACK_UPLOAD_CATEGORIES
+    ]
+
+    for category in categories:
         UploadCategory.objects.get_or_create(
             event=event,
-            code=code,
+            code=category.code,
             defaults={
-                "label": label,
-                "sort_order": sort_order,
+                "label": category.label,
+                "sort_order": category.sort_order,
                 "is_active": True,
             },
         )
@@ -54,5 +75,16 @@ def get_upload_limit_error(event, session_key, ip_address):
 
     if ip_address and event_uploads.filter(ip_address=ip_address).count() >= settings.MEMORA_IP_UPLOAD_LIMIT:
         return "Trop d'envois depuis cette connexion. Reessayez plus tard."
+
+    cooldown_seconds = settings.MEMORA_UPLOAD_COOLDOWN_SECONDS
+    if cooldown_seconds > 0:
+        cooldown_after = timezone.now() - timezone.timedelta(seconds=cooldown_seconds)
+        recent_uploads = event_uploads.filter(uploaded_at__gte=cooldown_after)
+
+        if session_key and recent_uploads.filter(session_key=session_key).exists():
+            return "Patientez quelques secondes avant d'envoyer un autre souvenir."
+
+        if ip_address and recent_uploads.filter(ip_address=ip_address).exists():
+            return "Patientez quelques secondes avant d'envoyer un autre souvenir."
 
     return ""

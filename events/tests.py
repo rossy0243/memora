@@ -57,6 +57,19 @@ class EventModelTests(TestCase):
 
         self.assertEqual(second_event.slug, "notre-mariage-2")
 
+    def test_event_normalizes_guest_access_code(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage prive",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            guest_access_code="  amour2026  ",
+        )
+
+        self.assertEqual(event.guest_access_code, "AMOUR2026")
+        self.assertTrue(event.requires_guest_access_code)
+        self.assertTrue(event.check_guest_access_code("amour2026"))
+
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
 class EventViewTests(TestCase):
@@ -90,6 +103,7 @@ class EventViewTests(TestCase):
                 "event_date": "2026-07-08",
                 "location": "Paris",
                 "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "amour2026",
                 "is_active": "on",
                 "media_retention_days": "90",
             },
@@ -99,6 +113,8 @@ class EventViewTests(TestCase):
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         self.assertEqual(event.organizer, self.user)
         self.assertEqual(event.slug, "mariage-de-lea-et-sam")
+        self.assertEqual(event.guest_access_code, "AMOUR2026")
+        self.assertTrue(event.public_access_key)
         self.assertTrue(event.qr_code_image.name.endswith("mariage-de-lea-et-sam-qr.png"))
 
     def test_event_detail_is_limited_to_owner(self):
@@ -114,6 +130,22 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_event_detail_generates_missing_private_qr_code(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception QR prive",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.assertFalse(event.qr_code_image)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        event.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(event.qr_code_image.name.endswith("reception-qr-prive-qr.png"))
+
     def test_public_event_page_uses_slug(self):
         event = Event.objects.create(
             organizer=self.user,
@@ -124,11 +156,55 @@ class EventViewTests(TestCase):
             welcome_message="Bienvenue dans nos souvenirs.",
         )
 
-        response = self.client.get(reverse("public_event", kwargs={"slug": event.slug}))
+        response = self.client.get(event.get_public_url())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lea &amp; Sam")
         self.assertContains(response, "Bienvenue dans nos souvenirs.")
+
+    def test_public_event_with_guest_access_code_requires_session_validation(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception code",
+            couple_name="Lea & Sam",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            guest_access_code="AMOUR2026",
+        )
+
+        response = self.client.get(event.get_public_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Entrez le code invite.")
+        self.assertNotContains(response, "Ajouter un souvenir")
+
+        wrong_response = self.client.post(event.get_public_url(), {"guest_access_code": "NON"})
+        self.assertEqual(wrong_response.status_code, 200)
+        self.assertContains(wrong_response, "Code incorrect.")
+
+        valid_response = self.client.post(event.get_public_url(), {"guest_access_code": "amour2026"})
+        self.assertRedirects(valid_response, event.get_public_url())
+
+        unlocked_response = self.client.get(event.get_public_url())
+        self.assertContains(unlocked_response, "Ajouter un souvenir")
+
+    def test_public_event_requires_access_key(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception privee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        response_without_key = self.client.get(f"/e/{event.slug}/")
+        response_with_wrong_key = self.client.get(
+            reverse(
+                "public_event",
+                kwargs={"slug": event.slug, "access_key": "mauvaise-cle"},
+            )
+        )
+
+        self.assertEqual(response_without_key.status_code, 404)
+        self.assertEqual(response_with_wrong_key.status_code, 404)
 
     def test_event_detail_displays_media_dashboard(self):
         event = Event.objects.create(
@@ -136,6 +212,7 @@ class EventViewTests(TestCase):
             title="Reception Dashboard",
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
+            guest_access_code="AMOUR2026",
         )
         ceremony = event.upload_categories.get(code="ceremony")
         dancefloor = event.upload_categories.get(code="dancefloor")
@@ -146,6 +223,7 @@ class EventViewTests(TestCase):
             media_type=GuestUpload.MediaType.IMAGE,
             original_filename="photo.jpg",
             file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
         )
         GuestUpload.objects.create(
             event=event,
@@ -154,6 +232,8 @@ class EventViewTests(TestCase):
             media_type=GuestUpload.MediaType.VIDEO,
             original_filename="video.mp4",
             file_size=456,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            is_selected_for_movie=True,
         )
         GuestUpload.objects.create(
             event=event,
@@ -169,6 +249,11 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Acces invite")
+        self.assertContains(response, "QR code et lien")
+        self.assertContains(response, "Lien secret")
+        self.assertContains(response, "AMOUR2026")
+        self.assertContains(response, event.public_access_key)
         self.assertContains(response, "Medias invites")
         self.assertContains(response, "photo.jpg")
         self.assertContains(response, "video.mp4")
@@ -176,6 +261,252 @@ class EventViewTests(TestCase):
         self.assertEqual(response.context["media_stats"]["total"], 2)
         self.assertEqual(response.context["media_stats"]["photos"], 1)
         self.assertEqual(response.context["media_stats"]["videos"], 1)
+        self.assertEqual(response.context["media_stats"]["selected_for_movie"], 1)
+
+    def test_event_detail_links_to_full_media_library(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Bibliotheque",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        self.assertContains(response, "Voir tous les medias")
+
+    def test_owner_can_browse_and_filter_event_media(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Medias",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        dancefloor = event.upload_categories.get(code="dancefloor")
+        GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-medias/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=dancefloor,
+            media_file="events/reception-medias/uploads/dancefloor/video.mp4",
+            media_type=GuestUpload.MediaType.VIDEO,
+            original_filename="video.mp4",
+            file_size=456,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            is_selected_for_movie=True,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=dancefloor,
+            media_file="events/reception-medias/uploads/dancefloor/deleted.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="deleted.jpg",
+            file_size=789,
+            is_deleted=True,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=dancefloor,
+            media_file="events/reception-medias/uploads/dancefloor/rejected.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="rejected.jpg",
+            file_size=321,
+            moderation_status=GuestUpload.ModerationStatus.REJECTED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:media_list", kwargs={"pk": event.pk}))
+        filtered_response = self.client.get(
+            reverse("events:media_list", kwargs={"pk": event.pk}),
+            {"category": "dancefloor", "type": GuestUpload.MediaType.VIDEO},
+        )
+        selected_response = self.client.get(
+            reverse("events:media_list", kwargs={"pk": event.pk}),
+            {"movie": "selected"},
+        )
+        rejected_response = self.client.get(
+            reverse("events:media_list", kwargs={"pk": event.pk}),
+            {"status": GuestUpload.ModerationStatus.REJECTED},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Photos et videos envoyees par les invites.")
+        self.assertContains(response, "1 media selectionne pour le film souvenir.")
+        self.assertContains(response, "photo.jpg")
+        self.assertContains(response, "video.mp4")
+        self.assertContains(response, "Retirer du film")
+        self.assertContains(response, "Garder pour le film")
+        self.assertContains(response, "Accepte")
+        self.assertNotContains(response, "deleted.jpg")
+        self.assertNotContains(response, "rejected.jpg")
+        self.assertEqual(
+            list(response.context["uploads"]),
+            list(
+                event.guest_uploads.filter(is_deleted=False)
+                .exclude(moderation_status=GuestUpload.ModerationStatus.REJECTED)
+                .order_by("-uploaded_at")
+            ),
+        )
+        self.assertContains(filtered_response, "video.mp4")
+        self.assertNotContains(filtered_response, "photo.jpg")
+        self.assertEqual(filtered_response.context["selected_category"], "dancefloor")
+        self.assertEqual(filtered_response.context["selected_media_type"], GuestUpload.MediaType.VIDEO)
+        self.assertContains(selected_response, "video.mp4")
+        self.assertNotContains(selected_response, "photo.jpg")
+        self.assertEqual(selected_response.context["selected_movie_filter"], "selected")
+        self.assertContains(rejected_response, "rejected.jpg")
+        self.assertNotContains(rejected_response, "photo.jpg")
+        self.assertEqual(rejected_response.context["selected_moderation_status"], GuestUpload.ModerationStatus.REJECTED)
+
+    def test_owner_can_toggle_media_movie_selection(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Selection",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-selection/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:toggle_movie_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"next": reverse("events:media_list", kwargs={"pk": event.pk})},
+        )
+        upload.refresh_from_db()
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        self.assertTrue(upload.is_selected_for_movie)
+
+        self.client.post(reverse("events:toggle_movie_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}))
+        upload.refresh_from_db()
+        self.assertFalse(upload.is_selected_for_movie)
+
+    def test_owner_can_moderate_event_media(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Moderation",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-moderation/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+        )
+        self.client.login(username="owner", password="secret")
+
+        upload.is_selected_for_movie = True
+        upload.save(update_fields=["is_selected_for_movie"])
+        reject_response = self.client.post(
+            reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {
+                "status": GuestUpload.ModerationStatus.REJECTED,
+                "next": reverse("events:media_list", kwargs={"pk": event.pk}),
+            },
+        )
+        upload.refresh_from_db()
+
+        self.assertRedirects(reject_response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.REJECTED)
+        self.assertFalse(upload.is_selected_for_movie)
+
+        restore_response = self.client.post(
+            reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"status": GuestUpload.ModerationStatus.APPROVED},
+        )
+        upload.refresh_from_db()
+
+        self.assertRedirects(restore_response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
+
+    def test_other_organizer_cannot_browse_event_media(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Media Privee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_other_organizer_cannot_toggle_media_movie_selection(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Selection Privee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-selection-privee/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:toggle_movie_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk})
+        )
+        upload.refresh_from_db()
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(upload.is_selected_for_movie)
+
+    def test_other_organizer_cannot_moderate_event_media(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Moderation Privee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-moderation-privee/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"status": GuestUpload.ModerationStatus.APPROVED},
+        )
+        upload.refresh_from_db()
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
 
     def test_owner_can_download_event_zip(self):
         event = Event.objects.create(
@@ -193,6 +524,7 @@ class EventViewTests(TestCase):
             media_type=GuestUpload.MediaType.IMAGE,
             original_filename="photo.jpg",
             file_size=11,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
         )
         GuestUpload.objects.create(
             event=event,
@@ -201,6 +533,7 @@ class EventViewTests(TestCase):
             media_type=GuestUpload.MediaType.VIDEO,
             original_filename="video.mp4",
             file_size=11,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
         )
         GuestUpload.objects.create(
             event=event,
@@ -210,6 +543,15 @@ class EventViewTests(TestCase):
             original_filename="deleted.jpg",
             file_size=7,
             is_deleted=True,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=dancefloor,
+            media_file=SimpleUploadedFile("rejected.jpg", b"rejected", content_type="image/jpeg"),
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="rejected.jpg",
+            file_size=8,
+            moderation_status=GuestUpload.ModerationStatus.REJECTED,
         )
         self.client.login(username="owner", password="secret")
 
@@ -230,6 +572,7 @@ class EventViewTests(TestCase):
                 any(name.startswith("Memora_reception_zip/06_Piste_de_danse/") and name.endswith("_video.mp4") for name in names)
             )
             self.assertFalse(any("deleted" in name for name in names))
+            self.assertFalse(any("rejected" in name for name in names))
 
     def test_other_organizer_cannot_download_event_zip(self):
         event = Event.objects.create(

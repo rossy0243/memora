@@ -1,14 +1,17 @@
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from events.access import has_guest_access
 from events.models import Event
 
 from .forms import GuestUploadForm
 from .services import ensure_session_key, get_client_ip, get_upload_limit_error
 
 
-def guest_upload_create(request, slug):
-    event = get_object_or_404(Event, slug=slug, is_active=True)
+def guest_upload_create(request, slug, access_key):
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, is_active=True)
+    if not has_guest_access(request, event):
+        return redirect(event.get_public_url())
 
     if request.method == "POST":
         form = GuestUploadForm(request.POST, request.FILES, event=event)
@@ -30,13 +33,23 @@ def guest_upload_create(request, slug):
                 upload.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
                 upload.session_key = session_key
                 upload.save()
-                return redirect(reverse("uploads:thanks", kwargs={"slug": event.slug}))
+                return redirect(
+                    reverse(
+                        "uploads:thanks",
+                        kwargs={
+                            "slug": event.slug,
+                            "access_key": event.public_access_key,
+                        },
+                    )
+                )
     else:
         form = GuestUploadForm(event=event)
 
     return render(request, "uploads/guest_upload_form.html", {"event": event, "form": form})
 
 
-def guest_upload_thanks(request, slug):
-    event = get_object_or_404(Event, slug=slug, is_active=True)
+def guest_upload_thanks(request, slug, access_key):
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, is_active=True)
+    if not has_guest_access(request, event):
+        return redirect(event.get_public_url())
     return render(request, "uploads/guest_upload_thanks.html", {"event": event})

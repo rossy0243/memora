@@ -14,8 +14,8 @@ class EventForm(forms.ModelForm):
             "location",
             "cover_image",
             "welcome_message",
+            "guest_access_code",
             "is_active",
-            "media_retention_days",
         )
         widgets = {
             "event_date": forms.DateInput(attrs={"type": "date"}),
@@ -30,6 +30,7 @@ class EventForm(forms.ModelForm):
             "couple_name": "Camille & Noe",
             "location": "Domaine des roses, Bordeaux",
             "welcome_message": "Merci de partager vos photos et videos de cette journee.",
+            "guest_access_code": "AMOUR2026",
         }
         for name, field in self.fields.items():
             field.widget.attrs.setdefault("class", "form-control")

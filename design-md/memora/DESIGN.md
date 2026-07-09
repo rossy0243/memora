@@ -255,5 +255,5 @@ Quand ce guide est valide, appliquer la direction a :
 
 1. la landing actuelle ;
 2. les futurs ecrans de creation d'evenement ;
-3. la page publique `/e/<slug>/` ;
+3. la page publique privee `/e/<slug>/<access_key>/` ;
 4. le dashboard organisateur.

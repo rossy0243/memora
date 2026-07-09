@@ -11,8 +11,8 @@ urlpatterns = [
     path("comptes/", include("accounts.urls")),
     path("dashboard/", include("dashboard.urls")),
     path("evenements/", include("events.urls")),
-    path("e/<slug:slug>/", include("uploads.urls")),
-    path("e/<slug:slug>/", public_event_preview, name="public_event"),
+    path("e/<slug:slug>/<slug:access_key>/", include("uploads.urls")),
+    path("e/<slug:slug>/<slug:access_key>/", public_event_preview, name="public_event"),
     path("", include("core.urls")),
 ]
 

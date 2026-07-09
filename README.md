@@ -14,22 +14,27 @@ Etapes realisees du MVP :
 - configuration PostgreSQL via `DATABASE_URL` ;
 - structure `templates/`, `static/` et `media/` ;
 - page d'accueil simple et mobile-first ;
-- modeles principaux crees : `Event`, `EventType`, `UploadCategory`, `GuestUpload`, `GeneratedMovie` ;
+- modeles principaux crees : `Event`, `EventType`, `UploadCategoryTemplate`, `UploadCategory`, `GuestUpload`, `GeneratedMovie` ;
 - types d'evenements gerables dans l'admin ;
-- categories de moments creees par evenement et gerables dans l'admin ;
+- modeles de moments geres par type d'evenement dans l'admin Memora ;
+- categories de moments copiees automatiquement dans chaque evenement ;
 - admin Django minimal pour inspecter les donnees ;
 - inscription et connexion organisateur ;
 - interface organisateur minimale pour lister, creer, modifier et consulter un evenement ;
-- page publique evenement accessible via `/e/<slug>/` ;
-- generation automatique du QR code pointant vers la page publique ;
+- page publique evenement accessible via un lien prive `/e/<slug>/<access_key>/` ;
+- generation automatique du QR code pointant vers le lien prive de la page publique ;
+- code d'acces invite optionnel par evenement, valide une fois par session ;
 - affichage et telechargement du QR code cote organisateur ;
-- upload invite sans compte via `/e/<slug>/souvenir/` ;
+- upload invite sans compte via `/e/<slug>/<access_key>/souvenir/` ;
 - choix obligatoire du moment ;
 - validations simples : taille, format, limites par session, IP et evenement ;
+- limitation anti-spam avec delai minimal configurable entre deux envois ;
 - dashboard media evenement avec compteurs photos/videos, repartition par moment et derniers souvenirs ;
-- telechargement ZIP des medias d'un evenement, organises par moments.
+- medias acceptes automatiquement, avec rejet/restauration manuel par l'organisateur en cas de probleme ;
+- telechargement ZIP des medias d'un evenement, organises par moments ;
+- suppression automatique preparee : les medias sont marques supprimes 7 jours apres la date de l'evenement.
 
-Les fonctionnalites de suppression automatique et traitement media avance ne sont pas encore implementees.
+Les fonctionnalites de suppression physique des fichiers et traitement media avance ne sont pas encore implementees.
 
 ## Installation locale
 
@@ -54,6 +59,20 @@ Puis lancer les migrations Django initiales :
 ```bash
 python manage.py migrate
 python manage.py runserver
+```
+
+## Nettoyage des medias
+
+Les medias invites expirent 7 jours apres la date de l'evenement. La commande suivante marque les medias expires avec `is_deleted=True` sans supprimer physiquement les fichiers :
+
+```bash
+python manage.py cleanup_expired_media
+```
+
+Verifier sans modifier :
+
+```bash
+python manage.py cleanup_expired_media --dry-run
 ```
 
 ## PostgreSQL local projet

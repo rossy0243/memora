@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ event.title }} - Memora{% endblock %}
 {% block body_class %}app-page{% endblock %}
@@ -41,15 +42,46 @@
     </article>
 
     <aside class="detail-panel public-link-panel">
-      <p class="section__label">Lien invite</p>
-      <h2>Page publique</h2>
-      <p>Cette URL servira de destination au QR code de l'evenement.</p>
-      <code>{{ request.scheme }}://{{ request.get_host }}{{ event.get_public_url }}</code>
+      <div class="panel-title-row">
+        <div>
+          <p class="section__label">Acces invite</p>
+          <h2>QR code et lien</h2>
+        </div>
+        <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
+          {% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}
+        </span>
+      </div>
+
+      <div class="public-url-box">
+        <span>Lien prive</span>
+        <code id="public-event-url">{{ public_event_url }}</code>
+        <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
+      </div>
+
+      <div class="security-list">
+        <div>
+          <span>Lien secret</span>
+          <strong>Actif</strong>
+        </div>
+        <div>
+          <span>Code invite</span>
+          {% if event.requires_guest_access_code %}
+            <strong>{{ event.guest_access_code }}</strong>
+          {% else %}
+            <strong>Desactive</strong>
+          {% endif %}
+        </div>
+        <div>
+          <span>Expiration medias</span>
+          <strong>{{ event.media_retention_days }} jours apres l'evenement</strong>
+        </div>
+      </div>
+
       {% if event.qr_code_image %}
         <img class="qr-code" src="{{ event.qr_code_image.url }}" alt="QR code de {{ event.title }}">
-        <a class="button button--secondary" href="{{ event.qr_code_image.url }}" download>Telecharger le QR code</a>
+        <a class="button button--primary" href="{{ event.qr_code_image.url }}" download>Telecharger le QR code</a>
       {% endif %}
-      <a class="button button--secondary" href="{{ event.get_public_url }}">Voir la page publique</a>
+      <a class="button button--secondary" href="{{ event.get_public_url }}">Voir la page invite</a>
     </aside>
   </div>
 
@@ -60,6 +92,7 @@
         <h2>Medias invites</h2>
       </div>
       <div class="section-actions">
+        <a class="button button--secondary" href="{% url 'events:media_list' event.pk %}">Voir tous les medias</a>
         <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}">Telecharger ZIP</a>
         <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
           {% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}
@@ -79,6 +112,10 @@
       <article class="stat-card">
         <span>Videos</span>
         <strong>{{ media_stats.videos|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Pour le film</span>
+        <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
       </article>
     </div>
 
@@ -134,4 +171,8 @@
     {% endif %}
   </section>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/copy-to-clipboard.js' %}"></script>
 {% endblock %}

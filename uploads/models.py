@@ -9,6 +9,32 @@ def guest_media_upload_path(instance, filename):
     return f"events/{event_slug}/uploads/{category_code}/{filename}"
 
 
+class UploadCategoryTemplate(models.Model):
+    event_type = models.ForeignKey(
+        "events.EventType",
+        on_delete=models.CASCADE,
+        related_name="upload_category_templates",
+    )
+    code = models.SlugField(max_length=40)
+    label = models.CharField(max_length=80)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["event_type_id", "sort_order", "label"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_type", "code"],
+                name="unique_upload_category_template_per_event_type",
+            ),
+        ]
+        verbose_name = "modele de moment"
+        verbose_name_plural = "modeles de moments"
+
+    def __str__(self):
+        return f"{self.label} - {self.event_type}"
+
+
 class UploadCategory(models.Model):
     event = models.ForeignKey(
         "events.Event",
@@ -37,6 +63,11 @@ class GuestUpload(models.Model):
         IMAGE = "image", "Image"
         VIDEO = "video", "Video"
 
+    class ModerationStatus(models.TextChoices):
+        PENDING = "pending", "A verifier"
+        APPROVED = "approved", "Accepte"
+        REJECTED = "rejected", "Rejete"
+
     event = models.ForeignKey(
         "events.Event",
         on_delete=models.CASCADE,
@@ -56,6 +87,11 @@ class GuestUpload(models.Model):
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     user_agent = models.TextField(blank=True)
     session_key = models.CharField(max_length=80, blank=True)
+    moderation_status = models.CharField(
+        max_length=16,
+        choices=ModerationStatus.choices,
+        default=ModerationStatus.APPROVED,
+    )
     is_selected_for_movie = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
 
@@ -65,6 +101,7 @@ class GuestUpload(models.Model):
             models.Index(fields=["event", "uploaded_at"]),
             models.Index(fields=["event", "media_type"]),
             models.Index(fields=["event", "is_deleted"]),
+            models.Index(fields=["event", "moderation_status"]),
             models.Index(fields=["ip_address", "uploaded_at"]),
             models.Index(fields=["session_key", "uploaded_at"]),
         ]
@@ -75,3 +112,7 @@ class GuestUpload(models.Model):
     @property
     def extension(self):
         return Path(self.original_filename).suffix.lower().lstrip(".")
+
+    @property
+    def is_approved(self):
+        return self.moderation_status == self.ModerationStatus.APPROVED

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Acces invite - {{ event.title }} - Memora{% endblock %}
+
+{% block content %}
+<section class="public-event">
+  {% if event.cover_image %}
+    <img class="public-event__image" src="{{ event.cover_image.url }}" alt="">
+  {% else %}
+    <img class="public-event__image" src="{% static 'img/memora-hero.png' %}" alt="">
+  {% endif %}
+  <div class="public-event__shade" aria-hidden="true"></div>
+  <div class="public-event__content public-event__content--access">
+    <p class="eyebrow">{{ event.get_event_type_display }}</p>
+    <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
+    <p class="tagline">Entrez le code invite.</p>
+    <form method="post" class="access-form">
+      {% csrf_token %}
+      <label for="guest_access_code">Code d'acces</label>
+      <input id="guest_access_code" name="guest_access_code" type="text" inputmode="text" autocomplete="one-time-code" required autofocus>
+      {% if access_error %}<p class="access-form__error">{{ access_error }}</p>{% endif %}
+      <button class="button button--primary" type="submit">Continuer</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

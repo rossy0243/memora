@@ -30,6 +30,7 @@ class EventAdmin(admin.ModelAdmin):
         "event_type",
         "event_date",
         "is_active",
+        "guest_access_code",
         "media_retention_days",
         "created_at",
     )
@@ -58,6 +59,7 @@ class EventAdmin(admin.ModelAdmin):
                 "fields": (
                     "cover_image",
                     "welcome_message",
+                    "guest_access_code",
                     "qr_code_image",
                     "is_active",
                 )

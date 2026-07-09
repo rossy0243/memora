@@ -39,6 +39,10 @@ class GuestUploadForm(forms.ModelForm):
         if extension not in settings.MEMORA_ALLOWED_UPLOAD_EXTENSIONS:
             raise forms.ValidationError("Ce format n'est pas accepte.")
 
+        allowed_content_types = settings.MEMORA_ALLOWED_UPLOAD_CONTENT_TYPES.get(extension, [])
+        if media_file.content_type not in allowed_content_types:
+            raise forms.ValidationError("Ce format n'est pas accepte.")
+
         if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
             raise forms.ValidationError("Cette video est trop lourde.")
 

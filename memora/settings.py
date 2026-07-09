@@ -143,7 +143,17 @@ LOGOUT_REDIRECT_URL = "core:home"
 MEMORA_ALLOWED_UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]
 MEMORA_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]
 MEMORA_VIDEO_EXTENSIONS = ["mp4", "mov", "webm"]
+MEMORA_ALLOWED_UPLOAD_CONTENT_TYPES = {
+    "jpg": ["image/jpeg"],
+    "jpeg": ["image/jpeg"],
+    "png": ["image/png"],
+    "webp": ["image/webp"],
+    "mp4": ["video/mp4"],
+    "mov": ["video/quicktime", "video/mp4"],
+    "webm": ["video/webm"],
+}
 MEMORA_MAX_UPLOAD_SIZE = int(os.getenv("MEMORA_MAX_UPLOAD_SIZE", str(250 * 1024 * 1024)))
 MEMORA_SESSION_UPLOAD_LIMIT = int(os.getenv("MEMORA_SESSION_UPLOAD_LIMIT", "25"))
 MEMORA_IP_UPLOAD_LIMIT = int(os.getenv("MEMORA_IP_UPLOAD_LIMIT", "80"))
 MEMORA_EVENT_UPLOAD_LIMIT = int(os.getenv("MEMORA_EVENT_UPLOAD_LIMIT", "3000"))
+MEMORA_UPLOAD_COOLDOWN_SECONDS = int(os.getenv("MEMORA_UPLOAD_COOLDOWN_SECONDS", "8"))

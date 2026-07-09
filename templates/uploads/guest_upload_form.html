@@ -9,20 +9,62 @@
 <section class="guest-upload-shell">
   <div class="guest-upload-heading">
     <p class="section__label">{{ event.get_event_type_display }}</p>
-    <h1>Ajouter un souvenir</h1>
-    <p>{{ event.title }}</p>
+    <h1>Prendre une photo ou filmer</h1>
+    <p>Selfie, camera arriere, filtres, puis envoi direct.</p>
   </div>
 
-  <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug %}">
+  <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}">
     {% csrf_token %}
     {{ form.non_field_errors }}
 
-    <label class="file-drop">
-      <span>Photo ou video</span>
+    <section class="camera-studio" id="camera-studio">
+      <div class="camera-studio__intro">
+        <span>Camera Memora</span>
+        <strong>Capturez sans quitter la page.</strong>
+        <button class="button button--primary" type="button" id="start-camera-button">Lancer la camera</button>
+      </div>
+
+      <div class="camera-panel" id="camera-panel" hidden>
+        <div class="camera-live">
+          <video id="camera-live-video" autoplay muted playsinline></video>
+          <span id="camera-status">Camera prete</span>
+        </div>
+
+        <div class="camera-filters" aria-label="Filtres camera">
+          <button type="button" class="camera-filter is-active" data-camera-filter="none">Naturel</button>
+          <button type="button" class="camera-filter" data-camera-filter="soft">Doux</button>
+          <button type="button" class="camera-filter" data-camera-filter="warm">Chaud</button>
+          <button type="button" class="camera-filter" data-camera-filter="mono">Noir blanc</button>
+        </div>
+
+        <div class="camera-controls">
+          <button class="button button--secondary button--compact" type="button" id="switch-camera-button">Selfie</button>
+          <button class="button button--primary button--compact" type="button" id="capture-photo-button">Photo</button>
+          <button class="button button--secondary button--compact" type="button" id="record-video-button">Video</button>
+          <button class="button button--secondary button--compact" type="button" id="stop-video-button" hidden>Stop</button>
+          <button class="button button--secondary button--compact" type="button" id="close-camera-button">Fermer</button>
+        </div>
+      </div>
+    </section>
+
+    <label class="file-drop" for="{{ form.media_file.id_for_label }}">
+      <span class="file-drop__title">Camera du telephone</span>
+      <span class="file-drop__action">Ouvrir l'appareil natif</span>
       {{ form.media_file }}
       {{ form.media_file.errors }}
-      <small>Formats acceptes : jpg, png, webp, mp4, mov, webm.</small>
+      <small id="selected-file-name">JPG, PNG, WEBP, MP4, MOV ou WEBM.</small>
     </label>
+
+    <div class="capture-preview" id="capture-preview" hidden>
+      <div class="capture-preview__media">
+        <img id="capture-preview-image" alt="">
+        <video id="capture-preview-video" muted playsinline controls></video>
+      </div>
+      <div class="capture-preview__body">
+        <span>Souvenir pret a envoyer</span>
+        <button class="button button--secondary button--compact" type="button" id="replace-media-button">Reprendre</button>
+      </div>
+    </div>
 
     <fieldset class="moment-fieldset">
       <legend>Choisir le moment</legend>
@@ -44,7 +86,7 @@
       <p>Envoi en cours...</p>
     </div>
 
-    <button class="button button--primary" type="submit">Envoyer</button>
+    <button class="button button--primary guest-submit" type="submit">Envoyer le souvenir</button>
   </form>
 </section>
 {% endblock %}

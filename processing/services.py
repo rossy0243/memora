@@ -25,7 +25,10 @@ def build_event_zip(event):
     buffer = BytesIO()
 
     uploads = (
-        event.guest_uploads.filter(is_deleted=False)
+        event.guest_uploads.filter(
+            is_deleted=False,
+            moderation_status="approved",
+        )
         .select_related("category")
         .order_by("category__sort_order", "uploaded_at", "pk")
     )

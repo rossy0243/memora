@@ -7,14 +7,16 @@
 
 {% block content %}
 <section class="guest-confirmation">
-  <div>
+  <div class="confirmation-card">
+    <div class="confirmation-mark" aria-hidden="true">✓</div>
     <p class="section__label">Merci</p>
-    <h1>Votre souvenir a bien ete envoye.</h1>
-    <p>{{ event.title }}</p>
+    <h1>Souvenir envoye.</h1>
+    <p class="confirmation-copy">Merci, votre photo ou video a bien rejoint l'album de {{ event.title }}.</p>
     <div class="confirmation-actions">
-      <a class="button button--primary" href="{% url 'uploads:create' event.slug %}">Ajouter un autre souvenir</a>
+      <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Ajouter un autre souvenir</a>
       <a class="button button--secondary" href="{{ event.get_public_url }}">Retour a l'evenement</a>
     </div>
+    <p class="confirmation-note">Aucun compte invite. Vous pouvez fermer cette page.</p>
   </div>
 </section>
 {% endblock %}

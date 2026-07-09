@@ -15,7 +15,7 @@
     <p class="eyebrow">{{ event.get_event_type_display }}</p>
     <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
     <p class="tagline">{% if event.welcome_message %}{{ event.welcome_message }}{% else %}Partagez vos photos et videos de ce moment.{% endif %}</p>
-    <a class="button button--primary" href="{% url 'uploads:create' event.slug %}">Ajouter un souvenir</a>
+    <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Ajouter un souvenir</a>
     <p class="microcopy">Photo ou video. Aucun compte invite.</p>
   </div>
 </section>

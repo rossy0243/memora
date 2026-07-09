@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from events.models import Event, EventType
 
-from .models import GuestUpload, UploadCategory
+from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -76,6 +76,54 @@ class UploadCategoryTests(TestCase):
         self.assertEqual(first_event.upload_categories.get(code="ceremony").label, "Mairie")
         self.assertEqual(second_event.upload_categories.get(code="ceremony").label, "Ceremonie")
 
+    def test_event_categories_are_copied_from_event_type_templates(self):
+        brunch_type = EventType.objects.create(
+            code="brunch",
+            label="Brunch",
+            sort_order=30,
+        )
+        UploadCategoryTemplate.objects.create(
+            event_type=brunch_type,
+            code="welcome",
+            label="Accueil",
+            sort_order=1,
+        )
+        UploadCategoryTemplate.objects.create(
+            event_type=brunch_type,
+            code="toast",
+            label="Toast",
+            sort_order=2,
+        )
+
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Brunch du lendemain",
+            event_type=brunch_type,
+            event_date=date(2026, 7, 9),
+        )
+
+        self.assertEqual(
+            list(event.upload_categories.order_by("sort_order").values_list("code", flat=True)),
+            ["welcome", "toast"],
+        )
+
+    def test_event_type_without_templates_uses_generic_templates(self):
+        custom_type = EventType.objects.create(
+            code="festival",
+            label="Festival",
+            sort_order=40,
+        )
+
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Festival Memora",
+            event_type=custom_type,
+            event_date=date(2026, 7, 9),
+        )
+
+        self.assertEqual(event.upload_categories.order_by("sort_order").first().code, "arrival")
+        self.assertTrue(event.upload_categories.filter(code="other").exists())
+
 
 class GuestUploadModelTests(TestCase):
     def setUp(self):
@@ -131,28 +179,127 @@ class GuestUploadViewTests(TestCase):
         )
         self.category = self.event.upload_categories.get(code="ceremony")
 
+    def upload_url(self, event=None, access_key=None):
+        event = event or self.event
+        return reverse(
+            "uploads:create",
+            kwargs={
+                "slug": event.slug,
+                "access_key": access_key or event.public_access_key,
+            },
+        )
+
+    def thanks_url(self, event=None, access_key=None):
+        event = event or self.event
+        return reverse(
+            "uploads:thanks",
+            kwargs={
+                "slug": event.slug,
+                "access_key": access_key or event.public_access_key,
+            },
+        )
+
     def test_guest_can_upload_memory_without_account(self):
         media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
 
         response = self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
             {
                 "media_file": media,
                 "category": self.category.pk,
             },
         )
 
-        self.assertRedirects(response, reverse("uploads:thanks", kwargs={"slug": self.event.slug}))
+        self.assertRedirects(response, self.thanks_url())
         upload = GuestUpload.objects.get(event=self.event)
         self.assertEqual(upload.media_type, GuestUpload.MediaType.IMAGE)
         self.assertEqual(upload.original_filename, "photo.jpg")
+        self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
         self.assertTrue(upload.session_key)
+
+    def test_guest_upload_requires_access_key(self):
+        response_without_key = self.client.get(f"/e/{self.event.slug}/souvenir/")
+        response_with_wrong_key = self.client.get(self.upload_url(access_key="mauvaise-cle"))
+
+        self.assertEqual(response_without_key.status_code, 404)
+        self.assertEqual(response_with_wrong_key.status_code, 404)
+
+    def test_guest_upload_page_is_mobile_first(self):
+        response = self.client.get(self.upload_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Prendre une photo ou filmer")
+        self.assertContains(response, "Selfie, camera arriere, filtres")
+        self.assertContains(response, "Camera Memora")
+        self.assertContains(response, "Lancer la camera")
+        self.assertContains(response, "Selfie")
+        self.assertContains(response, "Noir blanc")
+        self.assertContains(response, "Photo")
+        self.assertContains(response, "Video")
+        self.assertContains(response, "Ouvrir l'appareil natif")
+        self.assertContains(response, "Souvenir pret a envoyer")
+        self.assertContains(response, "Choisir le moment")
+        self.assertContains(response, "Envoyer le souvenir")
+        self.assertContains(response, "upload-progress.js")
+
+    def test_guest_confirmation_page_promotes_next_actions(self):
+        response = self.client.get(self.thanks_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Souvenir envoye.")
+        self.assertContains(response, "Ajouter un autre souvenir")
+        self.assertContains(response, "Retour a l'evenement")
+        self.assertContains(response, "Vous pouvez fermer cette page")
+
+    def test_guest_upload_requires_guest_access_code_when_enabled(self):
+        self.event.guest_access_code = "AMOUR2026"
+        self.event.save()
+        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertRedirects(response, self.event.get_public_url())
+        self.assertEqual(GuestUpload.objects.count(), 0)
+
+        self.client.post(self.event.get_public_url(), {"guest_access_code": "amour2026"})
+        unlocked_media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        unlocked_response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": unlocked_media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertRedirects(unlocked_response, self.thanks_url())
+        self.assertEqual(GuestUpload.objects.count(), 1)
 
     def test_rejects_invalid_file_extension(self):
         media = SimpleUploadedFile("notes.pdf", b"pdf", content_type="application/pdf")
 
         response = self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ce format n&#x27;est pas accepte.")
+        self.assertEqual(GuestUpload.objects.count(), 0)
+
+    def test_rejects_invalid_content_type(self):
+        media = SimpleUploadedFile("photo.jpg", b"not-an-image", content_type="text/plain")
+
+        response = self.client.post(
+            self.upload_url(),
             {
                 "media_file": media,
                 "category": self.category.pk,
@@ -174,7 +321,7 @@ class GuestUploadViewTests(TestCase):
         media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
 
         response = self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
             {
                 "media_file": media,
                 "category": other_category.pk,
@@ -189,7 +336,7 @@ class GuestUploadViewTests(TestCase):
         media = SimpleUploadedFile("video.mp4", b"12345", content_type="video/mp4")
 
         response = self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
             {
                 "media_file": media,
                 "category": self.category.pk,
@@ -206,14 +353,14 @@ class GuestUploadViewTests(TestCase):
         second_media = SimpleUploadedFile("second.jpg", b"second", content_type="image/jpeg")
 
         self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
             {
                 "media_file": first_media,
                 "category": self.category.pk,
             },
         )
         response = self.client.post(
-            reverse("uploads:create", kwargs={"slug": self.event.slug}),
+            self.upload_url(),
             {
                 "media_file": second_media,
                 "category": self.category.pk,
@@ -222,4 +369,28 @@ class GuestUploadViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Vous avez deja envoye beaucoup de souvenirs")
+        self.assertEqual(GuestUpload.objects.count(), 1)
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=60)
+    def test_limits_rapid_uploads_by_session_or_ip(self):
+        first_media = SimpleUploadedFile("first.jpg", b"first", content_type="image/jpeg")
+        second_media = SimpleUploadedFile("second.jpg", b"second", content_type="image/jpeg")
+
+        self.client.post(
+            self.upload_url(),
+            {
+                "media_file": first_media,
+                "category": self.category.pk,
+            },
+        )
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": second_media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Patientez quelques secondes")
         self.assertEqual(GuestUpload.objects.count(), 1)

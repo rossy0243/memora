@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import GuestUpload, UploadCategory
+from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
+
+
+@admin.register(UploadCategoryTemplate)
+class UploadCategoryTemplateAdmin(admin.ModelAdmin):
+    list_display = ("label", "event_type", "code", "sort_order", "is_active")
+    list_editable = ("sort_order", "is_active")
+    list_filter = ("event_type", "is_active")
+    search_fields = ("label", "code", "event_type__label")
+    prepopulated_fields = {"code": ("label",)}
 
 
 @admin.register(UploadCategory)
@@ -19,6 +28,7 @@ class GuestUploadAdmin(admin.ModelAdmin):
         "event",
         "category",
         "media_type",
+        "moderation_status",
         "file_size",
         "uploaded_at",
         "is_selected_for_movie",
@@ -26,6 +36,7 @@ class GuestUploadAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "media_type",
+        "moderation_status",
         "category",
         "is_selected_for_movie",
         "is_deleted",

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Medias - {{ event.title }} - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Medias recus</p>
+      <h1>{{ event.title }}</h1>
+      <p class="page-heading__meta">Photos et videos envoyees par les invites.</p>
+    </div>
+    <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">Retour dashboard</a>
+  </div>
+
+  <form class="media-filter-bar" method="get">
+    <label>
+      <span>Moment</span>
+      <select name="category">
+        <option value="">Tous les moments</option>
+        {% for category in categories %}
+          <option value="{{ category.code }}" {% if selected_category == category.code %}selected{% endif %}>{{ category.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <span>Type</span>
+      <select name="type">
+        <option value="">Photos et videos</option>
+        <option value="{{ media_types.IMAGE }}" {% if selected_media_type == media_types.IMAGE %}selected{% endif %}>Photos</option>
+        <option value="{{ media_types.VIDEO }}" {% if selected_media_type == media_types.VIDEO %}selected{% endif %}>Videos</option>
+      </select>
+    </label>
+    <label>
+      <span>Film souvenir</span>
+      <select name="movie">
+        <option value="">Tous les medias</option>
+        <option value="selected" {% if selected_movie_filter == "selected" %}selected{% endif %}>Selectionnes</option>
+      </select>
+    </label>
+    <label>
+      <span>Controle</span>
+      <select name="status">
+        <option value="">Acceptes</option>
+        <option value="{{ moderation_statuses.APPROVED }}" {% if selected_moderation_status == moderation_statuses.APPROVED %}selected{% endif %}>Acceptes uniquement</option>
+        <option value="{{ moderation_statuses.REJECTED }}" {% if selected_moderation_status == moderation_statuses.REJECTED %}selected{% endif %}>Rejetes</option>
+      </select>
+    </label>
+    <button class="button button--primary button--compact" type="submit">Filtrer</button>
+    <a class="button button--secondary button--compact" href="{% url 'events:media_list' event.pk %}">Reinitialiser</a>
+  </form>
+
+  <p class="media-selection-summary">{{ selected_for_movie_count }} media{{ selected_for_movie_count|pluralize }} selectionne{{ selected_for_movie_count|pluralize }} pour le film souvenir.</p>
+
+  {% if uploads %}
+    <div class="media-library-grid">
+      {% for upload in uploads %}
+        <article class="media-library-card">
+          <a class="media-library-card__preview" href="{{ upload.media_file.url }}">
+            {% if upload.media_type == "image" %}
+              <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
+            {% else %}
+              <div class="media-library-card__video">
+                <span>Video</span>
+              </div>
+            {% endif %}
+          </a>
+          <div class="media-library-card__body">
+            <span>{{ upload.category.label }}{% if upload.is_selected_for_movie %} - Pour le film{% endif %}</span>
+            <span class="moderation-pill moderation-pill--{{ upload.moderation_status }}">{{ upload.get_moderation_status_display }}</span>
+            <strong>{{ upload.original_filename }}</strong>
+            <small>{{ upload.get_media_type_display }} - {{ upload.file_size|filesizeformat }}</small>
+            <div class="media-library-card__actions">
+              <div class="moderation-actions">
+                {% if upload.moderation_status == moderation_statuses.REJECTED %}
+                  <form method="post" action="{% url 'events:set_media_moderation' event.pk upload.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <input type="hidden" name="status" value="{{ moderation_statuses.APPROVED }}">
+                    <button class="button button--primary button--compact" type="submit">Restaurer</button>
+                  </form>
+                {% endif %}
+                {% if upload.moderation_status != moderation_statuses.REJECTED %}
+                  <form method="post" action="{% url 'events:set_media_moderation' event.pk upload.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <input type="hidden" name="status" value="{{ moderation_statuses.REJECTED }}">
+                    <button class="button button--secondary button--compact" type="submit">Rejeter</button>
+                  </form>
+                {% endif %}
+              </div>
+              {% if upload.moderation_status == moderation_statuses.APPROVED %}
+                <form method="post" action="{% url 'events:toggle_movie_selection' event.pk upload.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="button {% if upload.is_selected_for_movie %}button--secondary{% else %}button--primary{% endif %} button--compact" type="submit">
+                    {% if upload.is_selected_for_movie %}Retirer du film{% else %}Garder pour le film{% endif %}
+                  </button>
+                </form>
+              {% endif %}
+              <a href="{{ upload.media_file.url }}" download>Telecharger l'original</a>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    {% if is_paginated %}
+      <nav class="pagination" aria-label="Pagination medias">
+        {% if page_obj.has_previous %}
+          <a class="button button--secondary button--compact" href="?page={{ page_obj.previous_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_media_type %}&type={{ selected_media_type }}{% endif %}{% if selected_movie_filter %}&movie={{ selected_movie_filter }}{% endif %}{% if selected_moderation_status %}&status={{ selected_moderation_status }}{% endif %}">Precedent</a>
+        {% endif %}
+        <span>Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="button button--secondary button--compact" href="?page={{ page_obj.next_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_media_type %}&type={{ selected_media_type }}{% endif %}{% if selected_movie_filter %}&movie={{ selected_movie_filter }}{% endif %}{% if selected_moderation_status %}&status={{ selected_moderation_status }}{% endif %}">Suivant</a>
+        {% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <div class="empty-state">
+      <h2>Aucun media trouve.</h2>
+      <p>Essayez un autre filtre ou attendez les premiers souvenirs invites.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
