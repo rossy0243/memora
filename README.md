@@ -127,6 +127,43 @@ MEMORA_S3_QUERYSTRING_AUTH=True
 
 Le montage video reste compatible avec le stockage cloud : les medias sont lus via Django Storage, copies temporairement en local pour FFmpeg, puis le film final est reenregistre dans le storage configure.
 
+## Production
+
+Memora est pret pour un premier deploiement Docker avec Gunicorn, WhiteNoise et FFmpeg :
+
+```bash
+docker build -t memora .
+docker run --env-file .env -p 8000:8000 memora
+```
+
+Avant le premier demarrage production, appliquer les migrations :
+
+```bash
+python manage.py migrate
+```
+
+Process attendus :
+
+```bash
+gunicorn memora.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 180
+python manage.py process_pending_movies --loop --sleep 30
+python manage.py generate_scheduled_movies
+```
+
+En production, definir au minimum :
+
+```env
+DJANGO_DEBUG=False
+DJANGO_SECRET_KEY=...
+DJANGO_ALLOWED_HOSTS=memora.example.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://memora.example.com
+DJANGO_SECURE_SSL_REDIRECT=True
+DJANGO_SESSION_COOKIE_SECURE=True
+DJANGO_CSRF_COOKIE_SECURE=True
+DJANGO_SECURE_HSTS_SECONDS=31536000
+DATABASE_URL=postgres://...
+```
+
 ## Nettoyage des medias
 
 Les medias invites expirent 7 jours apres la date de l'evenement. La commande suivante marque les medias expires avec `is_deleted=True` sans supprimer physiquement les fichiers :

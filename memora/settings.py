@@ -14,6 +14,17 @@ if load_dotenv:
     load_dotenv(BASE_DIR / ".env")
 
 
+def env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def env_int(name, default):
+    return int(os.getenv(name, str(default)))
+
+
 def database_from_url(url):
     parsed = urlparse(url)
     engine_by_scheme = {
@@ -34,7 +45,7 @@ def database_from_url(url):
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-secret-key")
 
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes", "on"}
+DEBUG = env_bool("DJANGO_DEBUG", False)
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -67,6 +78,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -131,6 +143,11 @@ USE_TZ = True
 STATIC_URL = os.getenv("DJANGO_STATIC_URL", "/static/")
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_STORAGE_BACKEND = os.getenv("DJANGO_STATICFILES_STORAGE") or (
+    "django.contrib.staticfiles.storage.StaticFilesStorage"
+    if DEBUG
+    else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+)
 
 MEDIA_URL = os.getenv("DJANGO_MEDIA_URL", "/media/")
 MEDIA_ROOT = BASE_DIR / "media"
@@ -142,7 +159,7 @@ STORAGES = {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": STATICFILES_STORAGE_BACKEND,
     },
 }
 
@@ -151,12 +168,7 @@ if MEMORA_STORAGE_BACKEND == "s3":
     MEMORA_S3_ENDPOINT_URL = os.getenv("MEMORA_S3_ENDPOINT_URL", "") or None
     MEMORA_S3_REGION_NAME = os.getenv("MEMORA_S3_REGION_NAME", "") or None
     MEMORA_S3_CUSTOM_DOMAIN = os.getenv("MEMORA_S3_CUSTOM_DOMAIN", "") or None
-    MEMORA_S3_QUERYSTRING_AUTH = os.getenv("MEMORA_S3_QUERYSTRING_AUTH", "True").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    MEMORA_S3_QUERYSTRING_AUTH = env_bool("MEMORA_S3_QUERYSTRING_AUTH", True)
 
     STORAGES["default"] = {
         "BACKEND": "storages.backends.s3.S3Storage",
@@ -180,6 +192,16 @@ LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "dashboard:home"
 LOGOUT_REDIRECT_URL = "core:home"
 
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", not DEBUG)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", not DEBUG)
+SECURE_HSTS_SECONDS = env_int("DJANGO_SECURE_HSTS_SECONDS", 0 if DEBUG else 31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
+SECURE_REFERRER_POLICY = os.getenv("DJANGO_SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
+X_FRAME_OPTIONS = os.getenv("DJANGO_X_FRAME_OPTIONS", "DENY")
+
 MEMORA_ALLOWED_UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]
 MEMORA_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]
 MEMORA_VIDEO_EXTENSIONS = ["mp4", "mov", "webm"]
@@ -192,20 +214,20 @@ MEMORA_ALLOWED_UPLOAD_CONTENT_TYPES = {
     "mov": ["video/quicktime", "video/mp4"],
     "webm": ["video/webm"],
 }
-MEMORA_MAX_UPLOAD_SIZE = int(os.getenv("MEMORA_MAX_UPLOAD_SIZE", str(250 * 1024 * 1024)))
-MEMORA_SESSION_UPLOAD_LIMIT = int(os.getenv("MEMORA_SESSION_UPLOAD_LIMIT", "25"))
-MEMORA_IP_UPLOAD_LIMIT = int(os.getenv("MEMORA_IP_UPLOAD_LIMIT", "80"))
-MEMORA_EVENT_UPLOAD_LIMIT = int(os.getenv("MEMORA_EVENT_UPLOAD_LIMIT", "3000"))
-MEMORA_UPLOAD_COOLDOWN_SECONDS = int(os.getenv("MEMORA_UPLOAD_COOLDOWN_SECONDS", "8"))
+MEMORA_MAX_UPLOAD_SIZE = env_int("MEMORA_MAX_UPLOAD_SIZE", 250 * 1024 * 1024)
+MEMORA_SESSION_UPLOAD_LIMIT = env_int("MEMORA_SESSION_UPLOAD_LIMIT", 25)
+MEMORA_IP_UPLOAD_LIMIT = env_int("MEMORA_IP_UPLOAD_LIMIT", 80)
+MEMORA_EVENT_UPLOAD_LIMIT = env_int("MEMORA_EVENT_UPLOAD_LIMIT", 3000)
+MEMORA_UPLOAD_COOLDOWN_SECONDS = env_int("MEMORA_UPLOAD_COOLDOWN_SECONDS", 8)
 MEMORA_FFMPEG_BINARY = os.getenv("MEMORA_FFMPEG_BINARY", "ffmpeg")
 MEMORA_FFPROBE_BINARY = os.getenv("MEMORA_FFPROBE_BINARY", "ffprobe")
 MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS = int(
     os.getenv("MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS", "10")
 )
-MEMORA_MOVIE_IMAGE_DURATION_SECONDS = int(os.getenv("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", "3"))
-MEMORA_MOVIE_VIDEO_MAX_SECONDS = int(os.getenv("MEMORA_MOVIE_VIDEO_MAX_SECONDS", "10"))
-MEMORA_MOVIE_MAX_DURATION_SECONDS = int(os.getenv("MEMORA_MOVIE_MAX_DURATION_SECONDS", "300"))
-MEMORA_MOVIE_AUTOGENERATE_HOUR = int(os.getenv("MEMORA_MOVIE_AUTOGENERATE_HOUR", "12"))
+MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)
+MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
+MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 300)
+MEMORA_MOVIE_AUTOGENERATE_HOUR = env_int("MEMORA_MOVIE_AUTOGENERATE_HOUR", 12)
 MEMORA_MOVIE_VIDEO_ENCODER = os.getenv("MEMORA_MOVIE_VIDEO_ENCODER", "libx264")
-MEMORA_MOVIE_WIDTH = int(os.getenv("MEMORA_MOVIE_WIDTH", "1280"))
-MEMORA_MOVIE_HEIGHT = int(os.getenv("MEMORA_MOVIE_HEIGHT", "720"))
+MEMORA_MOVIE_WIDTH = env_int("MEMORA_MOVIE_WIDTH", 1280)
+MEMORA_MOVIE_HEIGHT = env_int("MEMORA_MOVIE_HEIGHT", 720)

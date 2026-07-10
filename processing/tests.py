@@ -330,6 +330,15 @@ class ProcessPendingMoviesCommandTests(TestCase):
         process_generated_movie.assert_not_called()
         self.assertIn("[dry-run]", output.getvalue())
 
+    @patch("processing.management.commands.process_pending_movies.sleep", side_effect=KeyboardInterrupt)
+    def test_loop_mode_waits_between_passes(self, sleep_mock):
+        output = StringIO()
+
+        with self.assertRaises(KeyboardInterrupt):
+            call_command("process_pending_movies", "--loop", "--sleep", "1", stdout=output)
+
+        sleep_mock.assert_called_once_with(1)
+
 
 class CleanupExpiredMediaCommandTests(TestCase):
     def setUp(self):
