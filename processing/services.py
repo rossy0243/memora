@@ -13,7 +13,8 @@ from django.utils.text import slugify
 
 from uploads.models import GuestUpload
 
-from .models import GeneratedMovie
+from .analysis import analyze_event_media
+from .models import GeneratedMovie, MediaAnalysis
 
 
 DEFAULT_ZIP_CATEGORY_FOLDERS = {
@@ -121,6 +122,19 @@ def get_movie_candidate_uploads(event):
 
 
 def score_movie_candidate(upload):
+    try:
+        analysis = upload.analysis
+    except MediaAnalysis.DoesNotExist:
+        analysis = None
+
+    if analysis and analysis.status == MediaAnalysis.Status.COMPLETED:
+        score = analysis.movie_score
+        if upload.media_type == GuestUpload.MediaType.VIDEO:
+            score += 18
+        if upload.is_selected_for_movie:
+            score += 5
+        return score
+
     score = 100 if upload.media_type == GuestUpload.MediaType.VIDEO else 35
     score += MOVIE_CATEGORY_SCORE_BOOSTS.get(upload.category.code, 0)
 
@@ -221,6 +235,7 @@ def process_generated_movie(movie):
         return movie
 
     event = movie.event
+    analyze_event_media(event)
     uploads = list(get_movie_candidate_uploads(event))
 
     if not uploads:

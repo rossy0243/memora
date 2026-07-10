@@ -11,11 +11,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from PIL import Image
 
 from events.models import Event, EventType
 from uploads.models import GuestUpload
 
-from .models import GeneratedMovie
+from .analysis import analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
+from .models import GeneratedMovie, MediaAnalysis
 from .services import (
     _build_movie_clip,
     create_event_movie_job,
@@ -27,6 +29,13 @@ from .services import (
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+def make_test_image_bytes(color=(180, 160, 140)):
+    buffer = BytesIO()
+    image = Image.new("RGB", (120, 80), color=color)
+    image.save(buffer, format="JPEG")
+    return buffer.getvalue()
 
 
 class GeneratedMovieModelTests(TestCase):
@@ -47,6 +56,105 @@ class GeneratedMovieModelTests(TestCase):
 
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         self.assertIsNone(movie.final_file.name or None)
+
+
+class MediaAnalysisModelTests(TestCase):
+    def test_media_analysis_defaults_to_pending(self):
+        organizer = get_user_model().objects.create_user(
+            username="organizer",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Analyse",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=event.upload_categories.get(code="ceremony"),
+            media_file=SimpleUploadedFile("photo.jpg", make_test_image_bytes(), content_type="image/jpeg"),
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=100,
+        )
+
+        analysis = MediaAnalysis.objects.create(upload=upload)
+
+        self.assertEqual(analysis.status, MediaAnalysis.Status.PENDING)
+        self.assertEqual(analysis.provider, "local_heuristic_v1")
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class MediaAnalysisServiceTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="organizer-analysis",
+            password="secret",
+        )
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Analyse Service",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.category = self.event.upload_categories.get(code="emotional")
+
+    def create_image_upload(self, filename="photo.jpg"):
+        image_bytes = make_test_image_bytes()
+        return GuestUpload.objects.create(
+            event=self.event,
+            category=self.category,
+            media_file=SimpleUploadedFile(filename, image_bytes, content_type="image/jpeg"),
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename=filename,
+            file_size=len(image_bytes),
+        )
+
+    def test_create_missing_media_analysis_jobs(self):
+        upload = self.create_image_upload()
+
+        analyses = create_missing_media_analysis_jobs()
+
+        self.assertEqual(analyses, [upload.analysis])
+        self.assertEqual(upload.analysis.status, MediaAnalysis.Status.PENDING)
+
+    def test_analyze_pending_media_scores_image(self):
+        upload = self.create_image_upload()
+        create_media_analysis_job(upload)
+
+        analyses = analyze_pending_media()
+
+        analysis = analyses[0]
+        self.assertEqual(analysis.status, MediaAnalysis.Status.COMPLETED)
+        self.assertGreater(analysis.movie_score, 0)
+        self.assertIn("image", analysis.tags)
+        self.assertTrue(analysis.summary)
+
+    def test_analyze_pending_media_dry_run_command_does_not_create_jobs(self):
+        upload = self.create_image_upload()
+        output = StringIO()
+
+        call_command("analyze_pending_media", "--dry-run", stdout=output)
+
+        self.assertFalse(MediaAnalysis.objects.filter(upload=upload).exists())
+        self.assertIn("[dry-run]", output.getvalue())
+
+    @patch("processing.management.commands.analyze_pending_media.sleep", side_effect=KeyboardInterrupt)
+    def test_analyze_pending_media_loop_waits_between_passes(self, sleep_mock):
+        output = StringIO()
+
+        with self.assertRaises(KeyboardInterrupt):
+            call_command("analyze_pending_media", "--loop", "--sleep", "1", stdout=output)
+
+        sleep_mock.assert_called_once_with(1)
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
@@ -133,6 +241,34 @@ class MovieGenerationServiceTests(TestCase):
         candidates = list(get_movie_candidate_uploads(self.event))
 
         self.assertEqual(len(candidates), 2)
+
+    def test_movie_candidates_use_completed_media_analysis_score(self):
+        lower_score = self.create_upload(
+            "large.mp4",
+            GuestUpload.MediaType.VIDEO,
+            file_size=80_000_000,
+            duration=timedelta(seconds=8),
+        )
+        higher_score = self.create_upload(
+            "small.mp4",
+            GuestUpload.MediaType.VIDEO,
+            file_size=1_000_000,
+            duration=timedelta(seconds=8),
+        )
+        MediaAnalysis.objects.create(
+            upload=lower_score,
+            status=MediaAnalysis.Status.COMPLETED,
+            movie_score=40,
+        )
+        MediaAnalysis.objects.create(
+            upload=higher_score,
+            status=MediaAnalysis.Status.COMPLETED,
+            movie_score=88,
+        )
+
+        candidates = list(get_movie_candidate_uploads(self.event))
+
+        self.assertEqual(candidates[0], higher_score)
 
     def test_generate_event_movie_fails_without_media(self):
         movie = generate_event_movie(self.event)

@@ -34,7 +34,7 @@ Etapes realisees du MVP :
 - telechargement ZIP des medias d'un evenement, organises par moments ;
 - videos invitees limitees a 10 secondes avec verification serveur via FFprobe ;
 - generation automatique d'un premier film souvenir avec FFmpeg, planifiable a J+1 12h ;
-- selection automatique des meilleurs medias pour le film, avec scoring pret a etre remplace par une vraie analyse IA ;
+- analyse automatique des medias avec scores qualite, emotion, energie et selection film IA-ready ;
 - suppression automatique preparee : les medias sont marques supprimes 7 jours apres la date de l'evenement.
 
 Les fonctionnalites de suppression physique des fichiers et traitement media avance asynchrone ne sont pas encore implementees.
@@ -82,6 +82,32 @@ MEMORA_MOVIE_HEIGHT=720
 ```
 
 Memora selectionne automatiquement les videos acceptees les mieux scorees, limite le film final a 5 minutes, puis ignore les medias rejetes ou supprimes.
+
+## Analyse IA des medias
+
+Memora cree une analyse par media accepte avec :
+
+- score technique ;
+- score emotion ;
+- score energie ;
+- score final pour le film ;
+- luminosite, nettete, tags et resume court.
+
+Le moteur actuel est local et heuristique : il extrait une frame video avec FFmpeg, analyse l'image avec Pillow, puis score les moments forts. Il est concu pour etre remplace ou enrichi par une vraie IA vision externe sans changer le flux produit.
+
+Analyser les medias en attente :
+
+```bash
+python manage.py analyze_pending_media
+```
+
+Mode worker :
+
+```bash
+python manage.py analyze_pending_media --loop --sleep 30
+```
+
+Le worker de film analyse aussi les medias manquants avant le montage, afin que la selection automatique utilise les scores disponibles.
 
 Planifier les films dus a lancer via cron, worker planifie ou ordonnanceur :
 
@@ -147,6 +173,7 @@ Process attendus :
 ```bash
 gunicorn memora.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 180
 python manage.py process_pending_movies --loop --sleep 30
+python manage.py analyze_pending_media --loop --sleep 30
 python manage.py generate_scheduled_movies
 ```
 
