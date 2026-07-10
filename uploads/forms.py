@@ -70,11 +70,11 @@ class GuestUploadForm(forms.ModelForm):
                     "capture": "environment",
                 }
             ),
-            "category": forms.RadioSelect,
+            "category": forms.Select,
         }
         labels = {
             "media_file": "Photo ou video",
-            "category": "Moment",
+            "category": "Moment obligatoire",
         }
 
     def __init__(self, *args, event=None, **kwargs):
@@ -84,7 +84,14 @@ class GuestUploadForm(forms.ModelForm):
         if event is not None:
             queryset = queryset.filter(event=event)
         self.fields["category"].queryset = queryset
-        self.fields["category"].empty_label = None
+        self.fields["category"].empty_label = "Selectionner un moment"
+        self.fields["category"].required = True
+        self.fields["category"].widget.attrs.update(
+            {
+                "class": "moment-select",
+                "required": "required",
+            }
+        )
 
     def clean_media_file(self):
         media_file = self.cleaned_data["media_file"]

@@ -5,7 +5,7 @@ from events.access import has_guest_access
 from events.models import Event
 
 from .forms import GuestUploadForm
-from .services import ensure_session_key, get_client_ip, get_upload_limit_error
+from .services import ensure_session_key, get_client_ip, get_upload_limit_error, get_upload_quota
 
 
 def guest_upload_create(request, slug, access_key):
@@ -13,10 +13,12 @@ def guest_upload_create(request, slug, access_key):
     if not has_guest_access(request, event):
         return redirect(event.get_public_url())
 
+    session_key = ensure_session_key(request)
+    upload_quota = get_upload_quota(event, session_key)
+
     if request.method == "POST":
         form = GuestUploadForm(request.POST, request.FILES, event=event)
         if form.is_valid():
-            session_key = ensure_session_key(request)
             ip_address = get_client_ip(request)
             limit_error = get_upload_limit_error(event, session_key, ip_address)
 
@@ -46,7 +48,15 @@ def guest_upload_create(request, slug, access_key):
     else:
         form = GuestUploadForm(event=event)
 
-    return render(request, "uploads/guest_upload_form.html", {"event": event, "form": form})
+    return render(
+        request,
+        "uploads/guest_upload_form.html",
+        {
+            "event": event,
+            "form": form,
+            "upload_quota": upload_quota,
+        },
+    )
 
 
 def guest_upload_thanks(request, slug, access_key):

@@ -1,30 +1,35 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Memora - souvenirs d'evenement{% endblock %}
+{% block title %}Memora - souvenirs d'événement{% endblock %}
 
 {% block content %}
 <section class="hero">
-  <img class="hero__image" src="{% static 'img/memora-hero.png' %}" alt="Invite filmant un moment de fete pendant une reception">
+  <img class="hero__image" src="{% static 'img/memora-hero.png' %}" alt="Invité filmant un moment de fête pendant une réception">
   <div class="hero__shade" aria-hidden="true"></div>
   <div class="hero__content">
-    <p class="eyebrow">Mariages et evenements prives</p>
+    <p class="eyebrow">Mariages et événements privés</p>
     <h1>Memora</h1>
-    <p class="tagline">Revivez votre evenement a travers les yeux de vos invites.</p>
-    <p class="promise">Vous avez vecu votre evenement. Decouvrez maintenant tout ce que vous n'avez pas vu.</p>
+    <p class="tagline">Revivez votre événement à travers les yeux de vos invités.</p>
+    <p class="promise">Vous avez vécu votre journée. Découvrez maintenant les sourires, les scènes et les petits instants que vous n’avez pas vus.</p>
     <div class="hero__actions">
-      <a class="button button--primary" href="{% url 'events:create' %}">Creer mon evenement</a>
-      <span class="microcopy">Aucun compte invite. Aucune application a installer.</span>
+      <a class="button button--primary" href="{% url 'events:create' %}">Créer mon événement</a>
+    </div>
+    <div class="hero__badges" aria-label="Points forts">
+      <span>Aucune application</span>
+      <span>Aucun compte invité</span>
+      <span>Film souvenir automatique</span>
     </div>
   </div>
 </section>
 
-<section class="flow" aria-label="Experience invite">
+<section class="flow" aria-label="Expérience invité">
   <div class="flow__inner">
-    <p class="section__label">Experience invite</p>
+    <p class="section__label">Expérience invité</p>
+    <h2>Un souvenir envoyé en quelques secondes.</h2>
     <ol class="steps">
       <li>Scanner</li>
-      <li>Filmer</li>
+      <li>Capturer</li>
       <li>Choisir le moment</li>
       <li>Envoyer</li>
     </ol>
@@ -34,23 +39,45 @@
 <section id="foundation" class="foundation">
   <div class="foundation__inner">
     <div class="foundation__copy">
-      <p class="section__label">MVP en construction</p>
-      <h2>Une base claire pour collecter les souvenirs sans friction.</h2>
-      <p>Memora commence par une architecture Django propre, prete pour les evenements, les pages invitees, les medias et le futur dashboard organisateur.</p>
+      <p class="section__label">Pour les organisateurs</p>
+      <h2>Recevez les photos et vidéos de vos invités, sans courir après personne.</h2>
+      <p>Créez votre événement, partagez le QR Code, puis laissez Memora collecter les souvenirs, limiter les abus et préparer automatiquement un film avec les meilleurs moments.</p>
+      <div class="feature-list">
+        <div>
+          <strong>Collecte fluide</strong>
+          <span>Les invités filment ou prennent une photo directement depuis leur téléphone.</span>
+        </div>
+        <div>
+          <strong>Moments classés</strong>
+          <span>Cérémonie, cocktail, discours, piste de danse ou moment drôle : chaque souvenir arrive au bon endroit.</span>
+        </div>
+        <div>
+          <strong>Souvenir prêt à revivre</strong>
+          <span>Memora analyse les médias et sélectionne les meilleurs extraits pour composer le film.</span>
+        </div>
+      </div>
     </div>
 
-    <div class="foundation__preview" aria-label="Apercu du futur parcours invite">
+    <div class="foundation__preview" aria-label="Aperçu du parcours invité">
       <div class="phone-preview">
         <div class="phone-preview__media"></div>
         <div class="phone-preview__body">
           <span class="phone-preview__label">Mariage de Camille &amp; Noe</span>
           <strong>Ajouter un souvenir</strong>
-          <span>Ceremonie</span>
+          <span>Cérémonie</span>
           <span>Piste de danse</span>
-          <span>Moment drole</span>
+          <span>Moment drôle</span>
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="closing-band">
+  <div class="closing-band__inner">
+    <p class="section__label">La promesse</p>
+    <h2>Vous profitez de l’instant. Memora rassemble le reste.</h2>
+    <a class="button button--primary" href="{% url 'events:create' %}">Créer mon événement</a>
   </div>
 </section>
 {% endblock %}

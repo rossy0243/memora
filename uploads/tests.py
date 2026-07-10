@@ -240,8 +240,29 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Ouvrir l'appareil natif")
         self.assertContains(response, "Souvenir pret a envoyer")
         self.assertContains(response, "Choisir le moment")
+        self.assertContains(response, "obligatoire")
+        self.assertContains(response, "Selectionner un moment")
+        self.assertContains(response, "moment-select")
+        self.assertContains(response, "5 souvenirs maximum par appareil")
+        self.assertContains(response, "Il vous reste 5 envois")
         self.assertContains(response, "Envoyer le souvenir")
         self.assertContains(response, "upload-progress.js")
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
+    def test_guest_upload_page_shows_remaining_upload_count(self):
+        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        response = self.client.get(self.upload_url())
+
+        self.assertContains(response, "5 souvenirs maximum par appareil")
+        self.assertContains(response, "Il vous reste 4 envois")
 
     def test_guest_confirmation_page_promotes_next_actions(self):
         response = self.client.get(self.thanks_url())
@@ -402,8 +423,34 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Vous avez deja envoye beaucoup de souvenirs")
+        self.assertContains(response, "Vous avez atteint la limite de 1 souvenir")
         self.assertEqual(GuestUpload.objects.count(), 1)
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=5, MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
+    def test_limits_guest_to_five_uploads_by_session(self):
+        for index in range(5):
+            media = SimpleUploadedFile(f"photo-{index}.jpg", b"fake-image", content_type="image/jpeg")
+            response = self.client.post(
+                self.upload_url(),
+                {
+                    "media_file": media,
+                    "category": self.category.pk,
+                },
+            )
+            self.assertRedirects(response, self.thanks_url())
+
+        extra_media = SimpleUploadedFile("extra.jpg", b"fake-image", content_type="image/jpeg")
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": extra_media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Limite atteinte")
+        self.assertEqual(GuestUpload.objects.count(), 5)
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=60)
     def test_limits_rapid_uploads_by_session_or_ip(self):

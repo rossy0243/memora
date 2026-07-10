@@ -17,6 +17,15 @@
     {% csrf_token %}
     {{ form.non_field_errors }}
 
+    <div class="upload-quota {% if upload_quota.is_reached %}upload-quota--full{% endif %}">
+      <span>{{ upload_quota.limit }} souvenirs maximum par appareil</span>
+      {% if upload_quota.is_reached %}
+        <strong>Limite atteinte</strong>
+      {% else %}
+        <strong>Il vous reste {{ upload_quota.remaining }} envoi{% if upload_quota.remaining > 1 %}s{% endif %}</strong>
+      {% endif %}
+    </div>
+
     <section class="camera-studio" id="camera-studio">
       <div class="camera-studio__intro">
         <span>Camera Memora</span>
@@ -66,18 +75,11 @@
       </div>
     </div>
 
-    <fieldset class="moment-fieldset">
-      <legend>Choisir le moment</legend>
+    <div class="moment-field">
+      <label for="{{ form.category.id_for_label }}">Choisir le moment <span>obligatoire</span></label>
       {{ form.category.errors }}
-      <div class="moment-grid">
-        {% for radio in form.category %}
-          <label class="moment-chip">
-            {{ radio.tag }}
-            <span>{{ radio.choice_label }}</span>
-          </label>
-        {% endfor %}
-      </div>
-    </fieldset>
+      {{ form.category }}
+    </div>
 
     <div class="upload-progress" hidden>
       <div class="upload-progress__bar">
@@ -86,7 +88,7 @@
       <p>Envoi en cours...</p>
     </div>
 
-    <button class="button button--primary guest-submit" type="submit">Envoyer le souvenir</button>
+    <button class="button button--primary guest-submit" type="submit" {% if upload_quota.is_reached %}disabled{% endif %}>Envoyer le souvenir</button>
   </form>
 </section>
 {% endblock %}
