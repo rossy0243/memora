@@ -285,23 +285,24 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Telecharger la video")
         self.assertContains(response, "Generer le film")
 
-    @patch("events.views.generate_event_movie")
-    def test_owner_can_generate_event_movie(self, generate_event_movie):
+    @patch("events.views.create_event_movie_job")
+    def test_owner_can_generate_event_movie(self, create_event_movie_job):
         event = Event.objects.create(
             organizer=self.user,
             title="Reception Film Auto",
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        create_event_movie_job.return_value = GeneratedMovie.objects.create(event=event)
         self.client.login(username="owner", password="secret")
 
         response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
 
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
-        generate_event_movie.assert_called_once_with(event)
+        create_event_movie_job.assert_called_once_with(event)
 
-    @patch("events.views.generate_event_movie")
-    def test_other_organizer_cannot_generate_event_movie(self, generate_event_movie):
+    @patch("events.views.create_event_movie_job")
+    def test_other_organizer_cannot_generate_event_movie(self, create_event_movie_job):
         event = Event.objects.create(
             organizer=self.other_user,
             title="Reception Film Prive",
@@ -313,7 +314,7 @@ class EventViewTests(TestCase):
         response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 404)
-        generate_event_movie.assert_not_called()
+        create_event_movie_job.assert_not_called()
 
     def test_event_detail_links_to_full_media_library(self):
         event = Event.objects.create(

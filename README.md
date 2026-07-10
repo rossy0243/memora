@@ -76,23 +76,56 @@ MEMORA_MOVIE_IMAGE_DURATION_SECONDS=3
 MEMORA_MOVIE_VIDEO_MAX_SECONDS=10
 MEMORA_MOVIE_MAX_DURATION_SECONDS=300
 MEMORA_MOVIE_AUTOGENERATE_HOUR=12
+MEMORA_MOVIE_VIDEO_ENCODER=libx264
 MEMORA_MOVIE_WIDTH=1280
 MEMORA_MOVIE_HEIGHT=720
 ```
 
 Memora selectionne automatiquement les videos acceptees les mieux scorees, limite le film final a 5 minutes, puis ignore les medias rejetes ou supprimes.
 
-Generation planifiee a lancer via cron, worker planifie ou ordonnanceur :
+Planifier les films dus a lancer via cron, worker planifie ou ordonnanceur :
 
 ```bash
 python manage.py generate_scheduled_movies
 ```
 
-Verifier sans lancer FFmpeg :
+Traiter les films en attente avec le worker local :
+
+```bash
+python manage.py process_pending_movies
+```
+
+Verifier sans modifier :
 
 ```bash
 python manage.py generate_scheduled_movies --dry-run
+python manage.py process_pending_movies --dry-run
 ```
+
+En developpement, `generate_scheduled_movies --process-now` permet de planifier et traiter dans la meme execution.
+
+## Stockage media
+
+Par defaut, Memora stocke les medias localement dans `MEDIA_ROOT`.
+
+```env
+MEMORA_STORAGE_BACKEND=local
+```
+
+Pour utiliser un stockage S3 compatible comme AWS S3, Cloudflare R2 ou Backblaze B2 :
+
+```env
+MEMORA_STORAGE_BACKEND=s3
+MEMORA_S3_ACCESS_KEY_ID=...
+MEMORA_S3_SECRET_ACCESS_KEY=...
+MEMORA_S3_BUCKET_NAME=memora-media
+MEMORA_S3_ENDPOINT_URL=https://...
+MEMORA_S3_REGION_NAME=...
+MEMORA_S3_ADDRESSING_STYLE=auto
+MEMORA_S3_QUERYSTRING_AUTH=True
+```
+
+Le montage video reste compatible avec le stockage cloud : les medias sont lus via Django Storage, copies temporairement en local pour FFmpeg, puis le film final est reenregistre dans le storage configure.
 
 ## Nettoyage des medias
 

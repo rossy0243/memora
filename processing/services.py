@@ -176,8 +176,51 @@ def get_scheduled_movie_events(now=None):
     return scheduled_events
 
 
+def create_event_movie_job(event):
+    existing_job = (
+        event.generated_movies.filter(
+            status__in=[
+                GeneratedMovie.Status.PENDING,
+                GeneratedMovie.Status.PROCESSING,
+            ]
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if existing_job:
+        return existing_job
+    return GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PENDING)
+
+
+def get_pending_movie_jobs(limit=None):
+    queryset = (
+        GeneratedMovie.objects.filter(status=GeneratedMovie.Status.PENDING)
+        .select_related("event")
+        .order_by("created_at", "pk")
+    )
+    if limit:
+        return list(queryset[:limit])
+    return list(queryset)
+
+
+def process_pending_movie_jobs(limit=None):
+    processed_movies = []
+    for movie in get_pending_movie_jobs(limit=limit):
+        processed_movies.append(process_generated_movie(movie))
+    return processed_movies
+
+
 def generate_event_movie(event):
-    movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PENDING)
+    movie = create_event_movie_job(event)
+    return process_generated_movie(movie)
+
+
+def process_generated_movie(movie):
+    movie.refresh_from_db()
+    if movie.status not in {GeneratedMovie.Status.PENDING, GeneratedMovie.Status.PROCESSING}:
+        return movie
+
+    event = movie.event
     uploads = list(get_movie_candidate_uploads(event))
 
     if not uploads:
@@ -276,59 +319,68 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
     if not upload.media_file:
         raise ValueError(f"Media sans fichier: {upload.pk}")
 
-    input_path = Path(upload.media_file.path)
-    if not input_path.exists():
-        raise FileNotFoundError(f"Fichier introuvable: {input_path}")
+    input_path = _copy_media_to_temporary_file(upload, output_path.parent)
+    try:
+        video_filter = (
+            f"scale={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:"
+            "force_original_aspect_ratio=decrease,"
+            f"pad={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
+            "fps=30,format=yuv420p"
+        )
 
-    video_filter = (
-        f"scale={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:"
-        "force_original_aspect_ratio=decrease,"
-        f"pad={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-        "fps=30,format=yuv420p"
-    )
+        if upload.media_type == GuestUpload.MediaType.IMAGE:
+            command = [
+                ffmpeg_binary,
+                "-y",
+                "-loop",
+                "1",
+                "-t",
+                str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS),
+                "-i",
+                str(input_path),
+                "-vf",
+                video_filter,
+                "-an",
+                "-c:v",
+                settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+        else:
+            command = [
+                ffmpeg_binary,
+                "-y",
+                "-i",
+                str(input_path),
+                "-t",
+                str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS),
+                "-vf",
+                video_filter,
+                "-an",
+                "-c:v",
+                settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
 
-    if upload.media_type == GuestUpload.MediaType.IMAGE:
-        command = [
-            ffmpeg_binary,
-            "-y",
-            "-loop",
-            "1",
-            "-t",
-            str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS),
-            "-i",
-            str(input_path),
-            "-vf",
-            video_filter,
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-movflags",
-            "+faststart",
-            str(output_path),
-        ]
-    else:
-        command = [
-            ffmpeg_binary,
-            "-y",
-            "-i",
-            str(input_path),
-            "-t",
-            str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS),
-            "-vf",
-            video_filter,
-            "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-movflags",
-            "+faststart",
-            str(output_path),
-        ]
+        _run_ffmpeg(command)
+    finally:
+        input_path.unlink(missing_ok=True)
 
-    _run_ffmpeg(command)
+
+def _copy_media_to_temporary_file(upload, directory):
+    suffix = Path(upload.original_filename or upload.media_file.name).suffix.lower() or ".media"
+    with tempfile.NamedTemporaryFile(suffix=suffix, dir=directory, delete=False) as temporary_file:
+        temporary_path = Path(temporary_file.name)
+        try:
+            upload.media_file.open("rb")
+            for chunk in upload.media_file.chunks():
+                temporary_file.write(chunk)
+        finally:
+            upload.media_file.close()
+    return temporary_path
 
 
 def _run_ffmpeg(command):

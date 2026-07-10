@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "storages",
     "accounts.apps.AccountsConfig",
     "events.apps.EventsConfig",
     "uploads.apps.UploadsConfig",
@@ -134,6 +135,45 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = os.getenv("DJANGO_MEDIA_URL", "/media/")
 MEDIA_ROOT = BASE_DIR / "media"
 
+MEMORA_STORAGE_BACKEND = os.getenv("MEMORA_STORAGE_BACKEND", "local").lower()
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+if MEMORA_STORAGE_BACKEND == "s3":
+    MEMORA_S3_BUCKET_NAME = os.getenv("MEMORA_S3_BUCKET_NAME", "")
+    MEMORA_S3_ENDPOINT_URL = os.getenv("MEMORA_S3_ENDPOINT_URL", "") or None
+    MEMORA_S3_REGION_NAME = os.getenv("MEMORA_S3_REGION_NAME", "") or None
+    MEMORA_S3_CUSTOM_DOMAIN = os.getenv("MEMORA_S3_CUSTOM_DOMAIN", "") or None
+    MEMORA_S3_QUERYSTRING_AUTH = os.getenv("MEMORA_S3_QUERYSTRING_AUTH", "True").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": os.getenv("MEMORA_S3_ACCESS_KEY_ID", ""),
+            "secret_key": os.getenv("MEMORA_S3_SECRET_ACCESS_KEY", ""),
+            "bucket_name": MEMORA_S3_BUCKET_NAME,
+            "endpoint_url": MEMORA_S3_ENDPOINT_URL,
+            "region_name": MEMORA_S3_REGION_NAME,
+            "custom_domain": MEMORA_S3_CUSTOM_DOMAIN,
+            "addressing_style": os.getenv("MEMORA_S3_ADDRESSING_STYLE", "auto"),
+            "file_overwrite": False,
+            "querystring_auth": MEMORA_S3_QUERYSTRING_AUTH,
+            "default_acl": None,
+        },
+    }
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "accounts:login"
@@ -166,5 +206,6 @@ MEMORA_MOVIE_IMAGE_DURATION_SECONDS = int(os.getenv("MEMORA_MOVIE_IMAGE_DURATION
 MEMORA_MOVIE_VIDEO_MAX_SECONDS = int(os.getenv("MEMORA_MOVIE_VIDEO_MAX_SECONDS", "10"))
 MEMORA_MOVIE_MAX_DURATION_SECONDS = int(os.getenv("MEMORA_MOVIE_MAX_DURATION_SECONDS", "300"))
 MEMORA_MOVIE_AUTOGENERATE_HOUR = int(os.getenv("MEMORA_MOVIE_AUTOGENERATE_HOUR", "12"))
+MEMORA_MOVIE_VIDEO_ENCODER = os.getenv("MEMORA_MOVIE_VIDEO_ENCODER", "libx264")
 MEMORA_MOVIE_WIDTH = int(os.getenv("MEMORA_MOVIE_WIDTH", "1280"))
 MEMORA_MOVIE_HEIGHT = int(os.getenv("MEMORA_MOVIE_HEIGHT", "720"))

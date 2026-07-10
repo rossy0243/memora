@@ -1,7 +1,8 @@
 from datetime import date, timedelta
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import Path
 import shutil
+from types import SimpleNamespace
 import tempfile
 from unittest.mock import patch
 
@@ -15,7 +16,14 @@ from events.models import Event, EventType
 from uploads.models import GuestUpload
 
 from .models import GeneratedMovie
-from .services import generate_event_movie, get_event_movie_schedule_at, get_movie_candidate_uploads
+from .services import (
+    _build_movie_clip,
+    create_event_movie_job,
+    generate_event_movie,
+    get_event_movie_schedule_at,
+    get_movie_candidate_uploads,
+    process_pending_movie_jobs,
+)
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -132,6 +140,24 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("Aucun media", movie.error_logs)
 
+    def test_create_event_movie_job_reuses_pending_job(self):
+        first_job = create_event_movie_job(self.event)
+        second_job = create_event_movie_job(self.event)
+
+        self.assertEqual(first_job, second_job)
+        self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
+
+    def test_process_pending_movie_jobs_processes_pending_jobs(self):
+        movie = create_event_movie_job(self.event)
+
+        with patch("processing.services.process_generated_movie") as process_generated_movie:
+            process_generated_movie.return_value = movie
+
+            processed_movies = process_pending_movie_jobs()
+
+        process_generated_movie.assert_called_once_with(movie)
+        self.assertEqual(processed_movies, [movie])
+
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     def test_generate_event_movie_creates_completed_movie(self, run_ffmpeg, _which):
@@ -149,6 +175,43 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIsNotNone(movie.generated_at)
         self.assertLessEqual(movie.duration.total_seconds(), 300)
         self.assertGreaterEqual(run_ffmpeg.call_count, 2)
+
+    @patch("processing.services._run_ffmpeg")
+    def test_movie_clip_can_use_storage_without_local_path(self, run_ffmpeg):
+        class RemoteOnlyMedia:
+            name = "remote/video.mp4"
+
+            def __init__(self):
+                self.file = BytesIO(b"remote-media")
+
+            def open(self, mode="rb"):
+                self.file.seek(0)
+
+            def chunks(self):
+                yield self.file.read()
+
+            def close(self):
+                pass
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "clip.mp4"
+            upload = SimpleNamespace(
+                pk=123,
+                media_file=RemoteOnlyMedia(),
+                media_type=GuestUpload.MediaType.VIDEO,
+                original_filename="video.mp4",
+            )
+
+            def create_output(command):
+                input_path = Path(command[command.index("-i") + 1])
+                self.assertTrue(input_path.exists())
+                output_path.write_bytes(b"movie-bytes")
+
+            run_ffmpeg.side_effect = create_output
+
+            _build_movie_clip(upload, output_path, "ffmpeg")
+
+        run_ffmpeg.assert_called_once()
 
 
 class GenerateScheduledMoviesCommandTests(TestCase):
@@ -188,40 +251,84 @@ class GenerateScheduledMoviesCommandTests(TestCase):
         self.assertEqual(scheduled_at.minute, 0)
 
     @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
-    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
-    def test_generates_due_movies(self, generate_movie):
+    @patch("processing.management.commands.generate_scheduled_movies.create_event_movie_job")
+    def test_generates_due_movies(self, create_movie_job):
         event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
-        generate_movie.return_value = GeneratedMovie(
+        create_movie_job.return_value = GeneratedMovie(
             event=event,
-            status=GeneratedMovie.Status.COMPLETED,
+            status=GeneratedMovie.Status.PENDING,
         )
         output = StringIO()
 
         call_command("generate_scheduled_movies", stdout=output)
 
-        generate_movie.assert_called_once_with(event)
+        create_movie_job.assert_called_once_with(event)
         self.assertIn("Mariage planifie", output.getvalue())
 
     @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
-    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
-    def test_dry_run_does_not_generate_movie(self, generate_movie):
+    @patch("processing.management.commands.generate_scheduled_movies.create_event_movie_job")
+    def test_dry_run_does_not_generate_movie(self, create_movie_job):
         self.create_event_with_video(timezone.localdate() - timedelta(days=1))
         output = StringIO()
 
         call_command("generate_scheduled_movies", "--dry-run", stdout=output)
 
-        generate_movie.assert_not_called()
+        create_movie_job.assert_not_called()
         self.assertIn("[dry-run]", output.getvalue())
 
     @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
-    @patch("processing.management.commands.generate_scheduled_movies.generate_event_movie")
-    def test_completed_movie_is_not_generated_again(self, generate_movie):
+    @patch("processing.management.commands.generate_scheduled_movies.create_event_movie_job")
+    def test_completed_movie_is_not_generated_again(self, create_movie_job):
         event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
         GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.COMPLETED)
 
         call_command("generate_scheduled_movies")
 
-        generate_movie.assert_not_called()
+        create_movie_job.assert_not_called()
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
+    @patch("processing.management.commands.generate_scheduled_movies.process_generated_movie")
+    def test_process_now_processes_created_job(self, process_generated_movie):
+        event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
+
+        call_command("generate_scheduled_movies", "--process-now")
+
+        movie = GeneratedMovie.objects.get(event=event)
+        process_generated_movie.assert_called_once_with(movie)
+
+
+class ProcessPendingMoviesCommandTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(
+            username="organizer",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Film Worker",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    @patch("processing.management.commands.process_pending_movies.process_generated_movie")
+    def test_processes_pending_movies(self, process_generated_movie):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
+        process_generated_movie.return_value = movie
+
+        call_command("process_pending_movies")
+
+        process_generated_movie.assert_called_once_with(movie)
+
+    @patch("processing.management.commands.process_pending_movies.process_generated_movie")
+    def test_dry_run_does_not_process_movies(self, process_generated_movie):
+        GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
+        output = StringIO()
+
+        call_command("process_pending_movies", "--dry-run", stdout=output)
+
+        process_generated_movie.assert_not_called()
+        self.assertIn("[dry-run]", output.getvalue())
 
 
 class CleanupExpiredMediaCommandTests(TestCase):
