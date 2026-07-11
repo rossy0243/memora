@@ -189,12 +189,14 @@ Pour utiliser un stockage S3 compatible comme AWS S3, Cloudflare R2 ou Backblaze
 MEMORA_STORAGE_BACKEND=s3
 MEMORA_S3_ACCESS_KEY_ID=...
 MEMORA_S3_SECRET_ACCESS_KEY=...
-MEMORA_S3_BUCKET_NAME=memora-media
-MEMORA_S3_ENDPOINT_URL=https://...
-MEMORA_S3_REGION_NAME=...
-MEMORA_S3_ADDRESSING_STYLE=auto
+MEMORA_S3_BUCKET_NAME=memora
+MEMORA_S3_ENDPOINT_URL=https://<cloudflare-account-id>.r2.cloudflarestorage.com
+MEMORA_S3_REGION_NAME=auto
+MEMORA_S3_ADDRESSING_STYLE=path
 MEMORA_S3_QUERYSTRING_AUTH=True
 ```
+
+En local, le bucket Cloudflare R2 `memora` est valide avec le backend Django Storage.
 
 Le montage video reste compatible avec le stockage cloud : les medias sont lus via Django Storage, copies temporairement en local pour FFmpeg, puis le film final est reenregistre dans le storage configure.
 

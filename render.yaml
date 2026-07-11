@@ -71,16 +71,16 @@ services:
       - key: MEMORA_S3_SECRET_ACCESS_KEY
         sync: false
       - key: MEMORA_S3_BUCKET_NAME
-        sync: false
+        value: memora
       - key: MEMORA_S3_ENDPOINT_URL
-        sync: false
+        value: https://f5c8a4f17b2a3da43d059fafd599d0fa.r2.cloudflarestorage.com
       - key: MEMORA_S3_REGION_NAME
-        sync: false
+        value: auto
       - key: MEMORA_S3_CUSTOM_DOMAIN
-        sync: false
+        value: ""
       - &env_s3_addressing
         key: MEMORA_S3_ADDRESSING_STYLE
-        value: auto
+        value: path
       - &env_s3_querystring
         key: MEMORA_S3_QUERYSTRING_AUTH
         value: "True"

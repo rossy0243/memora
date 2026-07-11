@@ -18,13 +18,19 @@ Render demandera les valeurs marquees `sync: false` au premier import du Bluepri
 RUNWAYML_API_SECRET
 MEMORA_S3_ACCESS_KEY_ID
 MEMORA_S3_SECRET_ACCESS_KEY
-MEMORA_S3_BUCKET_NAME
-MEMORA_S3_ENDPOINT_URL
-MEMORA_S3_REGION_NAME
-MEMORA_S3_CUSTOM_DOMAIN
 ```
 
-`MEMORA_S3_CUSTOM_DOMAIN` peut rester vide si le bucket S3 compatible n'utilise pas de domaine public dedie.
+Le bucket Cloudflare R2 `memora`, l'endpoint R2, la region `auto`, le domaine custom vide et l'adressage `path` sont deja declares dans `render.yaml`.
+
+Pour Cloudflare R2, utiliser :
+
+```text
+MEMORA_S3_BUCKET_NAME=memora
+MEMORA_S3_ENDPOINT_URL=https://<cloudflare-account-id>.r2.cloudflarestorage.com
+MEMORA_S3_REGION_NAME=auto
+MEMORA_S3_ADDRESSING_STYLE=path
+MEMORA_S3_QUERYSTRING_AUTH=True
+```
 
 ## Pourquoi S3 est obligatoire en production
 
