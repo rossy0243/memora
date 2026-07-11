@@ -11,6 +11,12 @@ class HomePageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Memora")
 
+    def test_health_page_returns_success(self):
+        response = self.client.get(reverse("core:health"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"ok")
+
 
 class StorageConfigurationCheckTests(SimpleTestCase):
     @override_settings(MEMORA_STORAGE_BACKEND="local")

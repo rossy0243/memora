@@ -1,0 +1,323 @@
+previews:
+  generation: off
+
+databases:
+  - name: memora-db
+    postgresMajorVersion: "16"
+    region: frankfurt
+    plan: basic-256mb
+    databaseName: memora
+    user: memora
+    ipAllowList: []
+
+services:
+  - type: web
+    name: memora-web
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    preDeployCommand: python manage.py migrate
+    healthCheckPath: /health/
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 120
+    envVars:
+      - &env_debug
+        key: DJANGO_DEBUG
+        value: "False"
+      - &env_allowed_hosts
+        key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+      - &env_csrf_origins
+        key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://*.onrender.com
+      - &env_ssl_redirect
+        key: DJANGO_SECURE_SSL_REDIRECT
+        value: "True"
+      - &env_session_secure
+        key: DJANGO_SESSION_COOKIE_SECURE
+        value: "True"
+      - &env_csrf_secure
+        key: DJANGO_CSRF_COOKIE_SECURE
+        value: "True"
+      - &env_hsts_seconds
+        key: DJANGO_SECURE_HSTS_SECONDS
+        value: "31536000"
+      - &env_hsts_subdomains
+        key: DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS
+        value: "True"
+      - &env_hsts_preload
+        key: DJANGO_SECURE_HSTS_PRELOAD
+        value: "False"
+      - &env_database_url
+        key: DATABASE_URL
+        fromDatabase:
+          name: memora-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - &env_static_url
+        key: DJANGO_STATIC_URL
+        value: /static/
+      - &env_media_url
+        key: DJANGO_MEDIA_URL
+        value: /media/
+      - &env_storage_backend
+        key: MEMORA_STORAGE_BACKEND
+        value: s3
+      - key: MEMORA_S3_ACCESS_KEY_ID
+        sync: false
+      - key: MEMORA_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MEMORA_S3_BUCKET_NAME
+        sync: false
+      - key: MEMORA_S3_ENDPOINT_URL
+        sync: false
+      - key: MEMORA_S3_REGION_NAME
+        sync: false
+      - key: MEMORA_S3_CUSTOM_DOMAIN
+        sync: false
+      - &env_s3_addressing
+        key: MEMORA_S3_ADDRESSING_STYLE
+        value: auto
+      - &env_s3_querystring
+        key: MEMORA_S3_QUERYSTRING_AUTH
+        value: "True"
+      - &env_max_upload
+        key: MEMORA_MAX_UPLOAD_SIZE
+        value: "262144000"
+      - &env_session_upload_limit
+        key: MEMORA_SESSION_UPLOAD_LIMIT
+        value: "5"
+      - &env_ip_upload_limit
+        key: MEMORA_IP_UPLOAD_LIMIT
+        value: "80"
+      - &env_event_upload_limit
+        key: MEMORA_EVENT_UPLOAD_LIMIT
+        value: "3000"
+      - &env_upload_cooldown
+        key: MEMORA_UPLOAD_COOLDOWN_SECONDS
+        value: "8"
+      - &env_ffmpeg
+        key: MEMORA_FFMPEG_BINARY
+        value: ffmpeg
+      - &env_ffprobe
+        key: MEMORA_FFPROBE_BINARY
+        value: ffprobe
+      - &env_max_video_upload_duration
+        key: MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS
+        value: "10"
+      - &env_movie_image_duration
+        key: MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+        value: "3"
+      - &env_movie_video_max
+        key: MEMORA_MOVIE_VIDEO_MAX_SECONDS
+        value: "10"
+      - &env_movie_max_duration
+        key: MEMORA_MOVIE_MAX_DURATION_SECONDS
+        value: "600"
+      - &env_movie_autogenerate_hour
+        key: MEMORA_MOVIE_AUTOGENERATE_HOUR
+        value: "12"
+      - &env_movie_encoder
+        key: MEMORA_MOVIE_VIDEO_ENCODER
+        value: libx264
+      - &env_movie_width
+        key: MEMORA_MOVIE_WIDTH
+        value: "1280"
+      - &env_movie_height
+        key: MEMORA_MOVIE_HEIGHT
+        value: "720"
+      - &env_movie_photo_ratio
+        key: MEMORA_MOVIE_PHOTO_TARGET_RATIO
+        value: "0.20"
+      - &env_movie_min_photos
+        key: MEMORA_MOVIE_MIN_PHOTO_COUNT_WITH_VIDEOS
+        value: "2"
+      - &env_movie_max_consecutive_videos
+        key: MEMORA_MOVIE_MAX_CONSECUTIVE_VIDEOS_BEFORE_PHOTO
+        value: "3"
+      - &env_ai_provider
+        key: MEMORA_AI_ANALYSIS_PROVIDER
+        value: local_heuristic_v1
+      - &env_google_enabled
+        key: MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED
+        value: "False"
+      - &env_google_language
+        key: MEMORA_GOOGLE_VIDEO_INTELLIGENCE_LANGUAGE
+        value: fr-FR
+      - &env_google_timeout
+        key: MEMORA_GOOGLE_VIDEO_INTELLIGENCE_TIMEOUT_SECONDS
+        value: "180"
+      - &env_google_latest
+        key: MEMORA_GOOGLE_VIDEO_INTELLIGENCE_USE_LATEST_MODEL
+        value: "True"
+      - &env_render_provider
+        key: MEMORA_MOVIE_RENDER_PROVIDER
+        value: runway
+      - &env_runway_enabled
+        key: MEMORA_RUNWAY_ENABLED
+        value: "True"
+      - key: RUNWAYML_API_SECRET
+        sync: false
+      - &env_runway_workflow_version
+        key: MEMORA_RUNWAY_WORKFLOW_VERSION
+        value: "2026-06"
+      - &env_runway_video_model
+        key: MEMORA_RUNWAY_VIDEO_MODEL
+        value: gen4_aleph
+      - &env_runway_video_ratio
+        key: MEMORA_RUNWAY_VIDEO_RATIO
+        value: "1280:720"
+      - &env_runway_max_clips
+        key: MEMORA_RUNWAY_MAX_ENHANCED_CLIPS
+        value: "3"
+      - &env_runway_timeout
+        key: MEMORA_RUNWAY_TASK_TIMEOUT_SECONDS
+        value: "900"
+      - &env_runway_fallback
+        key: MEMORA_RUNWAY_FALLBACK_TO_FFMPEG
+        value: "True"
+      - &env_runway_prompt
+        key: MEMORA_RUNWAY_PROMPT
+        value: "Enhance this real event memory clip with a premium wedding film look. Preserve the original people, emotion, timing, voices and authentic camera movement. Apply subtle cinematic color grading, soft highlights, warm skin tones, elegant contrast, and smooth stabilization. Do not change identities. Do not add fictional content."
+      - &env_music_dir
+        key: MEMORA_MOVIE_MUSIC_DIR
+        value: /app/assets/music
+      - &env_music_volume
+        key: MEMORA_MOVIE_MUSIC_VOLUME
+        value: "0.22"
+      - &env_voice_volume
+        key: MEMORA_MOVIE_VOICE_VOLUME
+        value: "1.0"
+      - &env_ducked_music_volume
+        key: MEMORA_MOVIE_DUCKED_MUSIC_VOLUME
+        value: "0.08"
+
+  - type: worker
+    name: memora-movie-worker
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py process_pending_movies --loop --sleep 30
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 300
+    envVars: &worker_env
+      - *env_debug
+      - *env_allowed_hosts
+      - *env_csrf_origins
+      - *env_ssl_redirect
+      - *env_session_secure
+      - *env_csrf_secure
+      - *env_hsts_seconds
+      - *env_hsts_subdomains
+      - *env_hsts_preload
+      - *env_database_url
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          type: web
+          name: memora-web
+          envVarKey: DJANGO_SECRET_KEY
+      - *env_static_url
+      - *env_media_url
+      - *env_storage_backend
+      - key: MEMORA_S3_ACCESS_KEY_ID
+        fromService: &web_s3_access_key
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_ACCESS_KEY_ID
+      - key: MEMORA_S3_SECRET_ACCESS_KEY
+        fromService: &web_s3_secret_key
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_SECRET_ACCESS_KEY
+      - key: MEMORA_S3_BUCKET_NAME
+        fromService: &web_s3_bucket
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_BUCKET_NAME
+      - key: MEMORA_S3_ENDPOINT_URL
+        fromService: &web_s3_endpoint
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_ENDPOINT_URL
+      - key: MEMORA_S3_REGION_NAME
+        fromService: &web_s3_region
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_REGION_NAME
+      - key: MEMORA_S3_CUSTOM_DOMAIN
+        fromService: &web_s3_custom_domain
+          type: web
+          name: memora-web
+          envVarKey: MEMORA_S3_CUSTOM_DOMAIN
+      - *env_s3_addressing
+      - *env_s3_querystring
+      - *env_max_upload
+      - *env_session_upload_limit
+      - *env_ip_upload_limit
+      - *env_event_upload_limit
+      - *env_upload_cooldown
+      - *env_ffmpeg
+      - *env_ffprobe
+      - *env_max_video_upload_duration
+      - *env_movie_image_duration
+      - *env_movie_video_max
+      - *env_movie_max_duration
+      - *env_movie_autogenerate_hour
+      - *env_movie_encoder
+      - *env_movie_width
+      - *env_movie_height
+      - *env_movie_photo_ratio
+      - *env_movie_min_photos
+      - *env_movie_max_consecutive_videos
+      - *env_ai_provider
+      - *env_google_enabled
+      - *env_google_language
+      - *env_google_timeout
+      - *env_google_latest
+      - *env_render_provider
+      - *env_runway_enabled
+      - key: RUNWAYML_API_SECRET
+        fromService: &web_runway_secret
+          type: web
+          name: memora-web
+          envVarKey: RUNWAYML_API_SECRET
+      - *env_runway_workflow_version
+      - *env_runway_video_model
+      - *env_runway_video_ratio
+      - *env_runway_max_clips
+      - *env_runway_timeout
+      - *env_runway_fallback
+      - *env_runway_prompt
+      - *env_music_dir
+      - *env_music_volume
+      - *env_voice_volume
+      - *env_ducked_music_volume
+
+  - type: cron
+    name: memora-schedule-movies
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    schedule: "0 * * * *"
+    dockerCommand: python manage.py generate_scheduled_movies --process-now
+    autoDeployTrigger: commit
+    envVars: *worker_env
+
+  - type: cron
+    name: memora-cleanup-expired-media
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    schedule: "15 3 * * *"
+    dockerCommand: python manage.py cleanup_expired_media
+    autoDeployTrigger: commit
+    envVars: *worker_env

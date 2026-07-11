@@ -222,6 +222,10 @@ python manage.py analyze_pending_media --loop --sleep 30
 python manage.py generate_scheduled_movies
 ```
 
+Un Blueprint Render est disponible dans `render.yaml`. Il prepare un service web Django, un worker de montage, deux cron jobs et une base PostgreSQL Render. Les details de configuration sont dans `docs/render-deployment.md`.
+
+En production Render, le stockage media doit utiliser S3 compatible (`MEMORA_STORAGE_BACKEND=s3`) afin que le web, le worker et les cron jobs partagent les uploads et les films generes.
+
 En production, definir au minimum :
 
 ```env
