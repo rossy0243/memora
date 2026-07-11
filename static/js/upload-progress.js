@@ -21,13 +21,9 @@
   const cameraFeedback = document.getElementById("camera-feedback");
   const recordingBadge = document.getElementById("camera-recording-badge");
   const recordingTimer = document.getElementById("camera-recording-timer");
-  const backCameraButton = document.getElementById("back-camera-button");
-  const selfieCameraButton = document.getElementById("selfie-camera-button");
-  const photoModeButton = document.getElementById("photo-mode-button");
-  const videoModeButton = document.getElementById("video-mode-button");
-  const capturePhotoButton = document.getElementById("capture-photo-button");
-  const recordVideoButton = document.getElementById("record-video-button");
-  const stopVideoButton = document.getElementById("stop-video-button");
+  const lensToggleButton = document.getElementById("lens-toggle-button");
+  const modeToggleButton = document.getElementById("mode-toggle-button");
+  const cameraActionButton = document.getElementById("camera-action-button");
   const closeCameraButton = document.getElementById("close-camera-button");
   const filterButtons = document.querySelectorAll("[data-camera-filter]");
   const progress = form.querySelector(".upload-progress");
@@ -101,31 +97,34 @@
   }
 
   function updateCameraUi() {
+    const isRecording = recorder && recorder.state === "recording";
     if (liveVideo) {
       liveVideo.classList.toggle("is-selfie", facingMode === "user");
     }
-    if (backCameraButton) {
-      backCameraButton.classList.toggle("is-active", facingMode === "environment");
-      backCameraButton.disabled = isSwitchingCamera || facingMode === "environment";
+    if (lensToggleButton) {
+      lensToggleButton.textContent = facingMode === "user" ? "Selfie" : "Arriere";
+      lensToggleButton.disabled = isSwitchingCamera || isRecording;
+      lensToggleButton.classList.toggle("is-active", facingMode === "environment");
+      lensToggleButton.classList.toggle("is-selfie", facingMode === "user");
+      lensToggleButton.classList.toggle("is-switching", isSwitchingCamera);
     }
-    if (selfieCameraButton) {
-      selfieCameraButton.classList.toggle("is-active", facingMode === "user");
-      selfieCameraButton.disabled = isSwitchingCamera || facingMode === "user";
+    if (modeToggleButton) {
+      modeToggleButton.textContent = cameraMode === "photo" ? "Photo" : "Video";
+      modeToggleButton.disabled = isRecording;
+      modeToggleButton.classList.toggle("is-active", cameraMode === "photo");
+      modeToggleButton.classList.toggle("is-video", cameraMode === "video");
     }
-    if (photoModeButton) {
-      photoModeButton.classList.toggle("is-active", cameraMode === "photo");
-    }
-    if (videoModeButton) {
-      videoModeButton.classList.toggle("is-active", cameraMode === "video");
-    }
-    if (capturePhotoButton) {
-      capturePhotoButton.hidden = cameraMode !== "photo" || (recorder && recorder.state === "recording");
-    }
-    if (recordVideoButton) {
-      recordVideoButton.hidden = cameraMode !== "video" || (recorder && recorder.state === "recording");
-    }
-    if (stopVideoButton) {
-      stopVideoButton.hidden = !(recorder && recorder.state === "recording");
+    if (cameraActionButton) {
+      cameraActionButton.classList.toggle("camera-shutter--video", cameraMode === "video" && !isRecording);
+      cameraActionButton.classList.toggle("camera-shutter--stop", isRecording);
+      cameraActionButton.setAttribute(
+        "aria-label",
+        isRecording ? "Stopper la video" : cameraMode === "video" ? "Lancer la video" : "Prendre la photo",
+      );
+      const label = cameraActionButton.querySelector("strong");
+      if (label) {
+        label.textContent = isRecording ? "Stop" : cameraMode === "video" ? "Video" : "Photo";
+      }
     }
   }
 
@@ -411,44 +410,35 @@
     });
   }
 
-  if (backCameraButton) {
-    backCameraButton.addEventListener("click", function () {
-      selectFacingMode("environment");
+  if (lensToggleButton) {
+    lensToggleButton.addEventListener("click", function () {
+      selectFacingMode(facingMode === "environment" ? "user" : "environment");
     });
   }
 
-  if (selfieCameraButton) {
-    selfieCameraButton.addEventListener("click", function () {
-      selectFacingMode("user");
-    });
-  }
-
-  if (photoModeButton) {
-    photoModeButton.addEventListener("click", function () {
-      cameraMode = "photo";
-      setCameraStatus(facingMode === "user" ? "Selfie actif - appuyez sur Photo" : "Camera arriere active - appuyez sur Photo");
+  if (modeToggleButton) {
+    modeToggleButton.addEventListener("click", function () {
+      if (recorder && recorder.state === "recording") {
+        return;
+      }
+      cameraMode = cameraMode === "photo" ? "video" : "photo";
+      setCameraStatus(cameraMode === "photo" ? "Mode photo - appuyez au centre" : "Mode video - appuyez au centre");
       updateCameraUi();
     });
   }
 
-  if (videoModeButton) {
-    videoModeButton.addEventListener("click", function () {
-      cameraMode = "video";
-      setCameraStatus("Mode video - appuyez sur Video");
-      updateCameraUi();
+  if (cameraActionButton) {
+    cameraActionButton.addEventListener("click", function () {
+      if (recorder && recorder.state === "recording") {
+        stopVideoRecording();
+        return;
+      }
+      if (cameraMode === "video") {
+        startVideoRecording();
+        return;
+      }
+      capturePhoto();
     });
-  }
-
-  if (capturePhotoButton) {
-    capturePhotoButton.addEventListener("click", capturePhoto);
-  }
-
-  if (recordVideoButton) {
-    recordVideoButton.addEventListener("click", startVideoRecording);
-  }
-
-  if (stopVideoButton) {
-    stopVideoButton.addEventListener("click", stopVideoRecording);
   }
 
   if (closeCameraButton) {

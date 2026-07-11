@@ -58,26 +58,13 @@
             </div>
           </details>
 
-          <div class="camera-mode-switch" aria-label="Type de capture">
-            <button class="camera-segment is-active" type="button" id="photo-mode-button">Photo</button>
-            <button class="camera-segment" type="button" id="video-mode-button">Video</button>
-          </div>
-
           <div class="camera-controls">
-            <button class="camera-pill camera-pill--lens is-active" type="button" id="back-camera-button">Arriere</button>
-            <button class="camera-shutter" type="button" id="capture-photo-button" aria-label="Prendre la photo">
+            <button class="camera-pill camera-pill--mode is-active" type="button" id="mode-toggle-button" aria-label="Changer le type de capture">Photo</button>
+            <button class="camera-shutter" type="button" id="camera-action-button" aria-label="Prendre la photo">
               <span></span>
               <strong>Photo</strong>
             </button>
-            <button class="camera-shutter camera-shutter--video" type="button" id="record-video-button" aria-label="Lancer la video" hidden>
-              <span></span>
-              <strong>Video</strong>
-            </button>
-            <button class="camera-shutter camera-shutter--stop" type="button" id="stop-video-button" aria-label="Stopper la video" hidden>
-              <span></span>
-              <strong>Stop</strong>
-            </button>
-            <button class="camera-pill camera-pill--lens" type="button" id="selfie-camera-button">Selfie</button>
+            <button class="camera-pill camera-pill--lens is-active" type="button" id="lens-toggle-button" aria-label="Changer de camera">Arriere</button>
           </div>
         </div>
       </div>

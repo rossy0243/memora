@@ -1698,7 +1698,6 @@ body.camera-open {
 }
 
 .camera-filters,
-.camera-mode-switch,
 .camera-controls {
   display: grid;
   gap: 8px;
@@ -1709,17 +1708,8 @@ body.camera-open {
   padding-top: 8px;
 }
 
-.camera-mode-switch {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .camera-filter,
-.camera-pill,
-.camera-segment {
+.camera-pill {
   min-height: 46px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
@@ -1729,16 +1719,34 @@ body.camera-open {
   font-weight: 900;
 }
 
-.camera-segment {
-  border-color: transparent;
-  background: transparent;
-}
-
 .camera-filter.is-active,
-.camera-pill.is-active,
-.camera-segment.is-active {
+.camera-pill.is-active {
   color: var(--color-ink);
   background: var(--color-sage);
+}
+
+.camera-pill--mode,
+.camera-pill--lens {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.camera-pill--mode.is-video {
+  border-color: rgba(255, 220, 216, 0.42);
+  background: rgba(169, 54, 54, 0.22);
+}
+
+.camera-pill--lens.is-selfie {
+  border-color: rgba(255, 255, 255, 0.26);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.camera-pill.is-switching {
+  color: rgba(255, 255, 255, 0.76);
 }
 
 .camera-pill:disabled {
@@ -1746,9 +1754,13 @@ body.camera-open {
 }
 
 .camera-controls {
-  grid-template-columns: 0.78fr minmax(112px, 1fr) 0.78fr;
+  grid-template-columns: minmax(76px, 0.8fr) minmax(104px, 1fr) minmax(76px, 0.8fr);
   align-items: center;
   justify-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 28px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .camera-shutter {
