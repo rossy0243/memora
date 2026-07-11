@@ -151,7 +151,7 @@ a {
 
 .hero__image {
   z-index: -2;
-  object-fit: cover;
+  object-fit: contain;
   object-position: 63% center;
 }
 
@@ -1881,10 +1881,11 @@ body.camera-open {
 }
 
 .capture-preview {
+  position: relative;
   overflow: hidden;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  border-radius: 22px;
+  background: var(--color-ink);
+  box-shadow: 0 16px 44px rgba(36, 31, 34, 0.16);
 }
 
 .capture-preview__media {
@@ -1893,34 +1894,53 @@ body.camera-open {
 
 .capture-preview__media img,
 .capture-preview__media video {
+  display: block;
   width: 100%;
-  max-height: min(58svh, 520px);
+  max-height: min(66svh, 620px);
   aspect-ratio: 3 / 4;
-  object-fit: contain;
+  object-fit: cover;
   background: var(--color-ink);
 }
 
 .capture-preview__body {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
   display: grid;
   gap: 12px;
   align-items: center;
-  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  padding: 12px;
+  color: #fff;
+  background: rgba(15, 12, 13, 0.72);
+  backdrop-filter: blur(14px);
 }
 
 .capture-preview__body span {
-  color: #25563d;
+  color: #fff;
   font-weight: 900;
 }
 
 .capture-preview__body p {
   margin: 4px 0 0;
-  color: var(--color-muted);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.94rem;
 }
 
 .capture-preview__actions {
   display: grid;
-  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.capture-preview__actions .button {
+  min-height: 44px;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.86rem;
 }
 
 .moment-field {
