@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, UploadCategory
@@ -118,6 +119,71 @@ class EventViewTests(TestCase):
         self.assertEqual(event.guest_access_code, "AMOUR2026")
         self.assertTrue(event.public_access_key)
         self.assertFalse(event.qr_code_image)
+
+    def test_event_cover_image_is_compressed_before_storage(self):
+        self.client.login(username="owner", password="secret")
+        image_buffer = BytesIO()
+        Image.new("RGB", (2400, 1600), (180, 92, 104)).save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+        cover_image = SimpleUploadedFile(
+            "cover.png",
+            image_buffer.read(),
+            content_type="image/png",
+        )
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Mariage couverture",
+                "couple_name": "Lea & Sam",
+                "event_type": self.event_type.pk,
+                "event_date": "2026-07-08",
+                "location": "Paris",
+                "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "",
+                "is_active": "on",
+                "cover_image": cover_image,
+            },
+        )
+
+        event = Event.objects.get(title="Mariage couverture")
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        self.assertTrue(event.cover_image.name.endswith(".jpg"))
+        with Image.open(event.cover_image) as saved_image:
+            self.assertEqual(saved_image.format, "JPEG")
+            self.assertLessEqual(saved_image.width, 1800)
+            self.assertLessEqual(saved_image.height, 1200)
+
+    @override_settings(MEMORA_MAX_COVER_IMAGE_SIZE=4)
+    def test_event_cover_image_rejects_too_large_file(self):
+        self.client.login(username="owner", password="secret")
+        image_buffer = BytesIO()
+        Image.new("RGB", (24, 24), (180, 92, 104)).save(image_buffer, format="JPEG")
+        image_buffer.seek(0)
+        cover_image = SimpleUploadedFile(
+            "cover.jpg",
+            image_buffer.read(),
+            content_type="image/jpeg",
+        )
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Mariage image lourde",
+                "couple_name": "Lea & Sam",
+                "event_type": self.event_type.pk,
+                "event_date": "2026-07-08",
+                "location": "Paris",
+                "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "",
+                "is_active": "on",
+                "cover_image": cover_image,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Cette image est trop lourde.", str(response.context["form"].errors))
+        self.assertFalse(Event.objects.filter(title="Mariage image lourde").exists())
 
     def test_event_detail_is_limited_to_owner(self):
         event = Event.objects.create(

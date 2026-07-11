@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{% if object %}Modifier{% else %}Creer{% endif %} un evenement - Memora{% endblock %}
 {% block body_class %}app-page{% endblock %}
@@ -25,9 +26,13 @@
       </label>
     {% endfor %}
     <div class="form-actions">
-      <button class="button button--primary" type="submit">Enregistrer</button>
+      <button class="button button--primary" type="submit" data-loading-text="Enregistrement...">Enregistrer</button>
       <a class="button button--secondary" href="{% if object %}{% url 'events:detail' object.pk %}{% else %}{% url 'dashboard:home' %}{% endif %}">Annuler</a>
     </div>
   </form>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/form-submit-state.js' %}"></script>
 {% endblock %}

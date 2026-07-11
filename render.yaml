@@ -57,6 +57,9 @@ services:
           property: connectionString
       - key: DJANGO_SECRET_KEY
         generateValue: true
+      - &env_web_concurrency
+        key: WEB_CONCURRENCY
+        value: "2"
       - &env_static_url
         key: DJANGO_STATIC_URL
         value: /static/
@@ -87,6 +90,9 @@ services:
       - &env_max_upload
         key: MEMORA_MAX_UPLOAD_SIZE
         value: "262144000"
+      - &env_max_cover_image
+        key: MEMORA_MAX_COVER_IMAGE_SIZE
+        value: "8388608"
       - &env_session_upload_limit
         key: MEMORA_SESSION_UPLOAD_LIMIT
         value: "5"
