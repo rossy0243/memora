@@ -6,10 +6,13 @@
 
   const fileInput = form.querySelector("input[type='file']");
   const selectedFileName = document.getElementById("selected-file-name");
+  const clientDurationInput = document.getElementById("client-duration-seconds");
   const capturePreview = document.getElementById("capture-preview");
   const previewImage = document.getElementById("capture-preview-image");
   const previewVideo = document.getElementById("capture-preview-video");
+  const previewDetails = document.getElementById("capture-preview-details");
   const replaceMediaButton = document.getElementById("replace-media-button");
+  const retakeCameraButton = document.getElementById("retake-camera-button");
   const cameraStudio = document.getElementById("camera-studio");
   const startCameraButton = document.getElementById("start-camera-button");
   const cameraPanel = document.getElementById("camera-panel");
@@ -33,6 +36,8 @@
   let recorder = null;
   let recordedChunks = [];
   let recordingTimeout = null;
+  let recordingStartedAt = 0;
+  let pendingCapturedDuration = null;
   const maxRecordingSeconds = 10;
 
   const cameraFilters = {
@@ -63,6 +68,44 @@
       previewVideo.hidden = true;
       previewVideo.load();
     }
+    if (previewDetails) {
+      previewDetails.textContent = "Verifiez l'apercu, choisissez le moment, puis envoyez.";
+    }
+  }
+
+  function setClientDuration(durationSeconds) {
+    if (!clientDurationInput) {
+      return;
+    }
+    if (durationSeconds && Number.isFinite(durationSeconds)) {
+      clientDurationInput.value = Math.min(durationSeconds, maxRecordingSeconds).toFixed(2);
+      return;
+    }
+    clientDurationInput.value = "";
+  }
+
+  function setCameraOpen(isOpen) {
+    document.body.classList.toggle("camera-open", isOpen);
+    if (cameraStudio) {
+      cameraStudio.classList.toggle("camera-studio--active", isOpen);
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) {
+      return "";
+    }
+    if (bytes < 1024 * 1024) {
+      return Math.max(1, Math.round(bytes / 1024)) + " Ko";
+    }
+    return (bytes / (1024 * 1024)).toFixed(1).replace(".", ",") + " Mo";
+  }
+
+  function formatDuration(durationSeconds) {
+    if (!durationSeconds || !Number.isFinite(durationSeconds)) {
+      return "";
+    }
+    return durationSeconds.toFixed(durationSeconds >= 10 ? 0 : 1).replace(".", ",") + " s";
   }
 
   function setCameraStatus(message) {
@@ -91,6 +134,7 @@
     if (cameraPanel) {
       cameraPanel.hidden = true;
     }
+    setCameraOpen(false);
     if (recordVideoButton) {
       recordVideoButton.hidden = false;
     }
@@ -124,8 +168,10 @@
       if (cameraPanel) {
         cameraPanel.hidden = false;
       }
+      setCameraOpen(true);
       setCameraStatus(facingMode === "user" ? "Mode selfie" : "Camera arriere");
     } catch {
+      setCameraOpen(false);
       setCameraStatus("Autorisez la camera ou utilisez l'appareil natif.");
     }
   }
@@ -134,7 +180,7 @@
     return new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
   }
 
-  function setCapturedFile(blob, filename) {
+  function setCapturedFile(blob, filename, durationSeconds) {
     if (!fileInput || !window.DataTransfer || !window.File) {
       setCameraStatus("Capture prete. Votre navigateur demande l'appareil natif.");
       return;
@@ -143,6 +189,7 @@
     const file = new File([blob], filename, { type: blob.type });
     const transfer = new DataTransfer();
     transfer.items.add(file);
+    pendingCapturedDuration = durationSeconds || null;
     fileInput.files = transfer.files;
     fileInput.dispatchEvent(new Event("change", { bubbles: true }));
     setCameraStatus("Souvenir pret a envoyer");
@@ -195,13 +242,16 @@
         clearTimeout(recordingTimeout);
         recordingTimeout = null;
       }
+      const recordedSeconds = recordingStartedAt ? (Date.now() - recordingStartedAt) / 1000 : maxRecordingSeconds;
       const recordedType = recorder.mimeType || mimeType || "video/webm";
       const extension = recordedType.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(recordedChunks, { type: recordedType });
-      setCapturedFile(blob, "memora-video-" + timestamp() + "." + extension);
+      setCapturedFile(blob, "memora-video-" + timestamp() + "." + extension, recordedSeconds);
       recordedChunks = [];
+      recordingStartedAt = 0;
     });
     recorder.start();
+    recordingStartedAt = Date.now();
     recordingTimeout = setTimeout(stopVideoRecording, maxRecordingSeconds * 1000);
     setCameraStatus("Enregistrement video... 10 secondes max");
     if (recordVideoButton) {
@@ -278,22 +328,48 @@
       selectedFileName.textContent = file ? "Souvenir pret : " + file.name : "JPG, PNG, WEBP, MP4, MOV ou WEBM.";
 
       clearPreview();
+      const capturedDuration = pendingCapturedDuration;
+      pendingCapturedDuration = null;
+      setClientDuration(capturedDuration);
       if (!file || !capturePreview || !window.URL || !URL.createObjectURL) {
         return;
       }
 
       previewUrl = URL.createObjectURL(file);
       capturePreview.hidden = false;
+      if (previewDetails) {
+        const sizeLabel = formatFileSize(file.size);
+        previewDetails.textContent = sizeLabel ? "Apercu pret - " + sizeLabel + "." : "Apercu pret.";
+      }
 
       if (file.type.indexOf("image/") === 0 && previewImage) {
         previewImage.src = previewUrl;
         previewImage.hidden = false;
+        if (previewDetails) {
+          const sizeLabel = formatFileSize(file.size);
+          previewDetails.textContent = sizeLabel ? "Photo prete - " + sizeLabel + "." : "Photo prete.";
+        }
         return;
       }
 
       if (file.type.indexOf("video/") === 0 && previewVideo) {
         previewVideo.src = previewUrl;
         previewVideo.hidden = false;
+        if (previewDetails) {
+          const sizeLabel = formatFileSize(file.size);
+          previewDetails.textContent = sizeLabel ? "Video prete - " + sizeLabel + "." : "Video prete.";
+        }
+        previewVideo.addEventListener("loadedmetadata", function handleMetadata() {
+          const duration = previewVideo.duration;
+          if (duration && Number.isFinite(duration)) {
+            setClientDuration(duration);
+            if (previewDetails) {
+              const sizeLabel = formatFileSize(file.size);
+              const parts = ["Video prete", formatDuration(duration), sizeLabel].filter(Boolean);
+              previewDetails.textContent = parts.join(" - ") + ".";
+            }
+          }
+        }, { once: true });
         previewVideo.load();
       }
     });
@@ -303,6 +379,10 @@
     replaceMediaButton.addEventListener("click", function () {
       fileInput.click();
     });
+  }
+
+  if (retakeCameraButton) {
+    retakeCameraButton.addEventListener("click", startCamera);
   }
 
   form.addEventListener("submit", function (event) {

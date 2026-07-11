@@ -15,6 +15,7 @@
 
   <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}">
     {% csrf_token %}
+    {{ form.client_duration_seconds }}
     {{ form.non_field_errors }}
 
     <div class="upload-quota {% if upload_quota.is_reached %}upload-quota--full{% endif %}">
@@ -33,25 +34,34 @@
         <button class="button button--primary" type="button" id="start-camera-button">Lancer la camera</button>
       </div>
 
-      <div class="camera-panel" id="camera-panel" hidden>
+      <div class="camera-panel" id="camera-panel" role="dialog" aria-modal="true" aria-label="Camera Memora" hidden>
+        <div class="camera-panel__topbar">
+          <span>Camera Memora</span>
+          <button class="camera-close" type="button" id="close-camera-button" aria-label="Fermer la camera">Fermer</button>
+        </div>
+
         <div class="camera-live">
           <video id="camera-live-video" autoplay muted playsinline></video>
           <span id="camera-status">Camera prete</span>
         </div>
 
-        <div class="camera-filters" aria-label="Filtres camera">
-          <button type="button" class="camera-filter is-active" data-camera-filter="none">Naturel</button>
-          <button type="button" class="camera-filter" data-camera-filter="soft">Doux</button>
-          <button type="button" class="camera-filter" data-camera-filter="warm">Chaud</button>
-          <button type="button" class="camera-filter" data-camera-filter="mono">Noir blanc</button>
-        </div>
+        <div class="camera-panel__dock">
+          <details class="camera-filter-menu">
+            <summary>Filtres</summary>
+            <div class="camera-filters" aria-label="Filtres camera">
+              <button type="button" class="camera-filter is-active" data-camera-filter="none">Naturel</button>
+              <button type="button" class="camera-filter" data-camera-filter="soft">Doux</button>
+              <button type="button" class="camera-filter" data-camera-filter="warm">Chaud</button>
+              <button type="button" class="camera-filter" data-camera-filter="mono">Noir blanc</button>
+            </div>
+          </details>
 
-        <div class="camera-controls">
-          <button class="button button--secondary button--compact" type="button" id="switch-camera-button">Selfie</button>
-          <button class="button button--primary button--compact" type="button" id="capture-photo-button">Photo</button>
-          <button class="button button--secondary button--compact" type="button" id="record-video-button">Video</button>
-          <button class="button button--secondary button--compact" type="button" id="stop-video-button" hidden>Stop</button>
-          <button class="button button--secondary button--compact" type="button" id="close-camera-button">Fermer</button>
+          <div class="camera-controls">
+            <button class="camera-pill" type="button" id="switch-camera-button">Selfie</button>
+            <button class="camera-pill camera-pill--primary" type="button" id="capture-photo-button">Photo</button>
+            <button class="camera-pill" type="button" id="record-video-button">Video</button>
+            <button class="camera-pill camera-pill--danger" type="button" id="stop-video-button" hidden>Stop</button>
+          </div>
         </div>
       </div>
     </section>
@@ -70,13 +80,18 @@
         <video id="capture-preview-video" muted playsinline controls></video>
       </div>
       <div class="capture-preview__body">
-        <span>Souvenir pret a envoyer</span>
-        <button class="button button--secondary button--compact" type="button" id="replace-media-button">Reprendre</button>
+        <div>
+          <span>Souvenir pret a envoyer</span>
+          <p id="capture-preview-details">Verifiez l'apercu, choisissez le moment, puis envoyez.</p>
+        </div>
+        <div class="capture-preview__actions">
+          <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre avec la camera</button>
+          <button class="button button--secondary button--compact" type="button" id="replace-media-button">Choisir un autre fichier</button>
+        </div>
       </div>
     </div>
 
     <div class="moment-field">
-      <label for="{{ form.category.id_for_label }}">Choisir le moment <span>obligatoire</span></label>
       {{ form.category.errors }}
       {{ form.category }}
     </div>

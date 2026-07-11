@@ -1529,10 +1529,49 @@ h2 {
   font-size: 1.18rem;
 }
 
+body.camera-open {
+  overflow: hidden;
+}
+
 .camera-panel {
   display: grid;
   gap: 12px;
   padding: 0 12px 14px;
+}
+
+.camera-studio--active .camera-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+  background: #0f0c0d;
+}
+
+.camera-panel__topbar {
+  display: none;
+}
+
+.camera-studio--active .camera-panel__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  color: #fff;
+  font-weight: 900;
+}
+
+.camera-close {
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font: inherit;
+  font-weight: 900;
 }
 
 .camera-live {
@@ -1542,11 +1581,23 @@ h2 {
   background: #000;
 }
 
+.camera-studio--active .camera-live {
+  border-radius: 22px;
+  min-height: 0;
+}
+
 .camera-live video {
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
   background: #000;
+}
+
+.camera-studio--active .camera-live video {
+  display: block;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
 }
 
 .camera-live span {
@@ -1561,6 +1612,36 @@ h2 {
   font-weight: 900;
 }
 
+.camera-panel__dock {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.camera-filter-menu {
+  position: relative;
+}
+
+.camera-filter-menu summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 0 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.camera-filter-menu summary::-webkit-details-marker {
+  display: none;
+}
+
 .camera-filters,
 .camera-controls {
   display: grid;
@@ -1569,14 +1650,16 @@ h2 {
 
 .camera-filters {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 8px;
 }
 
-.camera-filter {
-  min-height: 42px;
+.camera-filter,
+.camera-pill {
+  min-height: 46px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   font: inherit;
   font-weight: 900;
 }
@@ -1587,7 +1670,21 @@ h2 {
 }
 
 .camera-controls {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 0.86fr 1.08fr 1.08fr;
+  align-items: center;
+}
+
+.camera-pill--primary {
+  border-color: #fff;
+  color: var(--color-ink);
+  background: #fff;
+}
+
+.camera-pill--danger {
+  grid-column: span 2;
+  border-color: rgba(255, 220, 216, 0.5);
+  color: #fff;
+  background: #a93636;
 }
 
 .file-drop {
@@ -1654,8 +1751,8 @@ h2 {
 .capture-preview__media img,
 .capture-preview__media video {
   width: 100%;
-  max-height: 420px;
-  aspect-ratio: 4 / 3;
+  max-height: min(58svh, 520px);
+  aspect-ratio: 3 / 4;
   object-fit: contain;
   background: var(--color-ink);
 }
@@ -1664,12 +1761,23 @@ h2 {
   display: grid;
   gap: 12px;
   align-items: center;
-  padding: 14px;
+  padding: 16px;
 }
 
 .capture-preview__body span {
   color: #25563d;
   font-weight: 900;
+}
+
+.capture-preview__body p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.94rem;
+}
+
+.capture-preview__actions {
+  display: grid;
+  gap: 10px;
 }
 
 .moment-field {
@@ -1858,7 +1966,15 @@ h2 {
   }
 
   .camera-controls {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: 0.8fr 1fr 1fr;
+  }
+
+  .capture-preview__body {
+    grid-template-columns: 1fr auto;
+  }
+
+  .capture-preview__actions {
+    grid-template-columns: auto auto;
   }
 
   .confirmation-card {

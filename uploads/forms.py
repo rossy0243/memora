@@ -29,7 +29,7 @@ def _probe_video_duration(media_file):
             for chunk in media_file.chunks():
                 temporary_file.write(chunk)
 
-        result = subprocess.run(
+        commands = [
             [
                 ffprobe_binary,
                 "-v",
@@ -40,16 +40,36 @@ def _probe_video_duration(media_file):
                 "json",
                 str(temporary_path),
             ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=15,
-        )
-        if result.returncode != 0:
-            raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+            [
+                ffprobe_binary,
+                "-v",
+                "error",
+                "-analyzeduration",
+                "100M",
+                "-probesize",
+                "100M",
+                "-show_entries",
+                "format=duration:stream=duration",
+                "-of",
+                "json",
+                str(temporary_path),
+            ],
+        ]
 
-        payload = json.loads(result.stdout or "{}")
-        return float(payload["format"]["duration"])
+        for command in commands:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            if result.returncode == 0:
+                duration = _duration_from_ffprobe_payload(result.stdout)
+                if duration is not None:
+                    return duration
+
+        raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired):
         raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
     finally:
@@ -59,7 +79,31 @@ def _probe_video_duration(media_file):
             temporary_path.unlink(missing_ok=True)
 
 
+def _duration_from_ffprobe_payload(payload):
+    data = json.loads(payload or "{}")
+    format_duration = data.get("format", {}).get("duration")
+    if format_duration not in (None, "N/A"):
+        duration = float(format_duration)
+        if duration > 0:
+            return duration
+
+    for stream in data.get("streams", []):
+        stream_duration = stream.get("duration")
+        if stream_duration not in (None, "N/A"):
+            duration = float(stream_duration)
+            if duration > 0:
+                return duration
+
+    return None
+
+
 class GuestUploadForm(forms.ModelForm):
+    client_duration_seconds = forms.FloatField(
+        required=False,
+        min_value=0,
+        widget=forms.HiddenInput(attrs={"id": "client-duration-seconds"}),
+    )
+
     class Meta:
         model = GuestUpload
         fields = ("media_file", "category")
@@ -90,6 +134,7 @@ class GuestUploadForm(forms.ModelForm):
             {
                 "class": "moment-select",
                 "required": "required",
+                "aria-label": "Moment obligatoire",
             }
         )
 
@@ -109,12 +154,35 @@ class GuestUploadForm(forms.ModelForm):
             raise forms.ValidationError("Cette video est trop lourde.")
 
         if extension in settings.MEMORA_VIDEO_EXTENSIONS:
-            duration_seconds = _probe_video_duration(media_file)
+            duration_seconds = self._client_duration_seconds()
+            try:
+                duration_seconds = _probe_video_duration(media_file)
+            except forms.ValidationError:
+                if not duration_seconds or media_file.size > settings.MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE:
+                    raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+
             if duration_seconds > settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
                 raise forms.ValidationError("Cette video depasse 10 secondes.")
             self.media_duration = timedelta(seconds=duration_seconds)
 
         return media_file
+
+    def _client_duration_seconds(self):
+        raw_duration = None
+        if self.is_bound:
+            raw_duration = self.data.get(self.add_prefix("client_duration_seconds"))
+        else:
+            raw_duration = self.cleaned_data.get("client_duration_seconds")
+
+        try:
+            duration_seconds = float(raw_duration)
+        except (TypeError, ValueError):
+            return None
+
+        if duration_seconds <= 0:
+            return None
+
+        return duration_seconds
 
     @staticmethod
     def get_media_type(filename):

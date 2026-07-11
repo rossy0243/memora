@@ -3,6 +3,7 @@ import shutil
 import tempfile
 from unittest.mock import patch
 
+from django import forms
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -239,7 +240,9 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Video")
         self.assertContains(response, "Ouvrir l'appareil natif")
         self.assertContains(response, "Souvenir pret a envoyer")
-        self.assertContains(response, "Choisir le moment")
+        self.assertContains(response, "Reprendre avec la camera")
+        self.assertContains(response, "Moment obligatoire")
+        self.assertNotContains(response, "Choisir le moment")
         self.assertContains(response, "obligatoire")
         self.assertContains(response, "Selectionner un moment")
         self.assertContains(response, "moment-select")
@@ -401,6 +404,48 @@ class GuestUploadViewTests(TestCase):
         upload = GuestUpload.objects.get(event=self.event)
         self.assertEqual(upload.media_type, GuestUpload.MediaType.VIDEO)
         self.assertEqual(upload.duration.total_seconds(), 9.5)
+
+    @patch(
+        "uploads.forms._probe_video_duration",
+        side_effect=forms.ValidationError("La duree de cette video ne peut pas etre verifiee."),
+    )
+    def test_accepts_memora_camera_duration_when_ffprobe_cannot_read_video(self, _probe_video_duration):
+        media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+                "client_duration_seconds": "8.25",
+            },
+        )
+
+        self.assertRedirects(response, self.thanks_url())
+        upload = GuestUpload.objects.get(event=self.event)
+        self.assertEqual(upload.media_type, GuestUpload.MediaType.VIDEO)
+        self.assertEqual(upload.duration.total_seconds(), 8.25)
+
+    @override_settings(MEMORA_MAX_UPLOAD_SIZE=50, MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE=4)
+    @patch(
+        "uploads.forms._probe_video_duration",
+        side_effect=forms.ValidationError("La duree de cette video ne peut pas etre verifiee."),
+    )
+    def test_rejects_client_duration_fallback_for_large_unreadable_video(self, _probe_video_duration):
+        media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+                "client_duration_seconds": "8.25",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "La duree de cette video ne peut pas etre verifiee.")
+        self.assertEqual(GuestUpload.objects.count(), 0)
 
     @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
     def test_limits_uploads_by_session(self):
