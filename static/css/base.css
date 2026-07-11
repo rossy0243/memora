@@ -461,6 +461,101 @@ h2 {
   color: var(--color-champagne);
 }
 
+.site-footer {
+  padding: 36px 20px 22px;
+  color: rgba(255, 255, 255, 0.82);
+  background:
+    linear-gradient(135deg, rgba(159, 79, 95, 0.28), rgba(216, 180, 106, 0.12)),
+    var(--color-ink);
+}
+
+.site-footer__inner,
+.site-footer__bottom {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+
+.site-footer__inner {
+  display: grid;
+  gap: 26px;
+}
+
+.site-footer__brand {
+  display: grid;
+  gap: 10px;
+}
+
+.site-footer__logo {
+  width: max-content;
+  color: #fff;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.site-footer__brand p {
+  max-width: 420px;
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 1rem;
+}
+
+.site-footer__promise {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.site-footer__promise span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.site-footer__links {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.site-footer__links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-footer__links a:hover,
+.site-footer__links a:focus {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.site-footer__bottom {
+  display: grid;
+  gap: 6px;
+  margin-top: 30px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding-top: 18px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.82rem;
+}
+
 @media (min-width: 720px) {
   .site-header {
     padding-top: 24px;
@@ -524,6 +619,20 @@ h2 {
 
   .closing-band .button {
     align-self: end;
+  }
+
+  .site-footer {
+    padding: 48px 56px 24px;
+  }
+
+  .site-footer__inner {
+    grid-template-columns: minmax(260px, 1fr) minmax(280px, 0.8fr) minmax(220px, 0.65fr);
+    align-items: start;
+  }
+
+  .site-footer__bottom {
+    grid-template-columns: 1fr auto;
+    align-items: center;
   }
 }
 

@@ -15,6 +15,8 @@ from uploads.models import GuestUpload
 
 from .analysis import analyze_event_media
 from .models import GeneratedMovie, MediaAnalysis
+from .runway import build_runway_montage_payload, runway_is_ready
+from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
 
 
 DEFAULT_ZIP_CATEGORY_FOLDERS = {
@@ -37,6 +39,14 @@ MOVIE_CATEGORY_SCORE_BOOSTS = {
     "cake": 12,
     "funny": 18,
     "emotional": 20,
+}
+
+MOVIE_PHOTO_CATEGORY_SCORE_BOOSTS = {
+    "ceremony": 10,
+    "cake": 8,
+    "emotional": 14,
+    "funny": 10,
+    "reception": 6,
 }
 
 
@@ -94,31 +104,26 @@ def get_movie_candidate_uploads(event):
         .order_by("uploaded_at", "pk")
     )
 
-    videos = [upload for upload in uploads if upload.media_type == GuestUpload.MediaType.VIDEO]
-    candidate_pool = videos or uploads
-    candidate_pool.sort(
-        key=lambda upload: (
-            score_movie_candidate(upload),
-            upload.uploaded_at,
-            upload.pk,
-        ),
-        reverse=True,
+    videos = _sort_movie_candidates(
+        upload for upload in uploads if upload.media_type == GuestUpload.MediaType.VIDEO
+    )
+    photos = _sort_movie_candidates(
+        upload for upload in uploads if upload.media_type == GuestUpload.MediaType.IMAGE
     )
 
-    selected_uploads = []
-    total_duration = 0
-    max_duration = settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
+    if not videos:
+        return _select_until_duration_limit(photos, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS)
+    if not photos:
+        return _select_until_duration_limit(videos, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS)
 
-    for upload in candidate_pool:
-        estimated_duration = _estimated_movie_clip_duration(upload)
-        if total_duration + estimated_duration > max_duration:
-            continue
-        selected_uploads.append(upload)
-        total_duration += estimated_duration
-        if total_duration >= max_duration:
-            break
-
-    return selected_uploads
+    selected_videos, reserved_photo_seconds = _select_videos_with_photo_reserve(videos, photos)
+    selected_photos = _select_photos_for_mixed_movie(
+        photos,
+        selected_videos,
+        reserved_photo_seconds,
+    )
+    selected_videos = _fill_remaining_duration_with_videos(videos, selected_videos, selected_photos)
+    return _weave_photos_between_videos(selected_videos, selected_photos)
 
 
 def score_movie_candidate(upload):
@@ -131,6 +136,8 @@ def score_movie_candidate(upload):
         score = analysis.movie_score
         if upload.media_type == GuestUpload.MediaType.VIDEO:
             score += 18
+        else:
+            score += MOVIE_PHOTO_CATEGORY_SCORE_BOOSTS.get(upload.category.code, 0)
         if upload.is_selected_for_movie:
             score += 5
         return score
@@ -152,6 +159,104 @@ def score_movie_candidate(upload):
             score -= 10
 
     return score
+
+
+def _sort_movie_candidates(uploads):
+    candidates = list(uploads)
+    candidates.sort(
+        key=lambda upload: (
+            score_movie_candidate(upload),
+            upload.uploaded_at,
+            upload.pk,
+        ),
+        reverse=True,
+    )
+    return candidates
+
+
+def _select_until_duration_limit(candidates, max_duration, max_count=None):
+    selected_uploads = []
+    total_duration = 0
+    for upload in candidates:
+        if max_count is not None and len(selected_uploads) >= max_count:
+            break
+        estimated_duration = _estimated_movie_clip_duration(upload)
+        if total_duration + estimated_duration > max_duration:
+            continue
+        selected_uploads.append(upload)
+        total_duration += estimated_duration
+        if total_duration >= max_duration:
+            break
+    return selected_uploads
+
+
+def _select_videos_with_photo_reserve(videos, photos):
+    max_duration = settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
+    target_photo_seconds = int(max_duration * settings.MEMORA_MOVIE_PHOTO_TARGET_RATIO)
+    min_photo_seconds = min(
+        len(photos),
+        settings.MEMORA_MOVIE_MIN_PHOTO_COUNT_WITH_VIDEOS,
+    ) * settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+    reserved_photo_seconds = min(max(target_photo_seconds, min_photo_seconds), max_duration)
+    video_budget = max(max_duration - reserved_photo_seconds, 0)
+
+    selected_videos = _select_until_duration_limit(videos, video_budget)
+    if not selected_videos:
+        selected_videos = _select_until_duration_limit(videos, max_duration)
+        reserved_photo_seconds = max_duration - sum(_estimated_movie_clip_duration(upload) for upload in selected_videos)
+
+    return selected_videos, reserved_photo_seconds
+
+
+def _select_photos_for_mixed_movie(photos, selected_videos, reserved_photo_seconds):
+    used_video_seconds = sum(_estimated_movie_clip_duration(upload) for upload in selected_videos)
+    remaining_duration = max(settings.MEMORA_MOVIE_MAX_DURATION_SECONDS - used_video_seconds, 0)
+    photo_budget = min(reserved_photo_seconds, remaining_duration)
+    max_photo_count = max(
+        len(selected_videos),
+        settings.MEMORA_MOVIE_MIN_PHOTO_COUNT_WITH_VIDEOS,
+    )
+    return _select_until_duration_limit(photos, photo_budget, max_count=max_photo_count)
+
+
+def _fill_remaining_duration_with_videos(videos, selected_videos, selected_photos):
+    selected_ids = {upload.pk for upload in selected_videos}
+    used_duration = sum(
+        _estimated_movie_clip_duration(upload)
+        for upload in [*selected_videos, *selected_photos]
+    )
+    remaining_duration = max(settings.MEMORA_MOVIE_MAX_DURATION_SECONDS - used_duration, 0)
+
+    additional_videos = _select_until_duration_limit(
+        [upload for upload in videos if upload.pk not in selected_ids],
+        remaining_duration,
+    )
+    return [*selected_videos, *additional_videos]
+
+
+def _weave_photos_between_videos(videos, photos):
+    if not photos:
+        return videos
+
+    interval = max(settings.MEMORA_MOVIE_MAX_CONSECUTIVE_VIDEOS_BEFORE_PHOTO, 1)
+    photo_slots = {index: [] for index in range(1, len(videos) + 1)}
+    for photo_index, photo in enumerate(photos):
+        slot = 1 + (photo_index * len(videos)) // len(photos)
+        photo_slots[slot].append(photo)
+
+    selected = []
+    consecutive_videos = 0
+    pending_photos = []
+    for index, video in enumerate(videos, start=1):
+        selected.append(video)
+        consecutive_videos += 1
+        pending_photos.extend(photo_slots[index])
+        if pending_photos and (consecutive_videos >= interval or index == len(videos)):
+            selected.extend(pending_photos)
+            pending_photos = []
+            consecutive_videos = 0
+
+    return selected
 
 
 def get_event_movie_schedule_at(event):
@@ -252,7 +357,27 @@ def process_generated_movie(movie):
         return movie
 
     movie.status = GeneratedMovie.Status.PROCESSING
-    movie.save(update_fields=["status", "updated_at"])
+    soundtrack = choose_movie_soundtrack(event, uploads)
+    edit_decision_data = build_edit_decision_data(event, uploads, soundtrack)
+    runway_ready = runway_is_ready()
+    edit_decision_data["runway"] = {
+        "ready": runway_ready,
+        "payload": build_runway_montage_payload(event, uploads, edit_decision_data),
+    }
+    movie.render_provider = "ffmpeg"
+    movie.music_mood = soundtrack.mood
+    movie.music_track = soundtrack.track_name
+    movie.edit_decision_data = edit_decision_data
+    movie.save(
+        update_fields=[
+            "status",
+            "render_provider",
+            "music_mood",
+            "music_track",
+            "edit_decision_data",
+            "updated_at",
+        ]
+    )
 
     try:
         with tempfile.TemporaryDirectory(prefix="memora_movie_") as temp_dir:
@@ -270,7 +395,7 @@ def process_generated_movie(movie):
                 "".join(f"file '{path.as_posix()}'\n" for path in clip_paths),
                 encoding="utf-8",
             )
-            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+            concat_output_path = temp_path / f"memora_{_clean_name(event.title)}_base.mp4"
             _run_ffmpeg(
                 [
                     ffmpeg_binary,
@@ -283,12 +408,20 @@ def process_generated_movie(movie):
                     str(concat_file),
                     "-c",
                     "copy",
-                    str(output_path),
+                    str(concat_output_path),
                 ]
             )
 
-            with output_path.open("rb") as output_file:
-                movie.final_file.save(output_path.name, File(output_file), save=False)
+            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+            final_output_path = _apply_soundtrack_if_available(
+                concat_output_path,
+                output_path,
+                soundtrack,
+                ffmpeg_binary,
+            )
+
+            with final_output_path.open("rb") as output_file:
+                movie.final_file.save(final_output_path.name, File(output_file), save=False)
 
         movie.status = GeneratedMovie.Status.COMPLETED
         movie.generated_at = timezone.now()
@@ -300,6 +433,10 @@ def process_generated_movie(movie):
                 "status",
                 "generated_at",
                 "duration",
+                "render_provider",
+                "music_mood",
+                "music_track",
+                "edit_decision_data",
                 "error_logs",
                 "updated_at",
             ]
@@ -372,9 +509,20 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                 str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS),
                 "-vf",
                 video_filter,
-                "-an",
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
                 "-c:v",
                 settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                "-c:a",
+                "aac",
+                "-b:a",
+                "128k",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
                 "-movflags",
                 "+faststart",
                 str(output_path),
@@ -403,6 +551,71 @@ def _run_ffmpeg(command):
     if result.returncode != 0:
         details = "\n".join(part for part in [result.stdout, result.stderr] if part)
         raise RuntimeError(details or f"FFmpeg a echoue avec le code {result.returncode}")
+
+
+def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_binary):
+    if not soundtrack.track_path:
+        return input_path
+    if not _media_file_has_audio(input_path):
+        return input_path
+
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(input_path),
+            "-stream_loop",
+            "-1",
+            "-i",
+            str(soundtrack.track_path),
+            "-filter_complex",
+            (
+                f"[0:a]aresample=48000,volume={settings.MEMORA_MOVIE_VOICE_VOLUME}[voice];"
+                f"[1:a]aresample=48000,volume={settings.MEMORA_MOVIE_MUSIC_VOLUME}[music];"
+                "[music][voice]sidechaincompress=threshold=0.035:ratio=10:attack=80:release=900[ducked];"
+                "[voice][ducked]amix=inputs=2:duration=first:dropout_transition=2[a]"
+            ),
+            "-map",
+            "0:v:0",
+            "-map",
+            "[a]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "160k",
+            "-shortest",
+            str(output_path),
+        ]
+    )
+    return output_path
+
+
+def _media_file_has_audio(path):
+    ffprobe_binary = settings.MEMORA_FFPROBE_BINARY
+    if shutil.which(ffprobe_binary) is None and not Path(ffprobe_binary).exists():
+        return False
+
+    result = subprocess.run(
+        [
+            ffprobe_binary,
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0 and "audio" in result.stdout.lower()
 
 
 def _category_folder_name(category):

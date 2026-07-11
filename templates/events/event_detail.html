@@ -102,6 +102,12 @@
         {% if latest_movie.generated_at %}
           <p>Genere le {{ latest_movie.generated_at }}</p>
         {% endif %}
+        {% if latest_movie.music_mood %}
+          <p>Ambiance musicale : {{ latest_movie.music_mood }}{% if latest_movie.music_track %} - {{ latest_movie.music_track }}{% endif %}</p>
+        {% endif %}
+        {% if latest_movie.render_provider %}
+          <p>Moteur de montage : {{ latest_movie.render_provider }}</p>
+        {% endif %}
         {% if latest_movie.final_file %}
           <a class="button button--secondary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
         {% endif %}

@@ -28,6 +28,10 @@ class GeneratedMovie(models.Model):
         blank=True,
         null=True,
     )
+    render_provider = models.CharField(max_length=40, default="ffmpeg")
+    music_mood = models.CharField(max_length=80, blank=True)
+    music_track = models.CharField(max_length=255, blank=True)
+    edit_decision_data = models.JSONField(default=dict, blank=True)
     generated_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)
     error_logs = models.TextField(blank=True)
@@ -70,6 +74,7 @@ class MediaAnalysis(models.Model):
     brightness = models.FloatField(blank=True, null=True)
     sharpness = models.FloatField(blank=True, null=True)
     tags = models.JSONField(default=list, blank=True)
+    provider_payload = models.JSONField(default=dict, blank=True)
     summary = models.CharField(max_length=255, blank=True)
     analyzed_at = models.DateTimeField(blank=True, null=True)
     error_logs = models.TextField(blank=True)

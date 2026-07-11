@@ -5,9 +5,9 @@ from .models import GeneratedMovie, MediaAnalysis
 
 @admin.register(GeneratedMovie)
 class GeneratedMovieAdmin(admin.ModelAdmin):
-    list_display = ("event", "status", "generated_at", "duration", "created_at")
-    list_filter = ("status", "generated_at", "created_at")
-    search_fields = ("event__title", "error_logs")
+    list_display = ("event", "status", "render_provider", "music_mood", "generated_at", "duration", "created_at")
+    list_filter = ("status", "render_provider", "music_mood", "generated_at", "created_at")
+    search_fields = ("event__title", "music_track", "error_logs")
     readonly_fields = ("created_at", "updated_at")
 
 
@@ -16,6 +16,7 @@ class MediaAnalysisAdmin(admin.ModelAdmin):
     list_display = (
         "upload",
         "status",
+        "provider",
         "movie_score",
         "technical_score",
         "emotion_score",

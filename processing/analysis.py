@@ -8,6 +8,7 @@ from PIL import Image, ImageFilter, ImageStat
 
 from uploads.models import GuestUpload
 
+from .google_video import GOOGLE_PROVIDER, analyze_video_with_google
 from .models import MediaAnalysis
 
 
@@ -102,6 +103,7 @@ def process_media_analysis(analysis):
     analysis.save(update_fields=["status", "error_logs", "updated_at"])
 
     try:
+        provider_payload = {}
         with tempfile.TemporaryDirectory(prefix="memora_analysis_") as temp_dir:
             temp_path = Path(temp_dir)
             if upload.media_type == GuestUpload.MediaType.VIDEO:
@@ -109,12 +111,15 @@ def process_media_analysis(analysis):
                 frame_path = temp_path / "frame.jpg"
                 _extract_video_frame(source_path, frame_path)
                 metrics = _analyze_image(frame_path)
+                if _should_use_google_video_intelligence(upload):
+                    provider_payload = analyze_video_with_google(source_path)
             else:
                 source_path = _copy_media_to_temporary_file(upload, temp_path)
                 metrics = _analyze_image(source_path)
 
-        scores = _score_upload(upload, metrics)
+        scores = _score_upload(upload, metrics, provider_payload=provider_payload)
         analysis.status = MediaAnalysis.Status.COMPLETED
+        analysis.provider = provider_payload.get("provider", "local_heuristic_v1")
         analysis.technical_score = scores["technical_score"]
         analysis.emotion_score = scores["emotion_score"]
         analysis.energy_score = scores["energy_score"]
@@ -122,12 +127,14 @@ def process_media_analysis(analysis):
         analysis.brightness = metrics["brightness"]
         analysis.sharpness = metrics["sharpness"]
         analysis.tags = scores["tags"]
+        analysis.provider_payload = provider_payload
         analysis.summary = scores["summary"]
         analysis.analyzed_at = timezone.now()
         analysis.error_logs = ""
         analysis.save(
             update_fields=[
                 "status",
+                "provider",
                 "technical_score",
                 "emotion_score",
                 "energy_score",
@@ -135,6 +142,7 @@ def process_media_analysis(analysis):
                 "brightness",
                 "sharpness",
                 "tags",
+                "provider_payload",
                 "summary",
                 "analyzed_at",
                 "error_logs",
@@ -147,6 +155,14 @@ def process_media_analysis(analysis):
         analysis.save(update_fields=["status", "error_logs", "updated_at"])
 
     return analysis
+
+
+def _should_use_google_video_intelligence(upload):
+    return (
+        settings.MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED
+        and settings.MEMORA_AI_ANALYSIS_PROVIDER == GOOGLE_PROVIDER
+        and upload.media_type == GuestUpload.MediaType.VIDEO
+    )
 
 
 def _analyze_image(path):
@@ -165,7 +181,8 @@ def _analyze_image(path):
     }
 
 
-def _score_upload(upload, metrics):
+def _score_upload(upload, metrics, provider_payload=None):
+    provider_payload = provider_payload or {}
     brightness_score = _clamp(100 - abs(metrics["brightness"] - 55) * 2.2)
     technical_score = _clamp(
         brightness_score * 0.45
@@ -191,7 +208,12 @@ def _score_upload(upload, metrics):
         emotion_score -= 4
         energy_score -= 10
 
-    tags = _build_tags(upload, metrics)
+    provider_scores = _score_provider_payload(provider_payload)
+    emotion_score += provider_scores["emotion_boost"]
+    energy_score += provider_scores["energy_boost"]
+    technical_score -= provider_scores["technical_penalty"]
+
+    tags = _build_tags(upload, metrics) + provider_scores["tags"]
     movie_score = _clamp(
         technical_score * 0.42
         + _clamp(emotion_score) * 0.34
@@ -203,8 +225,50 @@ def _score_upload(upload, metrics):
         "emotion_score": round(_clamp(emotion_score), 2),
         "energy_score": round(_clamp(energy_score), 2),
         "movie_score": round(movie_score, 2),
-        "tags": tags,
+        "tags": list(dict.fromkeys(tags)),
         "summary": _build_summary(upload, movie_score, tags),
+    }
+
+
+def _score_provider_payload(payload):
+    labels = {
+        label["description"].lower()
+        for label in payload.get("labels", [])
+        if label.get("description")
+    }
+    speech_segments = payload.get("speech_segments", [])
+    face_track_count = payload.get("face_track_count", 0) or 0
+    shot_count = payload.get("shot_count", 0) or 0
+    explicit_likelihood = payload.get("explicit_content", {}).get("max_likelihood", 0) or 0
+
+    emotion_boost = min(face_track_count * 3, 15)
+    energy_boost = min(max(shot_count - 1, 0) * 2, 12)
+    technical_penalty = 0
+    tags = []
+
+    if face_track_count:
+        tags.append("visages")
+    if speech_segments:
+        emotion_boost += 12
+        tags.append("voix")
+    if labels & {"wedding", "bride", "groom", "dance", "dancing", "party", "speech", "laughter"}:
+        emotion_boost += 10
+        tags.append("moment_humain")
+    if labels & {"dance", "dancing", "party", "concert", "performance"}:
+        energy_boost += 10
+        tags.append("energie")
+    if explicit_likelihood >= 4:
+        technical_penalty += 55
+        tags.append("contenu_sensible")
+    elif explicit_likelihood == 3:
+        technical_penalty += 24
+        tags.append("contenu_a_verifier")
+
+    return {
+        "emotion_boost": emotion_boost,
+        "energy_boost": energy_boost,
+        "technical_penalty": technical_penalty,
+        "tags": tags,
     }
 
 

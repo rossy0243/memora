@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import tempfile
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -16,7 +17,7 @@ from PIL import Image
 from events.models import Event, EventType
 from uploads.models import GuestUpload
 
-from .analysis import analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
+from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
     _build_movie_clip,
@@ -26,6 +27,7 @@ from .services import (
     get_movie_candidate_uploads,
     process_pending_movie_jobs,
 )
+from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -36,6 +38,12 @@ def make_test_image_bytes(color=(180, 160, 140)):
     image = Image.new("RGB", (120, 80), color=color)
     image.save(buffer, format="JPEG")
     return buffer.getvalue()
+
+
+def _candidate_duration(upload):
+    if upload.media_type == GuestUpload.MediaType.IMAGE:
+        return settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+    return int(upload.duration.total_seconds()) if upload.duration else settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
 
 
 class GeneratedMovieModelTests(TestCase):
@@ -55,6 +63,7 @@ class GeneratedMovieModelTests(TestCase):
         movie = GeneratedMovie.objects.create(event=event)
 
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertEqual(movie.render_provider, "ffmpeg")
         self.assertIsNone(movie.final_file.name or None)
 
 
@@ -84,6 +93,7 @@ class MediaAnalysisModelTests(TestCase):
 
         self.assertEqual(analysis.status, MediaAnalysis.Status.PENDING)
         self.assertEqual(analysis.provider, "local_heuristic_v1")
+        self.assertEqual(analysis.provider_payload, {})
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
@@ -156,6 +166,42 @@ class MediaAnalysisServiceTests(TestCase):
 
         sleep_mock.assert_called_once_with(1)
 
+    def test_google_provider_payload_boosts_human_voice_moments(self):
+        upload = self.create_image_upload()
+        metrics = {"brightness": 55, "contrast": 60, "sharpness": 60}
+        payload = {
+            "provider": "google_video_intelligence_v1",
+            "labels": [{"description": "wedding", "confidence": 0.91}],
+            "face_track_count": 3,
+            "shot_count": 4,
+            "speech_segments": [{"transcript": "merci a tous", "confidence": 0.85}],
+            "explicit_content": {"max_likelihood": 1, "max_likelihood_name": "VERY_UNLIKELY"},
+        }
+
+        scores = _score_upload(upload, metrics, provider_payload=payload)
+
+        self.assertIn("visages", scores["tags"])
+        self.assertIn("voix", scores["tags"])
+        self.assertIn("moment_humain", scores["tags"])
+        self.assertGreater(scores["movie_score"], 70)
+
+    def test_google_provider_payload_penalizes_sensitive_content(self):
+        upload = self.create_image_upload()
+        metrics = {"brightness": 55, "contrast": 60, "sharpness": 60}
+        payload = {
+            "provider": "google_video_intelligence_v1",
+            "labels": [],
+            "face_track_count": 0,
+            "shot_count": 1,
+            "speech_segments": [],
+            "explicit_content": {"max_likelihood": 5, "max_likelihood_name": "VERY_LIKELY"},
+        }
+
+        scores = _score_upload(upload, metrics, provider_payload=payload)
+
+        self.assertIn("contenu_sensible", scores["tags"])
+        self.assertLess(scores["movie_score"], 55)
+
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
 class MovieGenerationServiceTests(TestCase):
@@ -206,8 +252,8 @@ class MovieGenerationServiceTests(TestCase):
         )
 
     @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
-    def test_movie_candidates_select_best_videos_automatically(self):
-        self.create_upload("selected-photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+    def test_movie_candidates_mix_best_videos_and_photos_automatically(self):
+        selected_photo = self.create_upload("selected-photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
         best_video = self.create_upload(
             "best.mp4",
             GuestUpload.MediaType.VIDEO,
@@ -226,7 +272,35 @@ class MovieGenerationServiceTests(TestCase):
 
         candidates = list(get_movie_candidate_uploads(self.event))
 
-        self.assertEqual(candidates, [best_video, second_video])
+        self.assertEqual(candidates, [best_video, second_video, selected_photo])
+
+    @override_settings(
+        MEMORA_MOVIE_MAX_DURATION_SECONDS=40,
+        MEMORA_MOVIE_VIDEO_MAX_SECONDS=10,
+        MEMORA_MOVIE_IMAGE_DURATION_SECONDS=3,
+        MEMORA_MOVIE_PHOTO_TARGET_RATIO=0.20,
+        MEMORA_MOVIE_MIN_PHOTO_COUNT_WITH_VIDEOS=2,
+    )
+    def test_movie_candidates_reserve_room_for_photos_when_videos_exist(self):
+        for index in range(5):
+            self.create_upload(
+                f"video-{index}.mp4",
+                GuestUpload.MediaType.VIDEO,
+                file_size=20_000_000 + index,
+                duration=timedelta(seconds=10),
+            )
+        photo_one = self.create_upload("photo-one.jpg", GuestUpload.MediaType.IMAGE, category_code="emotional")
+        photo_two = self.create_upload("photo-two.jpg", GuestUpload.MediaType.IMAGE, category_code="cake")
+
+        candidates = list(get_movie_candidate_uploads(self.event))
+
+        self.assertIn(photo_one, candidates)
+        self.assertIn(photo_two, candidates)
+        self.assertLessEqual(sum(_candidate_duration(upload) for upload in candidates), 40)
+        self.assertGreaterEqual(
+            sum(1 for upload in candidates if upload.media_type == GuestUpload.MediaType.VIDEO),
+            3,
+        )
 
     @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
     def test_movie_candidates_never_exceed_movie_duration_cap(self):
@@ -270,6 +344,20 @@ class MovieGenerationServiceTests(TestCase):
 
         self.assertEqual(candidates[0], higher_score)
 
+    @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=600)
+    def test_default_movie_duration_cap_is_ten_minutes(self):
+        for index in range(61):
+            self.create_upload(
+                f"video-{index}.mp4",
+                GuestUpload.MediaType.VIDEO,
+                file_size=10_000_000 + index,
+                duration=timedelta(seconds=10),
+            )
+
+        candidates = list(get_movie_candidate_uploads(self.event))
+
+        self.assertLessEqual(sum(int(upload.duration.total_seconds()) for upload in candidates), 600)
+
     def test_generate_event_movie_fails_without_media(self):
         movie = generate_event_movie(self.event)
 
@@ -309,8 +397,26 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
         self.assertTrue(movie.final_file.name.endswith(".mp4"))
         self.assertIsNotNone(movie.generated_at)
-        self.assertLessEqual(movie.duration.total_seconds(), 300)
+        self.assertLessEqual(movie.duration.total_seconds(), 600)
+        self.assertEqual(movie.render_provider, "ffmpeg")
+        self.assertTrue(movie.music_mood)
+        self.assertIn("clips", movie.edit_decision_data)
         self.assertGreaterEqual(run_ffmpeg.call_count, 2)
+
+    def test_soundtrack_choice_and_edit_plan_are_generated(self):
+        upload = self.create_upload(
+            "dance.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="dancefloor",
+            duration=timedelta(seconds=8),
+        )
+
+        soundtrack = choose_movie_soundtrack(self.event, [upload])
+        edit_plan = build_edit_decision_data(self.event, [upload], soundtrack)
+
+        self.assertEqual(soundtrack.mood, "joyful_party")
+        self.assertTrue(edit_plan["audio_strategy"]["duck_music_when_voice_is_present"])
+        self.assertEqual(edit_plan["max_duration_seconds"], 600)
 
     @patch("processing.services._run_ffmpeg")
     def test_movie_clip_can_use_storage_without_local_path(self, run_ffmpeg):

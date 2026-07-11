@@ -35,6 +35,7 @@ Etapes realisees du MVP :
 - videos invitees limitees a 10 secondes avec verification serveur via FFprobe ;
 - generation automatique d'un premier film souvenir avec FFmpeg, planifiable a J+1 12h ;
 - analyse automatique des medias avec scores qualite, emotion, energie et selection film IA-ready ;
+- architecture preparee pour Google Video Intelligence, Runway et choix musical avec ducking de voix ;
 - suppression automatique preparee : les medias sont marques supprimes 7 jours apres la date de l'evenement.
 
 Les fonctionnalites de suppression physique des fichiers et traitement media avance asynchrone ne sont pas encore implementees.
@@ -74,14 +75,25 @@ MEMORA_FFPROBE_BINARY=ffprobe
 MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS=10
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS=3
 MEMORA_MOVIE_VIDEO_MAX_SECONDS=10
-MEMORA_MOVIE_MAX_DURATION_SECONDS=300
+MEMORA_MOVIE_MAX_DURATION_SECONDS=600
 MEMORA_MOVIE_AUTOGENERATE_HOUR=12
 MEMORA_MOVIE_VIDEO_ENCODER=libx264
 MEMORA_MOVIE_WIDTH=1280
 MEMORA_MOVIE_HEIGHT=720
+MEMORA_MOVIE_PHOTO_TARGET_RATIO=0.20
+MEMORA_MOVIE_MIN_PHOTO_COUNT_WITH_VIDEOS=2
+MEMORA_MOVIE_MAX_CONSECUTIVE_VIDEOS_BEFORE_PHOTO=3
+MEMORA_MOVIE_MUSIC_DIR=assets/music
+MEMORA_MOVIE_MUSIC_VOLUME=0.22
+MEMORA_MOVIE_VOICE_VOLUME=1.0
+MEMORA_MOVIE_DUCKED_MUSIC_VOLUME=0.08
 ```
 
-Memora selectionne automatiquement les videos acceptees les mieux scorees, limite le film final a 5 minutes, puis ignore les medias rejetes ou supprimes.
+Memora selectionne automatiquement les videos acceptees les mieux scorees, ajoute aussi les meilleures photos dans le montage, limite le film final a 10 minutes, puis ignore les medias rejetes ou supprimes. Les videos invitees restent limitees a 10 secondes chacune pour garder un rythme vif.
+
+Quand photos et videos sont disponibles, Memora reserve une part cible du film aux photos (`MEMORA_MOVIE_PHOTO_TARGET_RATIO`, 20% par defaut), garantit quelques photos fortes si elles existent, puis les place entre les videos pour creer des respirations emotionnelles sans transformer le film en diaporama.
+
+La bibliotheque musicale versionnee vit dans `assets/music/` par defaut, donc elle est disponible en local et dans l'image Docker de production. Si une bibliotheque musicale existe dans `MEMORA_MOVIE_MUSIC_DIR`, Memora choisit automatiquement une piste selon l'ambiance dominante (`romantic_cinematic`, `cinematic_emotional`, `joyful_party`, `warm_lounge`, `elegant_warm`). Quand la video finale contient de la voix, FFmpeg ajoute la musique en fond et la baisse automatiquement sous les voix avec `sidechaincompress`.
 
 ## Analyse IA des medias
 
@@ -93,7 +105,31 @@ Memora cree une analyse par media accepte avec :
 - score final pour le film ;
 - luminosite, nettete, tags et resume court.
 
-Le moteur actuel est local et heuristique : il extrait une frame video avec FFmpeg, analyse l'image avec Pillow, puis score les moments forts. Il est concu pour etre remplace ou enrichi par une vraie IA vision externe sans changer le flux produit.
+Le moteur par defaut est local et heuristique : il extrait une frame video avec FFmpeg, analyse l'image avec Pillow, puis score les moments forts.
+
+Pour activer Google Video Intelligence :
+
+```env
+MEMORA_AI_ANALYSIS_PROVIDER=google_video_intelligence_v1
+MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED=True
+MEMORA_GOOGLE_VIDEO_INTELLIGENCE_LANGUAGE=fr-FR
+MEMORA_GOOGLE_VIDEO_INTELLIGENCE_TIMEOUT_SECONDS=180
+MEMORA_GOOGLE_VIDEO_INTELLIGENCE_USE_LATEST_MODEL=True
+GOOGLE_APPLICATION_CREDENTIALS=/chemin/vers/service-account.json
+```
+
+Le provider Google enrichit le scoring avec labels video, detection de plans, contenu explicite, visages et transcription. Les voix et visages boostent les moments humains ; le contenu explicite penalise fortement la selection.
+
+Pour preparer le rendu premium Runway :
+
+```env
+MEMORA_RUNWAY_ENABLED=True
+RUNWAYML_API_SECRET=...
+MEMORA_RUNWAY_WORKFLOW_ID=...
+MEMORA_RUNWAY_WORKFLOW_VERSION=2026-06
+```
+
+Memora stocke un plan de montage structure dans `GeneratedMovie.edit_decision_data` avec clips selectionnes, mood musical, strategie audio et payload Runway. Tant que le workflow Runway n'est pas branche en production, FFmpeg reste le moteur de rendu fiable.
 
 Analyser les medias en attente :
 

@@ -38,6 +38,33 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer" aria-label="Pied de page">
+    <div class="site-footer__inner">
+      <div class="site-footer__brand">
+        <a class="site-footer__logo" href="{% url 'core:home' %}">Memora</a>
+        <p>Revivez votre &eacute;v&eacute;nement &agrave; travers les yeux de vos invit&eacute;s.</p>
+      </div>
+      <div class="site-footer__promise">
+        <span>Scanner</span>
+        <span>Capturer</span>
+        <span>Choisir</span>
+        <span>Envoyer</span>
+      </div>
+      <nav class="site-footer__links" aria-label="Liens Memora">
+        {% if user.is_authenticated %}
+          <a href="{% url 'dashboard:home' %}">Mes &eacute;v&eacute;nements</a>
+          <a href="{% url 'events:create' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
+        {% else %}
+          <a href="{% url 'accounts:signup' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
+          <a href="{% url 'accounts:login' %}">Espace organisateur</a>
+        {% endif %}
+      </nav>
+    </div>
+    <div class="site-footer__bottom">
+      <span>&copy; {% now "Y" %} Memora</span>
+      <span>Souvenirs priv&eacute;s, sans application invit&eacute;.</span>
+    </div>
+  </footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>
