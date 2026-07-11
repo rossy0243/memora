@@ -1,4 +1,5 @@
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from .checks import storage_configuration_check
@@ -11,6 +12,37 @@ class HomePageTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Memora")
 
+
+class AuthenticatedHomePageTests(TestCase):
+    def test_authenticated_organizer_is_redirected_to_dashboard(self):
+        user = get_user_model().objects.create_user(
+            username="organizer",
+            email="organizer@example.com",
+            password="secret",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertRedirects(response, reverse("dashboard:home"))
+
+
+class DashboardHomeTests(TestCase):
+    def test_empty_dashboard_has_single_create_event_call_to_action(self):
+        user = get_user_model().objects.create_user(
+            username="organizer",
+            email="organizer@example.com",
+            password="secret",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("dashboard:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("events:create"), count=1)
+
+
+class HealthPageTests(SimpleTestCase):
     def test_health_page_returns_success(self):
         response = self.client.get(reverse("core:health"))
 

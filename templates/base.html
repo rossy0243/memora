@@ -13,7 +13,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
-    <a class="brand" href="{% url 'core:home' %}" aria-label="Accueil Memora">Memora</a>
+    <a class="brand" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">Memora</a>
     <nav class="site-nav" aria-label="Navigation principale">
       {% if user.is_authenticated %}
         <a href="{% url 'dashboard:home' %}">Mes evenements</a>
@@ -41,7 +41,7 @@
   <footer class="site-footer" aria-label="Pied de page">
     <div class="site-footer__inner">
       <div class="site-footer__brand">
-        <a class="site-footer__logo" href="{% url 'core:home' %}">Memora</a>
+        <a class="site-footer__logo" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}">Memora</a>
         <p>Revivez votre &eacute;v&eacute;nement &agrave; travers les yeux de vos invit&eacute;s.</p>
       </div>
       <div class="site-footer__promise">
@@ -53,7 +53,6 @@
       <nav class="site-footer__links" aria-label="Liens Memora">
         {% if user.is_authenticated %}
           <a href="{% url 'dashboard:home' %}">Mes &eacute;v&eacute;nements</a>
-          <a href="{% url 'events:create' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
         {% else %}
           <a href="{% url 'accounts:signup' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
           <a href="{% url 'accounts:login' %}">Espace organisateur</a>

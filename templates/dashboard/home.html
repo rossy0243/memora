@@ -11,7 +11,9 @@
       <p class="section__label">Espace organisateur</p>
       <h1>Mes evenements</h1>
     </div>
-    <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+    {% if events %}
+      <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+    {% endif %}
   </div>
 
   {% if events %}
