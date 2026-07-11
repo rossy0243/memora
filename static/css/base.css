@@ -1595,9 +1595,14 @@ body.camera-open {
 
 .camera-studio--active .camera-live video {
   display: block;
+  width: 100%;
   height: 100%;
   min-height: 0;
   aspect-ratio: auto;
+}
+
+.camera-live video.is-selfie {
+  transform: scaleX(-1);
 }
 
 .camera-live span {
@@ -1610,6 +1615,56 @@ body.camera-open {
   background: rgba(36, 31, 34, 0.72);
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.camera-recording-badge,
+.camera-feedback {
+  position: absolute;
+  z-index: 2;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 900;
+}
+
+.camera-recording-badge {
+  top: 12px;
+  left: 12px;
+  padding: 7px 11px;
+  background: rgba(169, 54, 54, 0.9);
+  box-shadow: 0 0 0 0 rgba(169, 54, 54, 0.55);
+  animation: camera-rec-pulse 1.25s ease-in-out infinite;
+}
+
+.camera-feedback {
+  top: 50%;
+  left: 50%;
+  padding: 12px 18px;
+  background: rgba(15, 12, 13, 0.78);
+  transform: translate(-50%, -50%);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.camera-feedback--success {
+  background: rgba(37, 86, 61, 0.9);
+}
+
+.camera-feedback--recording {
+  background: rgba(169, 54, 54, 0.9);
+}
+
+@keyframes camera-rec-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(169, 54, 54, 0.55);
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px rgba(169, 54, 54, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(169, 54, 54, 0);
+  }
 }
 
 .camera-panel__dock {
@@ -1643,6 +1698,7 @@ body.camera-open {
 }
 
 .camera-filters,
+.camera-mode-switch,
 .camera-controls {
   display: grid;
   gap: 8px;
@@ -1653,8 +1709,17 @@ body.camera-open {
   padding-top: 8px;
 }
 
+.camera-mode-switch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .camera-filter,
-.camera-pill {
+.camera-pill,
+.camera-segment {
   min-height: 46px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
@@ -1664,27 +1729,66 @@ body.camera-open {
   font-weight: 900;
 }
 
-.camera-filter.is-active {
+.camera-segment {
+  border-color: transparent;
+  background: transparent;
+}
+
+.camera-filter.is-active,
+.camera-pill.is-active,
+.camera-segment.is-active {
   color: var(--color-ink);
   background: var(--color-sage);
 }
 
-.camera-controls {
-  grid-template-columns: 0.86fr 1.08fr 1.08fr;
-  align-items: center;
+.camera-pill:disabled {
+  opacity: 1;
 }
 
-.camera-pill--primary {
-  border-color: #fff;
-  color: var(--color-ink);
+.camera-controls {
+  grid-template-columns: 0.78fr minmax(112px, 1fr) 0.78fr;
+  align-items: center;
+  justify-items: center;
+}
+
+.camera-shutter {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  width: 96px;
+  height: 96px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.camera-shutter span {
+  display: block;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
   background: #fff;
 }
 
-.camera-pill--danger {
-  grid-column: span 2;
-  border-color: rgba(255, 220, 216, 0.5);
-  color: #fff;
+.camera-shutter--video span {
   background: #a93636;
+}
+
+.camera-shutter--stop {
+  border-color: rgba(255, 220, 216, 0.5);
+  background: #a93636;
+}
+
+.camera-shutter--stop span {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff;
 }
 
 .file-drop {
@@ -1966,7 +2070,7 @@ body.camera-open {
   }
 
   .camera-controls {
-    grid-template-columns: 0.8fr 1fr 1fr;
+    grid-template-columns: 0.78fr minmax(112px, 1fr) 0.78fr;
   }
 
   .capture-preview__body {
@@ -1984,5 +2088,39 @@ body.camera-open {
   .confirmation-actions {
     grid-template-columns: auto auto;
     justify-content: start;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .camera-studio--active .camera-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 34vw);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 14px;
+  }
+
+  .camera-studio--active .camera-live {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .camera-studio--active .camera-panel__dock {
+    grid-row: 2;
+    grid-column: 2;
+    align-self: end;
+    padding-top: 0;
+  }
+
+  .camera-studio--active .camera-panel__topbar {
+    grid-column: 1 / -1;
+  }
+
+  .camera-shutter {
+    width: 82px;
+    height: 82px;
+  }
+
+  .camera-shutter span {
+    width: 50px;
+    height: 50px;
   }
 }

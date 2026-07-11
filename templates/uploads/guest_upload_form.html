@@ -43,6 +43,8 @@
         <div class="camera-live">
           <video id="camera-live-video" autoplay muted playsinline></video>
           <span id="camera-status">Camera prete</span>
+          <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">0,0 s</span></strong>
+          <strong class="camera-feedback" id="camera-feedback" hidden></strong>
         </div>
 
         <div class="camera-panel__dock">
@@ -56,11 +58,26 @@
             </div>
           </details>
 
+          <div class="camera-mode-switch" aria-label="Type de capture">
+            <button class="camera-segment is-active" type="button" id="photo-mode-button">Photo</button>
+            <button class="camera-segment" type="button" id="video-mode-button">Video</button>
+          </div>
+
           <div class="camera-controls">
-            <button class="camera-pill" type="button" id="switch-camera-button">Selfie</button>
-            <button class="camera-pill camera-pill--primary" type="button" id="capture-photo-button">Photo</button>
-            <button class="camera-pill" type="button" id="record-video-button">Video</button>
-            <button class="camera-pill camera-pill--danger" type="button" id="stop-video-button" hidden>Stop</button>
+            <button class="camera-pill camera-pill--lens is-active" type="button" id="back-camera-button">Arriere</button>
+            <button class="camera-shutter" type="button" id="capture-photo-button" aria-label="Prendre la photo">
+              <span></span>
+              <strong>Photo</strong>
+            </button>
+            <button class="camera-shutter camera-shutter--video" type="button" id="record-video-button" aria-label="Lancer la video" hidden>
+              <span></span>
+              <strong>Video</strong>
+            </button>
+            <button class="camera-shutter camera-shutter--stop" type="button" id="stop-video-button" aria-label="Stopper la video" hidden>
+              <span></span>
+              <strong>Stop</strong>
+            </button>
+            <button class="camera-pill camera-pill--lens" type="button" id="selfie-camera-button">Selfie</button>
           </div>
         </div>
       </div>

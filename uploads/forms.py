@@ -128,7 +128,8 @@ class GuestUploadForm(forms.ModelForm):
         if event is not None:
             queryset = queryset.filter(event=event)
         self.fields["category"].queryset = queryset
-        self.fields["category"].empty_label = "Selectionner un moment"
+        self.fields["category"].label_from_instance = lambda category: category.label
+        self.fields["category"].empty_label = "Moment"
         self.fields["category"].required = True
         self.fields["category"].widget.attrs.update(
             {

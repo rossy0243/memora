@@ -18,7 +18,13 @@
   const cameraPanel = document.getElementById("camera-panel");
   const liveVideo = document.getElementById("camera-live-video");
   const cameraStatus = document.getElementById("camera-status");
-  const switchCameraButton = document.getElementById("switch-camera-button");
+  const cameraFeedback = document.getElementById("camera-feedback");
+  const recordingBadge = document.getElementById("camera-recording-badge");
+  const recordingTimer = document.getElementById("camera-recording-timer");
+  const backCameraButton = document.getElementById("back-camera-button");
+  const selfieCameraButton = document.getElementById("selfie-camera-button");
+  const photoModeButton = document.getElementById("photo-mode-button");
+  const videoModeButton = document.getElementById("video-mode-button");
   const capturePhotoButton = document.getElementById("capture-photo-button");
   const recordVideoButton = document.getElementById("record-video-button");
   const stopVideoButton = document.getElementById("stop-video-button");
@@ -37,7 +43,10 @@
   let recordedChunks = [];
   let recordingTimeout = null;
   let recordingStartedAt = 0;
+  let recordingInterval = null;
   let pendingCapturedDuration = null;
+  let cameraMode = "photo";
+  let isSwitchingCamera = false;
   const maxRecordingSeconds = 10;
 
   const cameraFilters = {
@@ -91,6 +100,70 @@
     }
   }
 
+  function updateCameraUi() {
+    if (liveVideo) {
+      liveVideo.classList.toggle("is-selfie", facingMode === "user");
+    }
+    if (backCameraButton) {
+      backCameraButton.classList.toggle("is-active", facingMode === "environment");
+      backCameraButton.disabled = isSwitchingCamera || facingMode === "environment";
+    }
+    if (selfieCameraButton) {
+      selfieCameraButton.classList.toggle("is-active", facingMode === "user");
+      selfieCameraButton.disabled = isSwitchingCamera || facingMode === "user";
+    }
+    if (photoModeButton) {
+      photoModeButton.classList.toggle("is-active", cameraMode === "photo");
+    }
+    if (videoModeButton) {
+      videoModeButton.classList.toggle("is-active", cameraMode === "video");
+    }
+    if (capturePhotoButton) {
+      capturePhotoButton.hidden = cameraMode !== "photo" || (recorder && recorder.state === "recording");
+    }
+    if (recordVideoButton) {
+      recordVideoButton.hidden = cameraMode !== "video" || (recorder && recorder.state === "recording");
+    }
+    if (stopVideoButton) {
+      stopVideoButton.hidden = !(recorder && recorder.state === "recording");
+    }
+  }
+
+  function showCameraFeedback(message, tone) {
+    if (!cameraFeedback) {
+      return;
+    }
+    cameraFeedback.textContent = message;
+    cameraFeedback.hidden = false;
+    cameraFeedback.classList.toggle("camera-feedback--success", tone === "success");
+    cameraFeedback.classList.toggle("camera-feedback--recording", tone === "recording");
+    window.setTimeout(function () {
+      if (cameraFeedback.textContent === message) {
+        cameraFeedback.hidden = true;
+      }
+    }, tone === "recording" ? 1200 : 1800);
+  }
+
+  function setRecordingState(isRecording) {
+    document.body.classList.toggle("camera-is-recording", isRecording);
+    if (recordingBadge) {
+      recordingBadge.hidden = !isRecording;
+    }
+    if (!isRecording && recordingTimer) {
+      recordingTimer.textContent = "0,0 s";
+    }
+    updateCameraUi();
+  }
+
+  function updateRecordingTimer() {
+    if (!recordingTimer || !recordingStartedAt) {
+      return;
+    }
+    const elapsed = Math.min((Date.now() - recordingStartedAt) / 1000, maxRecordingSeconds);
+    recordingTimer.textContent = formatDuration(elapsed);
+    setCameraStatus("Video en cours - stop pour terminer");
+  }
+
   function formatFileSize(bytes) {
     if (!bytes) {
       return "";
@@ -114,10 +187,34 @@
     }
   }
 
-  function stopCamera() {
+  function cameraConstraints(exactFacingMode) {
+    return {
+      audio: true,
+      video: {
+        facingMode: exactFacingMode ? { exact: facingMode } : { ideal: facingMode },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    };
+  }
+
+  async function requestCameraStream() {
+    try {
+      return await navigator.mediaDevices.getUserMedia(cameraConstraints(true));
+    } catch {
+      return navigator.mediaDevices.getUserMedia(cameraConstraints(false));
+    }
+  }
+
+  function stopCamera(options) {
+    const hidePanel = !options || options.hidePanel !== false;
     if (recordingTimeout) {
       clearTimeout(recordingTimeout);
       recordingTimeout = null;
+    }
+    if (recordingInterval) {
+      clearInterval(recordingInterval);
+      recordingInterval = null;
     }
     if (recorder && recorder.state !== "inactive") {
       recorder.stop();
@@ -131,19 +228,18 @@
     if (liveVideo) {
       liveVideo.srcObject = null;
     }
-    if (cameraPanel) {
+    if (cameraPanel && hidePanel) {
       cameraPanel.hidden = true;
     }
-    setCameraOpen(false);
-    if (recordVideoButton) {
-      recordVideoButton.hidden = false;
+    if (hidePanel) {
+      setCameraOpen(false);
     }
-    if (stopVideoButton) {
-      stopVideoButton.hidden = true;
-    }
+    setRecordingState(false);
+    updateCameraUi();
   }
 
-  async function startCamera() {
+  async function startCamera(options) {
+    const preservePanel = options && options.preservePanel;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !liveVideo) {
       if (cameraStudio) {
         cameraStudio.classList.add("camera-studio--unsupported");
@@ -152,26 +248,24 @@
       return;
     }
 
-    stopCamera();
-    setCameraStatus("Ouverture de la camera...");
+    stopCamera({ hidePanel: !preservePanel });
+    if (cameraPanel) {
+      cameraPanel.hidden = false;
+    }
+    setCameraOpen(true);
+    updateCameraUi();
+    setCameraStatus(preservePanel ? "Changement de camera..." : "Ouverture de la camera...");
     try {
-      cameraStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      cameraStream = await requestCameraStream();
       liveVideo.srcObject = cameraStream;
       liveVideo.style.filter = cameraFilters[activeFilter] || "none";
-      if (cameraPanel) {
-        cameraPanel.hidden = false;
-      }
-      setCameraOpen(true);
-      setCameraStatus(facingMode === "user" ? "Mode selfie" : "Camera arriere");
+      setCameraStatus(facingMode === "user" ? "Selfie actif" : "Camera arriere active");
+      updateCameraUi();
     } catch {
       setCameraOpen(false);
+      if (cameraPanel) {
+        cameraPanel.hidden = true;
+      }
       setCameraStatus("Autorisez la camera ou utilisez l'appareil natif.");
     }
   }
@@ -195,20 +289,37 @@
     setCameraStatus("Souvenir pret a envoyer");
   }
 
+  function showPreviewAfterCapture(message) {
+    showCameraFeedback(message, "success");
+    window.setTimeout(function () {
+      stopCamera();
+      if (capturePreview) {
+        capturePreview.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 450);
+  }
+
   function capturePhoto() {
     if (!liveVideo || !cameraStream) {
       return;
     }
 
+    setCameraStatus("Capture de la photo...");
+    showCameraFeedback("Photo prise", "success");
     const canvas = document.createElement("canvas");
     canvas.width = liveVideo.videoWidth || 1280;
     canvas.height = liveVideo.videoHeight || 720;
     const context = canvas.getContext("2d");
     context.filter = cameraFilters[activeFilter] || "none";
+    if (facingMode === "user") {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+    }
     context.drawImage(liveVideo, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(function (blob) {
       if (blob) {
         setCapturedFile(blob, "memora-photo-" + timestamp() + ".jpg");
+        showPreviewAfterCapture("Photo prise");
       }
     }, "image/jpeg", 0.92);
   }
@@ -242,6 +353,10 @@
         clearTimeout(recordingTimeout);
         recordingTimeout = null;
       }
+      if (recordingInterval) {
+        clearInterval(recordingInterval);
+        recordingInterval = null;
+      }
       const recordedSeconds = recordingStartedAt ? (Date.now() - recordingStartedAt) / 1000 : maxRecordingSeconds;
       const recordedType = recorder.mimeType || mimeType || "video/webm";
       const extension = recordedType.indexOf("mp4") >= 0 ? "mp4" : "webm";
@@ -249,17 +364,17 @@
       setCapturedFile(blob, "memora-video-" + timestamp() + "." + extension, recordedSeconds);
       recordedChunks = [];
       recordingStartedAt = 0;
+      setRecordingState(false);
+      showPreviewAfterCapture("Video prete");
     });
     recorder.start();
     recordingStartedAt = Date.now();
+    updateRecordingTimer();
+    recordingInterval = setInterval(updateRecordingTimer, 200);
     recordingTimeout = setTimeout(stopVideoRecording, maxRecordingSeconds * 1000);
-    setCameraStatus("Enregistrement video... 10 secondes max");
-    if (recordVideoButton) {
-      recordVideoButton.hidden = true;
-    }
-    if (stopVideoButton) {
-      stopVideoButton.hidden = false;
-    }
+    setRecordingState(true);
+    showCameraFeedback("Enregistrement", "recording");
+    setCameraStatus("Video en cours - stop pour terminer");
   }
 
   function stopVideoRecording() {
@@ -268,29 +383,59 @@
       recordingTimeout = null;
     }
     if (recorder && recorder.state !== "inactive") {
+      setCameraStatus("Preparation de la video...");
       recorder.stop();
     }
-    if (recordVideoButton) {
-      recordVideoButton.hidden = false;
-    }
-    if (stopVideoButton) {
-      stopVideoButton.hidden = true;
-    }
+    setRecordingState(false);
   }
 
   if (cameraStudio && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
     cameraStudio.classList.add("camera-studio--unsupported");
   }
+  updateCameraUi();
 
   if (startCameraButton) {
     startCameraButton.addEventListener("click", startCamera);
   }
 
-  if (switchCameraButton) {
-    switchCameraButton.addEventListener("click", function () {
-      facingMode = facingMode === "environment" ? "user" : "environment";
-      switchCameraButton.textContent = facingMode === "environment" ? "Selfie" : "Arriere";
-      startCamera();
+  function selectFacingMode(nextFacingMode) {
+    if (facingMode === nextFacingMode || isSwitchingCamera) {
+      return;
+    }
+    facingMode = nextFacingMode;
+    isSwitchingCamera = true;
+    updateCameraUi();
+    startCamera({ preservePanel: true }).finally(function () {
+      isSwitchingCamera = false;
+      updateCameraUi();
+    });
+  }
+
+  if (backCameraButton) {
+    backCameraButton.addEventListener("click", function () {
+      selectFacingMode("environment");
+    });
+  }
+
+  if (selfieCameraButton) {
+    selfieCameraButton.addEventListener("click", function () {
+      selectFacingMode("user");
+    });
+  }
+
+  if (photoModeButton) {
+    photoModeButton.addEventListener("click", function () {
+      cameraMode = "photo";
+      setCameraStatus(facingMode === "user" ? "Selfie actif - appuyez sur Photo" : "Camera arriere active - appuyez sur Photo");
+      updateCameraUi();
+    });
+  }
+
+  if (videoModeButton) {
+    videoModeButton.addEventListener("click", function () {
+      cameraMode = "video";
+      setCameraStatus("Mode video - appuyez sur Video");
+      updateCameraUi();
     });
   }
 
