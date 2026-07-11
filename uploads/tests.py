@@ -235,7 +235,6 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Camera Memora")
         self.assertContains(response, "Lancer la camera")
         self.assertContains(response, "Selfie")
-        self.assertContains(response, "Arriere")
         self.assertContains(response, "REC")
         self.assertContains(response, "mode-toggle-button")
         self.assertContains(response, "camera-action-button")

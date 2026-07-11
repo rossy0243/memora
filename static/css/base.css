@@ -1796,11 +1796,38 @@ body.camera-open {
   background: #a93636;
 }
 
+.camera-shutter--stopping {
+  border-color: rgba(255, 255, 255, 0.46);
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .camera-shutter--stop span {
   width: 44px;
   height: 44px;
   border-radius: 12px;
   background: #fff;
+}
+
+.camera-shutter--stopping span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  animation: camera-stopping-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes camera-stopping-pulse {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.72;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .file-drop {

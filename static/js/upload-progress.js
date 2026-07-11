@@ -43,6 +43,7 @@
   let pendingCapturedDuration = null;
   let cameraMode = "photo";
   let isSwitchingCamera = false;
+  let isStoppingRecording = false;
   const maxRecordingSeconds = 10;
 
   const cameraFilters = {
@@ -102,14 +103,16 @@
       liveVideo.classList.toggle("is-selfie", facingMode === "user");
     }
     if (lensToggleButton) {
-      lensToggleButton.textContent = facingMode === "user" ? "Selfie" : "Arriere";
+      lensToggleButton.textContent = facingMode === "user" ? "Arriere" : "Selfie";
+      lensToggleButton.setAttribute("aria-label", facingMode === "user" ? "Passer en camera arriere" : "Passer en selfie");
       lensToggleButton.disabled = isSwitchingCamera || isRecording;
       lensToggleButton.classList.toggle("is-active", facingMode === "environment");
       lensToggleButton.classList.toggle("is-selfie", facingMode === "user");
       lensToggleButton.classList.toggle("is-switching", isSwitchingCamera);
     }
     if (modeToggleButton) {
-      modeToggleButton.textContent = cameraMode === "photo" ? "Photo" : "Video";
+      modeToggleButton.textContent = cameraMode === "photo" ? "Video" : "Photo";
+      modeToggleButton.setAttribute("aria-label", cameraMode === "photo" ? "Passer en video" : "Passer en photo");
       modeToggleButton.disabled = isRecording;
       modeToggleButton.classList.toggle("is-active", cameraMode === "photo");
       modeToggleButton.classList.toggle("is-video", cameraMode === "video");
@@ -117,13 +120,21 @@
     if (cameraActionButton) {
       cameraActionButton.classList.toggle("camera-shutter--video", cameraMode === "video" && !isRecording);
       cameraActionButton.classList.toggle("camera-shutter--stop", isRecording);
+      cameraActionButton.classList.toggle("camera-shutter--stopping", isStoppingRecording);
+      cameraActionButton.disabled = isStoppingRecording;
       cameraActionButton.setAttribute(
         "aria-label",
-        isRecording ? "Stopper la video" : cameraMode === "video" ? "Lancer la video" : "Prendre la photo",
+        isStoppingRecording
+          ? "Preparation de la video"
+          : isRecording
+            ? "Stopper la video"
+            : cameraMode === "video"
+              ? "Lancer la video"
+              : "Prendre la photo",
       );
       const label = cameraActionButton.querySelector("strong");
       if (label) {
-        label.textContent = isRecording ? "Stop" : cameraMode === "video" ? "Video" : "Photo";
+        label.textContent = isStoppingRecording ? "..." : isRecording ? "Stop" : cameraMode === "video" ? "Video" : "Photo";
       }
     }
   }
@@ -146,7 +157,7 @@
   function setRecordingState(isRecording) {
     document.body.classList.toggle("camera-is-recording", isRecording);
     if (recordingBadge) {
-      recordingBadge.hidden = !isRecording;
+      recordingBadge.hidden = !isRecording || isStoppingRecording;
     }
     if (!isRecording && recordingTimer) {
       recordingTimer.textContent = "0,0 s";
@@ -341,6 +352,7 @@
 
     const mimeType = supportedVideoMimeType();
     recordedChunks = [];
+    isStoppingRecording = false;
     recorder = new MediaRecorder(cameraStream, mimeType ? { mimeType: mimeType } : undefined);
     recorder.addEventListener("dataavailable", function (event) {
       if (event.data && event.data.size > 0) {
@@ -363,6 +375,7 @@
       setCapturedFile(blob, "memora-video-" + timestamp() + "." + extension, recordedSeconds);
       recordedChunks = [];
       recordingStartedAt = 0;
+      isStoppingRecording = false;
       setRecordingState(false);
       showPreviewAfterCapture("Video prete");
     });
@@ -377,15 +390,24 @@
   }
 
   function stopVideoRecording() {
+    if (isStoppingRecording) {
+      return;
+    }
     if (recordingTimeout) {
       clearTimeout(recordingTimeout);
       recordingTimeout = null;
     }
+    if (recordingInterval) {
+      clearInterval(recordingInterval);
+      recordingInterval = null;
+    }
     if (recorder && recorder.state !== "inactive") {
-      setCameraStatus("Preparation de la video...");
+      isStoppingRecording = true;
+      setCameraStatus("Video en preparation...");
+      showCameraFeedback("Preparation", "recording");
+      updateCameraUi();
       recorder.stop();
     }
-    setRecordingState(false);
   }
 
   if (cameraStudio && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
