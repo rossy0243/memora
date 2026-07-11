@@ -15,7 +15,7 @@ from uploads.models import GuestUpload
 
 from .analysis import analyze_event_media
 from .models import GeneratedMovie, MediaAnalysis
-from .runway import build_runway_montage_payload, runway_is_ready
+from .runway import build_runway_montage_payload, enhance_clip_with_runway, runway_is_ready
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
 
 
@@ -384,11 +384,48 @@ def process_generated_movie(movie):
             temp_path = Path(temp_dir)
             clip_paths = []
             total_duration = 0
+            runway_enhancements = []
+            runway_enhanced_count = 0
             for index, upload in enumerate(uploads, start=1):
                 clip_path = temp_path / f"clip_{index:04d}.mp4"
                 _build_movie_clip(upload, clip_path, ffmpeg_binary)
+                if _should_enhance_clip_with_runway(upload, runway_enhanced_count):
+                    runway_clip_path = temp_path / f"clip_{index:04d}_runway.mp4"
+                    try:
+                        enhancement = enhance_clip_with_runway(
+                            clip_path,
+                            runway_clip_path,
+                            prompt_text=edit_decision_data["runway"]["payload"]["style_prompt"],
+                        )
+                        enhancement.update(
+                            {
+                                "upload_id": upload.pk,
+                                "filename": upload.original_filename,
+                                "source_clip": clip_path.name,
+                            }
+                        )
+                        runway_enhancements.append(enhancement)
+                        clip_path = runway_clip_path
+                        runway_enhanced_count += 1
+                    except Exception as exc:
+                        runway_enhancements.append(
+                            {
+                                "upload_id": upload.pk,
+                                "filename": upload.original_filename,
+                                "source_clip": clip_path.name,
+                                "failed": True,
+                                "error": str(exc),
+                                "fallback": settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG,
+                            }
+                        )
+                        if not settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG:
+                            raise
                 clip_paths.append(clip_path)
                 total_duration += _estimated_movie_clip_duration(upload)
+
+            movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
+            if runway_enhanced_count:
+                movie.render_provider = "runway+ffmpeg"
 
             concat_file = temp_path / "clips.txt"
             concat_file.write_text(
@@ -447,6 +484,14 @@ def process_generated_movie(movie):
         movie.save(update_fields=["status", "error_logs", "updated_at"])
 
     return movie
+
+
+def _should_enhance_clip_with_runway(upload, enhanced_count):
+    return (
+        runway_is_ready()
+        and upload.media_type == GuestUpload.MediaType.VIDEO
+        and enhanced_count < settings.MEMORA_RUNWAY_MAX_ENHANCED_CLIPS
+    )
 
 
 def _clean_name(value):

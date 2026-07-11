@@ -403,6 +403,41 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("clips", movie.edit_decision_data)
         self.assertGreaterEqual(run_ffmpeg.call_count, 2)
 
+    @override_settings(
+        MEMORA_RUNWAY_ENABLED=True,
+        MEMORA_RUNWAY_API_SECRET="test-key",
+        MEMORA_MOVIE_RENDER_PROVIDER="runway",
+        MEMORA_RUNWAY_MAX_ENHANCED_CLIPS=1,
+        MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True,
+    )
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services.enhance_clip_with_runway")
+    @patch("processing.services._run_ffmpeg")
+    def test_runway_enhances_selected_video_before_final_assembly(self, run_ffmpeg, enhance_clip, _which):
+        self.create_upload(
+            "best.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="emotional",
+            duration=timedelta(seconds=8),
+        )
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        def create_runway_output(_input_path, output_path, prompt_text=None):
+            output_path.write_bytes(b"runway-movie-bytes")
+            return {"task_id": "task_123", "output_count": 1, "output_file": output_path.name}
+
+        run_ffmpeg.side_effect = create_output
+        enhance_clip.side_effect = create_runway_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertEqual(movie.render_provider, "runway+ffmpeg")
+        self.assertEqual(movie.edit_decision_data["runway"]["enhancements"][0]["task_id"], "task_123")
+        enhance_clip.assert_called_once()
+
     def test_soundtrack_choice_and_edit_plan_are_generated(self):
         upload = self.create_upload(
             "dance.mp4",

@@ -257,6 +257,20 @@ MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))
 MEMORA_RUNWAY_WORKFLOW_ID = os.getenv("MEMORA_RUNWAY_WORKFLOW_ID", "")
 MEMORA_RUNWAY_WORKFLOW_VERSION = os.getenv("MEMORA_RUNWAY_WORKFLOW_VERSION", "2026-06")
+MEMORA_RUNWAY_VIDEO_MODEL = os.getenv("MEMORA_RUNWAY_VIDEO_MODEL", "gen4_aleph")
+MEMORA_RUNWAY_VIDEO_RATIO = os.getenv("MEMORA_RUNWAY_VIDEO_RATIO", "1280:720")
+MEMORA_RUNWAY_MAX_ENHANCED_CLIPS = env_int("MEMORA_RUNWAY_MAX_ENHANCED_CLIPS", 3)
+MEMORA_RUNWAY_TASK_TIMEOUT_SECONDS = env_int("MEMORA_RUNWAY_TASK_TIMEOUT_SECONDS", 900)
+MEMORA_RUNWAY_FALLBACK_TO_FFMPEG = env_bool("MEMORA_RUNWAY_FALLBACK_TO_FFMPEG", True)
+MEMORA_RUNWAY_PROMPT = os.getenv(
+    "MEMORA_RUNWAY_PROMPT",
+    (
+        "Enhance this real event memory clip with a premium wedding film look. "
+        "Preserve the original people, emotion, timing, voices and authentic camera movement. "
+        "Apply subtle cinematic color grading, soft highlights, warm skin tones, elegant contrast, "
+        "and smooth stabilization. Do not change identities. Do not add fictional content."
+    ),
+)
 MEMORA_MOVIE_MUSIC_DIR = os.getenv("MEMORA_MOVIE_MUSIC_DIR", str(BASE_DIR / "assets" / "music"))
 MEMORA_MOVIE_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_MUSIC_VOLUME", "0.22"))
 MEMORA_MOVIE_VOICE_VOLUME = float(os.getenv("MEMORA_MOVIE_VOICE_VOLUME", "1.0"))

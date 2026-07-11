@@ -127,9 +127,18 @@ MEMORA_RUNWAY_ENABLED=True
 RUNWAYML_API_SECRET=...
 MEMORA_RUNWAY_WORKFLOW_ID=...
 MEMORA_RUNWAY_WORKFLOW_VERSION=2026-06
+MEMORA_RUNWAY_VIDEO_MODEL=gen4_aleph
+MEMORA_RUNWAY_VIDEO_RATIO=1280:720
+MEMORA_RUNWAY_MAX_ENHANCED_CLIPS=3
+MEMORA_RUNWAY_TASK_TIMEOUT_SECONDS=900
+MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True
 ```
 
-Memora stocke un plan de montage structure dans `GeneratedMovie.edit_decision_data` avec clips selectionnes, mood musical, strategie audio et payload Runway. Tant que le workflow Runway n'est pas branche en production, FFmpeg reste le moteur de rendu fiable.
+Memora stocke un plan de montage structure dans `GeneratedMovie.edit_decision_data` avec clips selectionnes, mood musical, strategie audio et payload Runway.
+
+Le mode Runway principal ne depend pas d'un workflow publie : Memora peut envoyer les meilleurs clips video a Runway via `video_to_video` (`gen4_aleph`), recuperer les segments ameliores, puis assembler le film final avec FFmpeg. FFmpeg reste responsable du montage complet 10 minutes, des photos, de la musique et du ducking voix/musique. Si Runway echoue et que `MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True`, le clip original normalise est conserve pour ne pas bloquer la generation.
+
+Un workflow publie Runway pourra etre ajoute plus tard pour des traitements plus specifiques, mais il n'est plus bloquant pour activer l'enhancement premium.
 
 Analyser les medias en attente :
 
