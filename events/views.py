@@ -13,7 +13,7 @@ from uploads.models import GuestUpload, UploadCategory
 from .forms import EventForm
 from .access import grant_guest_access, has_guest_access
 from .models import Event
-from .services import generate_event_qr_code
+from .services import build_event_qr_code_png
 
 
 class OrganizerEventMixin(LoginRequiredMixin):
@@ -30,12 +30,7 @@ class EventCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.organizer = self.request.user
-        response = super().form_valid(form)
-        generate_event_qr_code(
-            self.object,
-            self.request.build_absolute_uri(self.object.get_public_url()),
-        )
-        return response
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse_lazy("events:detail", kwargs={"pk": self.object.pk})
@@ -44,14 +39,6 @@ class EventCreateView(LoginRequiredMixin, CreateView):
 class EventUpdateView(OrganizerEventMixin, UpdateView):
     form_class = EventForm
     template_name = "events/event_form.html"
-
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        generate_event_qr_code(
-            self.object,
-            self.request.build_absolute_uri(self.object.get_public_url()),
-        )
-        return response
 
     def get_success_url(self):
         return reverse_lazy("events:detail", kwargs={"pk": self.object.pk})
@@ -62,11 +49,6 @@ class EventDetailView(OrganizerEventMixin, DetailView):
     context_object_name = "event"
 
     def get_context_data(self, **kwargs):
-        if not self.object.qr_code_image:
-            generate_event_qr_code(
-                self.object,
-                self.request.build_absolute_uri(self.object.get_public_url()),
-            )
         context = super().get_context_data(**kwargs)
         uploads = (
             self.object.guest_uploads.filter(is_deleted=False)
@@ -108,6 +90,7 @@ class EventDetailView(OrganizerEventMixin, DetailView):
                 "latest_uploads": uploads[:8],
                 "latest_movie": self.object.generated_movies.order_by("-created_at").first(),
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
+                "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
             }
         )
         return context
@@ -239,6 +222,16 @@ def generate_movie(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     create_event_movie_job(event)
     return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
+
+
+@login_required
+def event_qr_code(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    public_url = request.build_absolute_uri(event.get_public_url())
+    response = HttpResponse(build_event_qr_code_png(public_url), content_type="image/png")
+    response["Content-Disposition"] = f'inline; filename="{event.slug}-qr.png"'
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 @login_required

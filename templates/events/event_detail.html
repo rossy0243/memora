@@ -77,10 +77,8 @@
         </div>
       </div>
 
-      {% if event.qr_code_image %}
-        <img class="qr-code" src="{{ event.qr_code_image.url }}" alt="QR code de {{ event.title }}">
-        <a class="button button--primary" href="{{ event.qr_code_image.url }}" download>Telecharger le QR code</a>
-      {% endif %}
+      <img class="qr-code" src="{{ event_qr_code_url }}" alt="QR code de {{ event.title }}">
+      <a class="button button--primary" href="{{ event_qr_code_url }}" download>Telecharger le QR code</a>
       <a class="button button--secondary" href="{{ event.get_public_url }}">Voir la page invite</a>
     </aside>
   </div>

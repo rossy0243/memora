@@ -117,7 +117,7 @@ class EventViewTests(TestCase):
         self.assertEqual(event.slug, "mariage-de-lea-et-sam")
         self.assertEqual(event.guest_access_code, "AMOUR2026")
         self.assertTrue(event.public_access_key)
-        self.assertTrue(event.qr_code_image.name.endswith("mariage-de-lea-et-sam-qr.png"))
+        self.assertFalse(event.qr_code_image)
 
     def test_event_detail_is_limited_to_owner(self):
         event = Event.objects.create(
@@ -132,7 +132,7 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_event_detail_generates_missing_private_qr_code(self):
+    def test_event_detail_displays_dynamic_private_qr_code(self):
         event = Event.objects.create(
             organizer=self.user,
             title="Reception QR prive",
@@ -146,7 +146,23 @@ class EventViewTests(TestCase):
 
         event.refresh_from_db()
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(event.qr_code_image.name.endswith("reception-qr-prive-qr.png"))
+        self.assertFalse(event.qr_code_image)
+        self.assertContains(response, reverse("events:qr_code", kwargs={"pk": event.pk}))
+
+    def test_owner_can_download_dynamic_qr_code(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception QR dynamique",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:qr_code", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertGreater(len(response.content), 1000)
 
     def test_public_event_page_uses_slug(self):
         event = Event.objects.create(
