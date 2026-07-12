@@ -16,6 +16,80 @@
     <a class="button button--primary" href="{% url 'events:update' event.pk %}">Modifier</a>
   </div>
 
+  <section class="live-dashboard">
+    <article class="live-dashboard__hero">
+      <div>
+        <p class="section__label">Suivi en direct</p>
+        <h2>{% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}</h2>
+        <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} recu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Les invites peuvent continuer a envoyer depuis le QR code.</p>
+      </div>
+      <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
+        {% if event.is_active %}En ligne{% else %}Ferme{% endif %}
+      </span>
+    </article>
+
+    <div class="stat-grid stat-grid--live">
+      <article class="stat-card">
+        <span>Total</span>
+        <strong>{{ media_stats.total|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Photos</span>
+        <strong>{{ media_stats.photos|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Videos</span>
+        <strong>{{ media_stats.videos|default:0 }}</strong>
+      </article>
+      <article class="stat-card">
+        <span>Pour le film</span>
+        <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
+      </article>
+    </div>
+
+    <div class="live-dashboard__quick">
+      <article class="quick-panel">
+        <p class="section__label">Acces invite</p>
+        <h3>Lien public et QR code</h3>
+        <code id="public-event-url">{{ public_event_url }}</code>
+        <div class="quick-actions">
+          <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
+          <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>QR code</a>
+          <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Page invite</a>
+        </div>
+      </article>
+
+      <article class="quick-panel quick-panel--movie">
+        <div class="panel-title-row">
+          <div>
+            <p class="section__label">Film souvenir</p>
+            <h3>Video automatique</h3>
+          </div>
+          {% if latest_movie %}
+            <span class="status-pill {% if latest_movie.status == 'completed' %}status-pill--active{% endif %}">{{ latest_movie.get_status_display }}</span>
+          {% else %}
+            <span class="status-pill">En attente</span>
+          {% endif %}
+        </div>
+        {% if latest_movie and latest_movie.final_file %}
+          <video class="movie-preview" src="{{ latest_movie.final_file.url }}" controls preload="metadata"></video>
+          <a class="button button--primary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
+        {% elif latest_movie %}
+          <p class="muted-copy">Statut : {{ latest_movie.get_status_display }}. Memora prepare automatiquement la video souvenir.</p>
+          {% if latest_movie.error_logs %}
+            <p class="muted-copy">{{ latest_movie.error_logs }}</p>
+          {% endif %}
+        {% else %}
+          <p class="muted-copy">Memora genere le film automatiquement apres l'evenement. Vous pouvez aussi le lancer maintenant.</p>
+        {% endif %}
+        <form method="post" action="{% url 'events:generate_movie' event.pk %}">
+          {% csrf_token %}
+          <button class="button button--primary" type="submit">Generer le film</button>
+        </form>
+      </article>
+    </div>
+  </section>
+
   <div class="detail-layout">
     <article class="detail-panel">
       {% if event.cover_image %}
@@ -54,7 +128,7 @@
 
       <div class="public-url-box">
         <span>Lien prive</span>
-        <code id="public-event-url">{{ public_event_url }}</code>
+        <code>{{ public_event_url }}</code>
         <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
       </div>
 
@@ -83,41 +157,6 @@
     </aside>
   </div>
 
-  <section class="movie-panel detail-panel">
-    <div class="section-heading">
-      <div>
-        <p class="section__label">Film souvenir</p>
-        <h2>Video automatique</h2>
-      </div>
-      <form method="post" action="{% url 'events:generate_movie' event.pk %}">
-        {% csrf_token %}
-        <button class="button button--primary" type="submit">Generer le film</button>
-      </form>
-    </div>
-    {% if latest_movie %}
-      <div class="movie-status">
-        <span class="status-pill {% if latest_movie.status == 'completed' %}status-pill--active{% endif %}">{{ latest_movie.get_status_display }}</span>
-        {% if latest_movie.generated_at %}
-          <p>Genere le {{ latest_movie.generated_at }}</p>
-        {% endif %}
-        {% if latest_movie.music_mood %}
-          <p>Ambiance musicale : {{ latest_movie.music_mood }}{% if latest_movie.music_track %} - {{ latest_movie.music_track }}{% endif %}</p>
-        {% endif %}
-        {% if latest_movie.render_provider %}
-          <p>Moteur de montage : {{ latest_movie.render_provider }}</p>
-        {% endif %}
-        {% if latest_movie.final_file %}
-          <a class="button button--secondary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
-        {% endif %}
-        {% if latest_movie.error_logs %}
-          <p class="muted-copy">{{ latest_movie.error_logs }}</p>
-        {% endif %}
-      </div>
-    {% else %}
-      <p class="muted-copy">Memora planifie le montage en arriere-plan avec les meilleurs medias acceptes.</p>
-    {% endif %}
-  </section>
-
   <section class="media-dashboard">
     <div class="section-heading">
       <div>
@@ -131,25 +170,6 @@
           {% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}
         </span>
       </div>
-    </div>
-
-    <div class="stat-grid">
-      <article class="stat-card">
-        <span>Total</span>
-        <strong>{{ media_stats.total|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Photos</span>
-        <strong>{{ media_stats.photos|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Videos</span>
-        <strong>{{ media_stats.videos|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Pour le film</span>
-        <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
-      </article>
     </div>
 
     <div class="media-panels">

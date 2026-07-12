@@ -874,6 +874,76 @@ h2 {
   gap: 18px;
 }
 
+.live-dashboard {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.live-dashboard__hero,
+.quick-panel {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 14px 44px rgba(36, 31, 34, 0.06);
+}
+
+.live-dashboard__hero {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  padding: 20px;
+}
+
+.live-dashboard__hero h2 {
+  margin-bottom: 8px;
+  font-size: clamp(2rem, 8vw, 3.8rem);
+}
+
+.live-dashboard__hero p {
+  max-width: 680px;
+  color: var(--color-body);
+}
+
+.live-dashboard__quick {
+  display: grid;
+  gap: 16px;
+}
+
+.quick-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.quick-panel h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+
+.quick-panel code {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--color-primary-active);
+  background: var(--color-surface-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.quick-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.movie-preview {
+  width: 100%;
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  aspect-ratio: 16 / 9;
+}
+
 .section-heading {
   display: grid;
   gap: 14px;
@@ -1030,6 +1100,10 @@ h2 {
   grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 18px;
+}
+
+.stat-grid--live {
+  margin-bottom: 0;
 }
 
 .stat-card {
@@ -1467,6 +1541,24 @@ h2 {
   background: var(--color-surface);
 }
 
+.guest-form-errors:empty {
+  display: none;
+}
+
+.guest-form-errors .errorlist,
+.guest-upload-form > .errorlist {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  border: 1px solid rgba(126, 34, 34, 0.22);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: #8f2525;
+  background: #fff1f0;
+  font-weight: 800;
+  list-style: none;
+}
+
 .upload-quota {
   display: flex;
   align-items: center;
@@ -1527,6 +1619,20 @@ h2 {
 
 .camera-studio__intro strong {
   font-size: 1.18rem;
+}
+
+.camera-studio__intro p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.92rem;
+}
+
+.camera-studio__intro p.is-warning {
+  color: #ffdcd8;
+}
+
+.camera-studio__intro p.is-ok {
+  color: #d9f4e6;
 }
 
 body.camera-open {
@@ -1615,6 +1721,22 @@ body.camera-open {
   background: rgba(36, 31, 34, 0.72);
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.camera-orientation-hint {
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  bottom: 56px;
+  display: none;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #fff;
+  background: rgba(15, 12, 13, 0.68);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
 }
 
 .camera-recording-badge,
@@ -2075,6 +2197,23 @@ body.camera-open {
     grid-template-columns: minmax(0, 1fr) 360px;
   }
 
+  .live-dashboard__hero {
+    grid-template-columns: 1fr auto;
+    padding: 28px;
+  }
+
+  .live-dashboard__quick {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .quick-panel {
+    padding: 22px;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .stat-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -2151,6 +2290,10 @@ body.camera-open {
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
+  .camera-orientation-hint {
+    display: block;
+  }
+
   .camera-studio--active .camera-panel {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 34vw);
     grid-template-rows: auto minmax(0, 1fr);

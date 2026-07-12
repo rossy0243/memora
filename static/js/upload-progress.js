@@ -16,6 +16,7 @@
   const cameraStudio = document.getElementById("camera-studio");
   const startCameraButton = document.getElementById("start-camera-button");
   const cameraPanel = document.getElementById("camera-panel");
+  const cameraPermissionNote = document.getElementById("camera-permission-note");
   const liveVideo = document.getElementById("camera-live-video");
   const cameraStatus = document.getElementById("camera-status");
   const cameraFeedback = document.getElementById("camera-feedback");
@@ -45,6 +46,8 @@
   let isSwitchingCamera = false;
   let isStoppingRecording = false;
   const maxRecordingSeconds = 10;
+  let slowUploadTimer = null;
+  let verySlowUploadTimer = null;
 
   const cameraFilters = {
     none: "none",
@@ -197,6 +200,53 @@
     }
   }
 
+  function setPermissionNote(message, tone) {
+    if (!cameraPermissionNote) {
+      return;
+    }
+    cameraPermissionNote.textContent = message;
+    cameraPermissionNote.classList.toggle("is-warning", tone === "warning");
+    cameraPermissionNote.classList.toggle("is-ok", tone === "ok");
+  }
+
+  function cameraErrorMessage(error) {
+    if (!error) {
+      return "La camera n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+    }
+    if (error.name === "NotAllowedError" || error.name === "SecurityError") {
+      return "Autorisez la camera et le micro pour capturer avec Memora.";
+    }
+    if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      return "Aucune camera disponible. Utilisez l'appareil natif.";
+    }
+    if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+      return "La camera est deja utilisee par une autre application.";
+    }
+    if (error.name === "OverconstrainedError" || error.name === "ConstraintNotSatisfiedError") {
+      return "Cet objectif n'est pas disponible sur ce telephone.";
+    }
+    return "La camera n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+  }
+
+  async function refreshCameraPermissionHint() {
+    if (!navigator.permissions || !navigator.permissions.query) {
+      return;
+    }
+    try {
+      const permission = await navigator.permissions.query({ name: "camera" });
+      if (permission.state === "granted") {
+        setPermissionNote("Camera autorisee. Vous pouvez capturer directement ici.", "ok");
+      } else if (permission.state === "denied") {
+        setPermissionNote("Camera bloquee. Activez l'autorisation dans votre navigateur.", "warning");
+      } else {
+        setPermissionNote("Votre navigateur demandera l'autorisation camera et micro.");
+      }
+      permission.onchange = refreshCameraPermissionHint;
+    } catch {
+      // Safari mobile ne supporte pas toujours l'API Permissions pour la camera.
+    }
+  }
+
   function cameraConstraints(exactFacingMode) {
     return {
       audio: true,
@@ -271,12 +321,14 @@
       liveVideo.style.filter = cameraFilters[activeFilter] || "none";
       setCameraStatus(facingMode === "user" ? "Selfie actif" : "Camera arriere active");
       updateCameraUi();
-    } catch {
+    } catch (error) {
       setCameraOpen(false);
       if (cameraPanel) {
         cameraPanel.hidden = true;
       }
-      setCameraStatus("Autorisez la camera ou utilisez l'appareil natif.");
+      const message = cameraErrorMessage(error);
+      setPermissionNote(message, "warning");
+      setCameraStatus(message);
     }
   }
 
@@ -412,7 +464,9 @@
 
   if (cameraStudio && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
     cameraStudio.classList.add("camera-studio--unsupported");
+    setPermissionNote("Camera integree indisponible. Utilisez l'appareil natif.", "warning");
   }
+  refreshCameraPermissionHint();
   updateCameraUi();
 
   if (startCameraButton) {
@@ -547,6 +601,10 @@
       return;
     }
 
+    if (!form.checkValidity()) {
+      return;
+    }
+
     event.preventDefault();
 
     if (progress) {
@@ -562,6 +620,16 @@
     if (progressText) {
       progressText.textContent = "Preparation de l'envoi...";
     }
+    slowUploadTimer = window.setTimeout(function () {
+      if (progressText) {
+        progressText.textContent = "Connexion lente... gardez cette page ouverte.";
+      }
+    }, 8000);
+    verySlowUploadTimer = window.setTimeout(function () {
+      if (progressText) {
+        progressText.textContent = "Envoi toujours en cours. Les videos peuvent prendre plus de temps.";
+      }
+    }, 20000);
 
     const request = new XMLHttpRequest();
     request.open(form.method || "POST", form.action);
@@ -579,6 +647,8 @@
     });
 
     request.addEventListener("load", function () {
+      clearTimeout(slowUploadTimer);
+      clearTimeout(verySlowUploadTimer);
       if (progressBar) {
         progressBar.style.width = "100%";
       }
@@ -597,8 +667,22 @@
     });
 
     request.addEventListener("error", function () {
+      clearTimeout(slowUploadTimer);
+      clearTimeout(verySlowUploadTimer);
       if (progressText) {
-        progressText.textContent = "L'envoi a echoue. Reessayez.";
+        progressText.textContent = "L'envoi a echoue. Verifiez la connexion puis reessayez.";
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = initialSubmitLabel;
+      }
+    });
+
+    request.addEventListener("abort", function () {
+      clearTimeout(slowUploadTimer);
+      clearTimeout(verySlowUploadTimer);
+      if (progressText) {
+        progressText.textContent = "L'envoi a ete interrompu.";
       }
       if (submitButton) {
         submitButton.disabled = false;

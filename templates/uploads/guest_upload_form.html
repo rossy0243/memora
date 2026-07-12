@@ -18,6 +18,11 @@
     {{ form.client_duration_seconds }}
     {{ form.non_field_errors }}
 
+    <div class="guest-form-errors" aria-live="polite">
+      {{ form.media_file.errors }}
+      {{ form.category.errors }}
+    </div>
+
     <div class="upload-quota {% if upload_quota.is_reached %}upload-quota--full{% endif %}">
       <span>{{ upload_quota.limit }} souvenirs maximum par appareil</span>
       {% if upload_quota.is_reached %}
@@ -31,6 +36,7 @@
       <div class="camera-studio__intro">
         <span>Camera Memora</span>
         <strong>Capturez sans quitter la page.</strong>
+        <p id="camera-permission-note">Votre navigateur demandera l'autorisation camera et micro.</p>
         <button class="button button--primary" type="button" id="start-camera-button">Lancer la camera</button>
       </div>
 
@@ -43,6 +49,7 @@
         <div class="camera-live">
           <video id="camera-live-video" autoplay muted playsinline></video>
           <span id="camera-status">Camera prete</span>
+          <em class="camera-orientation-hint">Tournez le telephone en portrait pour une prise plus stable.</em>
           <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">0,0 s</span></strong>
           <strong class="camera-feedback" id="camera-feedback" hidden></strong>
         </div>
@@ -74,7 +81,6 @@
       <span class="file-drop__title">Camera du telephone</span>
       <span class="file-drop__action">Ouvrir l'appareil natif</span>
       {{ form.media_file }}
-      {{ form.media_file.errors }}
       <small id="selected-file-name">JPG, PNG, WEBP, MP4, MOV ou WEBM. Video 10 s max.</small>
     </label>
 
@@ -96,11 +102,10 @@
     </div>
 
     <div class="moment-field">
-      {{ form.category.errors }}
       {{ form.category }}
     </div>
 
-    <div class="upload-progress" hidden>
+    <div class="upload-progress" hidden aria-live="polite">
       <div class="upload-progress__bar">
         <span></span>
       </div>
