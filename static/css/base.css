@@ -773,6 +773,103 @@ h2 {
   padding: 20px;
 }
 
+.event-form {
+  gap: 24px;
+}
+
+.event-form [hidden] {
+  display: none !important;
+}
+
+.form-section {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.form-section:last-of-type {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.form-section__heading {
+  display: grid;
+  gap: 4px;
+}
+
+.form-section__heading h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.form-stack small {
+  color: var(--color-muted);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.toggle-row {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--color-canvas);
+  cursor: pointer;
+}
+
+.toggle-row input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-row__visual {
+  width: 54px;
+  height: 30px;
+  border-radius: 999px;
+  background: #d8d4d0;
+  transition: background 160ms ease;
+}
+
+.toggle-row__visual::after {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(36, 31, 34, 0.16);
+  transition: transform 160ms ease;
+  content: "";
+}
+
+.toggle-row input:checked + .toggle-row__visual {
+  background: var(--color-primary);
+}
+
+.toggle-row input:checked + .toggle-row__visual::after {
+  transform: translateX(24px);
+}
+
+.toggle-row input:focus-visible + .toggle-row__visual {
+  outline: 2px solid var(--color-primary-soft);
+  outline-offset: 3px;
+}
+
 .checkbox-row {
   display: flex !important;
   grid-template-columns: none;
@@ -2187,6 +2284,10 @@ body.camera-open {
   .form-actions {
     grid-template-columns: auto auto;
     justify-content: start;
+  }
+
+  .form-grid--two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .event-grid {

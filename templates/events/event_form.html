@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}{% if object %}Modifier{% else %}Creer{% endif %} un evenement - Memora{% endblock %}
+{% block title %}{% if object %}Modifier{% else %}Créer{% endif %} un événement - Memora{% endblock %}
 {% block body_class %}app-page{% endblock %}
 {% block header_class %}site-header--solid{% endblock %}
 
@@ -9,24 +9,107 @@
 <section class="app-shell app-shell--narrow">
   <div class="page-heading">
     <div>
-      <p class="section__label">Evenement</p>
-      <h1>{% if object %}Modifier l'evenement{% else %}Creer un evenement{% endif %}</h1>
+      <p class="section__label">Événement</p>
+      <h1>{% if object %}Modifier l'événement{% else %}Créer un événement{% endif %}</h1>
+      <p class="page-heading__meta">Mariage, anniversaire, gala ou soirée privée : Memora s'adapte au moment.</p>
     </div>
   </div>
 
-  <form method="post" enctype="multipart/form-data" class="form-card form-stack">
+  <form method="post" enctype="multipart/form-data" class="form-card event-form form-stack" data-event-form>
     {% csrf_token %}
     {{ form.non_field_errors }}
-    {% for field in form %}
-      <label class="{% if field.field.widget.input_type == 'checkbox' %}checkbox-row{% endif %}">
-        <span>{{ field.label }}</span>
-        {{ field }}
-        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-        {{ field.errors }}
+
+    <section class="form-section">
+      <div class="form-section__heading">
+        <p class="section__label">Essentiel</p>
+        <h2>Ce que les invités verront</h2>
+      </div>
+
+      <label>
+        <span>{{ form.title.label }}</span>
+        {{ form.title }}
+        <small>{{ form.title.help_text }}</small>
+        {{ form.title.errors }}
       </label>
-    {% endfor %}
+
+      <label>
+        <span>{{ form.couple_name.label }}</span>
+        {{ form.couple_name }}
+        <small>{{ form.couple_name.help_text }}</small>
+        {{ form.couple_name.errors }}
+      </label>
+
+      <div class="form-grid form-grid--two">
+        <label>
+          <span>{{ form.event_type.label }}</span>
+          {{ form.event_type }}
+          <small>{{ form.event_type.help_text }}</small>
+          {{ form.event_type.errors }}
+        </label>
+
+        <label>
+          <span>{{ form.event_date.label }}</span>
+          {{ form.event_date }}
+          <small>{{ form.event_date.help_text }}</small>
+          {{ form.event_date.errors }}
+        </label>
+      </div>
+
+      <label class="custom-event-type-field" data-custom-event-type-field hidden>
+        <span>{{ form.custom_event_type_label.label }}</span>
+        {{ form.custom_event_type_label }}
+        <small>{{ form.custom_event_type_label.help_text }}</small>
+        {{ form.custom_event_type_label.errors }}
+      </label>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section__heading">
+        <p class="section__label">Page invitée</p>
+        <h2>Accueil après le scan</h2>
+      </div>
+
+      <label>
+        <span>{{ form.cover_image.label }}</span>
+        {{ form.cover_image }}
+        <small>{{ form.cover_image.help_text }}</small>
+        {{ form.cover_image.errors }}
+      </label>
+
+      <label>
+        <span>{{ form.welcome_message.label }}</span>
+        {{ form.welcome_message }}
+        <small>{{ form.welcome_message.help_text }}</small>
+        {{ form.welcome_message.errors }}
+      </label>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section__heading">
+        <p class="section__label">Collecte</p>
+        <h2>Accès et statut</h2>
+      </div>
+
+      <label>
+        <span>{{ form.guest_access_code.label }}</span>
+        {{ form.guest_access_code }}
+        <small>{{ form.guest_access_code.help_text }}</small>
+        {{ form.guest_access_code.errors }}
+      </label>
+
+      <label class="toggle-row">
+        {{ form.is_active }}
+        <span class="toggle-row__visual" aria-hidden="true"></span>
+        <span>
+          <strong>{{ form.is_active.label }}</strong>
+          <small>{{ form.is_active.help_text }}</small>
+        </span>
+        {{ form.is_active.errors }}
+      </label>
+    </section>
+
     <div class="form-actions">
-      <button class="button button--primary" type="submit" data-loading-text="Enregistrement...">Enregistrer</button>
+      <button class="button button--primary" type="submit" data-loading-text="Enregistrement...">Enregistrer l'événement</button>
       <a class="button button--secondary" href="{% if object %}{% url 'events:detail' object.pk %}{% else %}{% url 'dashboard:home' %}{% endif %}">Annuler</a>
     </div>
   </form>
@@ -34,5 +117,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{% static 'js/event-form.js' %}"></script>
 <script src="{% static 'js/form-submit-state.js' %}"></script>
 {% endblock %}

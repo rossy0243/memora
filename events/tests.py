@@ -118,8 +118,76 @@ class EventViewTests(TestCase):
         self.assertEqual(event.organizer, self.user)
         self.assertEqual(event.slug, "mariage-de-lea-et-sam")
         self.assertEqual(event.guest_access_code, "AMOUR2026")
+        self.assertEqual(event.location, "")
+        self.assertEqual(event.media_retention_days, 7)
         self.assertTrue(event.public_access_key)
         self.assertFalse(event.qr_code_image)
+
+    def test_event_form_is_french_and_event_agnostic(self):
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Créer un événement")
+        self.assertContains(response, "Nom affiché aux invités")
+        self.assertContains(response, "Type d&#x27;événement personnalisé")
+        self.assertContains(response, "Collecte active")
+        self.assertContains(response, "data-custom-event-type-field")
+        self.assertContains(response, "data-custom-event-type-field hidden")
+        self.assertContains(response, "event-form")
+        self.assertNotContains(response, "Lieu (optionnel)")
+        self.assertNotContains(response, "Conservation des médias")
+        self.assertNotContains(response, "Couple name")
+
+    def test_custom_event_type_is_created_when_other_is_selected(self):
+        other_type = EventType.objects.get(code="other")
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Baby shower de Lina",
+                "couple_name": "Baby shower de Lina",
+                "event_type": other_type.pk,
+                "custom_event_type_label": "Baby shower",
+                "event_date": "2026-07-08",
+                "location": "",
+                "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "",
+                "is_active": "on",
+                "media_retention_days": "7",
+            },
+        )
+
+        event = Event.objects.get(title="Baby shower de Lina")
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        self.assertEqual(event.event_type.label, "Baby shower")
+        self.assertEqual(event.event_type.code, "baby-shower")
+
+    def test_other_event_type_requires_custom_label(self):
+        other_type = EventType.objects.get(code="other")
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Evenement mystere",
+                "couple_name": "",
+                "event_type": other_type.pk,
+                "custom_event_type_label": "",
+                "event_date": "2026-07-08",
+                "location": "",
+                "welcome_message": "",
+                "guest_access_code": "",
+                "is_active": "on",
+                "media_retention_days": "7",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Indiquez le type d&#x27;événement")
+        self.assertFalse(Event.objects.filter(title="Evenement mystere").exists())
 
     def test_event_cover_image_is_compressed_before_storage(self):
         self.client.login(username="owner", password="secret")

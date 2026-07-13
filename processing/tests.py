@@ -20,7 +20,9 @@ from uploads.models import GuestUpload
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
+    _apply_event_badge,
     _build_movie_clip,
+    _shorten_badge_text,
     create_event_movie_job,
     generate_event_movie,
     get_event_movie_schedule_at,
@@ -385,6 +387,8 @@ class MovieGenerationServiceTests(TestCase):
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     def test_generate_event_movie_creates_completed_movie(self, run_ffmpeg, _which):
+        self.event.couple_name = "Lea & Sam"
+        self.event.save(update_fields=["couple_name"])
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
         def create_output(command):
@@ -401,7 +405,40 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.render_provider, "ffmpeg")
         self.assertTrue(movie.music_mood)
         self.assertIn("clips", movie.edit_decision_data)
-        self.assertGreaterEqual(run_ffmpeg.call_count, 2)
+        self.assertEqual(movie.edit_decision_data["badge"]["display_name"], "Lea & Sam")
+        self.assertTrue(movie.edit_decision_data["badge"]["applied"])
+        badge_command = run_ffmpeg.call_args_list[-1].args[0]
+        self.assertIn("drawtext", badge_command[badge_command.index("-vf") + 1])
+        self.assertGreaterEqual(run_ffmpeg.call_count, 3)
+
+    @patch("processing.services._run_ffmpeg")
+    def test_event_badge_uses_display_name_and_preserves_audio_mapping(self, run_ffmpeg):
+        self.event.couple_name = "Camille & Noe"
+        input_path = Path(TEST_MEDIA_ROOT) / "input.mp4"
+        output_path = Path(TEST_MEDIA_ROOT) / "badged.mp4"
+        input_path.write_bytes(b"movie")
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"badged")
+
+        run_ffmpeg.side_effect = create_output
+
+        result = _apply_event_badge(input_path, output_path, self.event, "ffmpeg", Path(TEST_MEDIA_ROOT))
+
+        self.assertEqual(result, output_path)
+        command = run_ffmpeg.call_args.args[0]
+        self.assertIn("-map", command)
+        self.assertIn("0:a?", command)
+        self.assertIn("drawbox", command[command.index("-vf") + 1])
+        self.assertIn("drawtext", command[command.index("-vf") + 1])
+        self.assertIn("font='Arial'", command[command.index("-vf") + 1])
+        self.assertIn("y=ih-126", command[command.index("-vf") + 1])
+
+    def test_badge_text_is_shortened_for_clean_video_overlay(self):
+        text = _shorten_badge_text("Un tres tres long nom affiche pour un evenement Memora")
+
+        self.assertLessEqual(len(text), 38)
+        self.assertTrue(text.endswith("..."))
 
     @override_settings(
         MEMORA_RUNWAY_ENABLED=True,
@@ -489,6 +526,29 @@ class MovieGenerationServiceTests(TestCase):
             _build_movie_clip(upload, output_path, "ffmpeg")
 
         run_ffmpeg.assert_called_once()
+
+    @patch("processing.services._run_ffmpeg")
+    def test_movie_image_clip_gets_silent_audio_for_concat(self, run_ffmpeg):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "clip.mp4"
+            upload = SimpleNamespace(
+                pk=124,
+                media_file=SimpleUploadedFile("photo.jpg", make_test_image_bytes(), content_type="image/jpeg"),
+                media_type=GuestUpload.MediaType.IMAGE,
+                original_filename="photo.jpg",
+            )
+
+            def create_output(command):
+                output_path.write_bytes(b"movie-bytes")
+
+            run_ffmpeg.side_effect = create_output
+
+            _build_movie_clip(upload, output_path, "ffmpeg")
+
+        command = run_ffmpeg.call_args.args[0]
+        self.assertIn("anullsrc=channel_layout=stereo:sample_rate=48000", command)
+        self.assertIn("1:a:0", command)
+        self.assertIn("-shortest", command)
 
 
 class GenerateScheduledMoviesCommandTests(TestCase):

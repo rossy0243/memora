@@ -449,13 +449,33 @@ def process_generated_movie(movie):
                 ]
             )
 
-            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
-            final_output_path = _apply_soundtrack_if_available(
+            soundtrack_output_path = temp_path / f"memora_{_clean_name(event.title)}_soundtrack.mp4"
+            soundtrack_output_path = _apply_soundtrack_if_available(
                 concat_output_path,
-                output_path,
+                soundtrack_output_path,
                 soundtrack,
                 ffmpeg_binary,
             )
+            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+            badge_data = {
+                "enabled": settings.MEMORA_MOVIE_BADGE_ENABLED,
+                "display_name": _event_display_name(event),
+                "duration_seconds": settings.MEMORA_MOVIE_BADGE_DURATION_SECONDS,
+                "applied": False,
+            }
+            try:
+                final_output_path = _apply_event_badge(
+                    soundtrack_output_path,
+                    output_path,
+                    event,
+                    ffmpeg_binary,
+                    temp_path,
+                )
+                badge_data["applied"] = final_output_path == output_path
+            except Exception as exc:
+                final_output_path = soundtrack_output_path
+                badge_data["error"] = str(exc)
+            movie.edit_decision_data["badge"] = badge_data
 
             with final_output_path.open("rb") as output_file:
                 movie.final_file.save(final_output_path.name, File(output_file), save=False)
@@ -526,38 +546,28 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
         )
 
         if upload.media_type == GuestUpload.MediaType.IMAGE:
+            clip_duration = str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
             command = [
                 ffmpeg_binary,
                 "-y",
                 "-loop",
                 "1",
                 "-t",
-                str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS),
+                clip_duration,
                 "-i",
                 str(input_path),
-                "-vf",
-                video_filter,
-                "-an",
-                "-c:v",
-                settings.MEMORA_MOVIE_VIDEO_ENCODER,
-                "-movflags",
-                "+faststart",
-                str(output_path),
-            ]
-        else:
-            command = [
-                ffmpeg_binary,
-                "-y",
-                "-i",
-                str(input_path),
+                "-f",
+                "lavfi",
                 "-t",
-                str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS),
+                clip_duration,
+                "-i",
+                "anullsrc=channel_layout=stereo:sample_rate=48000",
                 "-vf",
                 video_filter,
                 "-map",
                 "0:v:0",
                 "-map",
-                "0:a?",
+                "1:a:0",
                 "-c:v",
                 settings.MEMORA_MOVIE_VIDEO_ENCODER,
                 "-c:a",
@@ -568,10 +578,76 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                 "48000",
                 "-ac",
                 "2",
+                "-shortest",
                 "-movflags",
                 "+faststart",
                 str(output_path),
             ]
+        else:
+            clip_duration = str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS)
+            if _media_file_has_audio(input_path):
+                command = [
+                    ffmpeg_binary,
+                    "-y",
+                    "-i",
+                    str(input_path),
+                    "-t",
+                    clip_duration,
+                    "-vf",
+                    video_filter,
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "0:a:0",
+                    "-c:v",
+                    settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-ar",
+                    "48000",
+                    "-ac",
+                    "2",
+                    "-movflags",
+                    "+faststart",
+                    str(output_path),
+                ]
+            else:
+                command = [
+                    ffmpeg_binary,
+                    "-y",
+                    "-i",
+                    str(input_path),
+                    "-f",
+                    "lavfi",
+                    "-t",
+                    clip_duration,
+                    "-i",
+                    "anullsrc=channel_layout=stereo:sample_rate=48000",
+                    "-t",
+                    clip_duration,
+                    "-vf",
+                    video_filter,
+                    "-map",
+                    "0:v:0",
+                    "-map",
+                    "1:a:0",
+                    "-c:v",
+                    settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-ar",
+                    "48000",
+                    "-ac",
+                    "2",
+                    "-shortest",
+                    "-movflags",
+                    "+faststart",
+                    str(output_path),
+                ]
 
         _run_ffmpeg(command)
     finally:
@@ -636,6 +712,66 @@ def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_b
         ]
     )
     return output_path
+
+
+def _apply_event_badge(input_path, output_path, event, ffmpeg_binary, work_dir):
+    display_name = _event_display_name(event)
+    if not settings.MEMORA_MOVIE_BADGE_ENABLED or not display_name:
+        return input_path
+
+    brand_file = work_dir / "badge_brand.txt"
+    title_file = work_dir / "badge_title.txt"
+    brand_file.write_text("MEMORA", encoding="utf-8")
+    title_file.write_text(_shorten_badge_text(display_name), encoding="utf-8")
+
+    duration = max(settings.MEMORA_MOVIE_BADGE_DURATION_SECONDS, 1)
+    enable = f"between(t\\,0\\,{duration})"
+    brand_path = _escape_filter_path(brand_file)
+    title_path = _escape_filter_path(title_file)
+    video_filter = (
+        f"drawbox=x=44:y=ih-126:w=640:h=80:color=0x241F22@0.58:t=fill:enable='{enable}',"
+        f"drawbox=x=44:y=ih-126:w=5:h=80:color=0xA45D6A@0.96:t=fill:enable='{enable}',"
+        f"drawtext=font='Arial':textfile='{brand_path}':x=78:y=h-110:fontcolor=0xF5EAE4:fontsize=17:enable='{enable}',"
+        f"drawtext=font='Arial':textfile='{title_path}':x=78:y=h-86:fontcolor=white:fontsize=34:enable='{enable}'"
+    )
+
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(input_path),
+            "-vf",
+            video_filter,
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            settings.MEMORA_MOVIE_VIDEO_ENCODER,
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+    )
+    return output_path
+
+
+def _event_display_name(event):
+    return (event.couple_name or event.title or "").strip()
+
+
+def _shorten_badge_text(value, max_length=38):
+    normalized = " ".join((value or "").split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[: max_length - 3].rstrip()}..."
+
+
+def _escape_filter_path(path):
+    return path.as_posix().replace(":", "\\:").replace("'", "\\'")
 
 
 def _media_file_has_audio(path):

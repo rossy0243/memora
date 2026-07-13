@@ -1,5 +1,6 @@
 .env
 .secrets/
+.tmp/
 *service-account*.json
 *credentials*.json
 .venv/
