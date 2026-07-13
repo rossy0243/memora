@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
+from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, UploadCategory
 
@@ -153,6 +154,37 @@ class EventViewTests(TestCase):
             self.assertEqual(saved_image.format, "JPEG")
             self.assertLessEqual(saved_image.width, 1800)
             self.assertLessEqual(saved_image.height, 1200)
+
+    @patch("django.db.models.fields.files.FieldFile.save", side_effect=OSError("storage down"))
+    def test_event_cover_storage_error_returns_form_error(self, _field_file_save):
+        self.client.login(username="owner", password="secret")
+        image_buffer = BytesIO()
+        Image.new("RGB", (24, 24), (180, 92, 104)).save(image_buffer, format="JPEG")
+        image_buffer.seek(0)
+        cover_image = SimpleUploadedFile(
+            "cover.jpg",
+            image_buffer.read(),
+            content_type="image/jpeg",
+        )
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Mariage stockage indisponible",
+                "couple_name": "Lea & Sam",
+                "event_type": self.event_type.pk,
+                "event_date": "2026-07-08",
+                "location": "Paris",
+                "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "",
+                "is_active": "on",
+                "cover_image": cover_image,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, STORAGE_UNAVAILABLE_MESSAGE)
+        self.assertFalse(Event.objects.filter(title="Mariage stockage indisponible").exists())
 
     @override_settings(MEMORA_MAX_COVER_IMAGE_SIZE=4)
     def test_event_cover_image_rejects_too_large_file(self):

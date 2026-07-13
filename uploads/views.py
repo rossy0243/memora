@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from events.access import has_guest_access
 from events.models import Event
 
@@ -35,16 +36,23 @@ def guest_upload_create(request, slug, access_key):
                 upload.ip_address = ip_address
                 upload.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
                 upload.session_key = session_key
-                upload.save()
-                return redirect(
-                    reverse(
-                        "uploads:thanks",
-                        kwargs={
-                            "slug": event.slug,
-                            "access_key": event.public_access_key,
-                        },
+                try:
+                    upload.save()
+                except Exception as exc:
+                    if not is_storage_error(exc):
+                        raise
+                    recover_from_storage_error()
+                    form.add_error("media_file", STORAGE_UNAVAILABLE_MESSAGE)
+                else:
+                    return redirect(
+                        reverse(
+                            "uploads:thanks",
+                            kwargs={
+                                "slug": event.slug,
+                                "access_key": event.public_access_key,
+                            },
+                        )
                     )
-                )
     else:
         form = GuestUploadForm(event=event)
 

@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from events.models import Event, EventType
 
 from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
@@ -218,6 +219,22 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(upload.original_filename, "photo.jpg")
         self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
         self.assertTrue(upload.session_key)
+
+    @patch("uploads.models.GuestUpload.save", side_effect=OSError("storage down"))
+    def test_guest_upload_storage_error_returns_form_error(self, _upload_save):
+        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, STORAGE_UNAVAILABLE_MESSAGE)
+        self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_guest_upload_requires_access_key(self):
         response_without_key = self.client.get(f"/e/{self.event.slug}/souvenir/")
