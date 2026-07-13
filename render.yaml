@@ -205,7 +205,7 @@ services:
     name: memora-movie-worker
     runtime: docker
     region: frankfurt
-    plan: starter
+    plan: standard
     dockerfilePath: ./Dockerfile
     dockerContext: .
     dockerCommand: python manage.py process_pending_movies --loop --sleep 30
@@ -308,7 +308,7 @@ services:
     name: memora-schedule-movies
     runtime: docker
     region: frankfurt
-    plan: starter
+    plan: standard
     dockerfilePath: ./Dockerfile
     dockerContext: .
     schedule: "0 * * * *"

@@ -38,6 +38,10 @@ Le service web recoit les uploads, puis le worker lit ces fichiers pour analyser
 
 Backblaze B2, Cloudflare R2 et AWS S3 conviennent.
 
+## Taille des instances de montage
+
+Le montage FFmpeg a besoin de plus de memoire que le web Django. Le Blueprint met donc `memora-movie-worker` et `memora-schedule-movies` en plan `standard` pour disposer de 2 GB RAM. En dessous, Render peut arreter le process pendant la generation sans laisser d'erreur applicative exploitable.
+
 ## Activation Google Video Intelligence
 
 Ajouter le JSON du compte de service dans Render sous forme Base64 :
