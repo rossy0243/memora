@@ -312,17 +312,18 @@ def create_event_movie_job(event):
     return GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PENDING)
 
 
-def get_pending_movie_jobs(limit=None):
+def get_pending_movie_jobs(limit=None, include_processing=False):
     stale_processing_before = timezone.now() - timedelta(
         minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES
     )
+    processing_filter = Q(status=GeneratedMovie.Status.PROCESSING)
+    if not include_processing:
+        processing_filter &= Q(updated_at__lte=stale_processing_before)
+
     queryset = (
         GeneratedMovie.objects.filter(
             Q(status=GeneratedMovie.Status.PENDING)
-            | Q(
-                status=GeneratedMovie.Status.PROCESSING,
-                updated_at__lte=stale_processing_before,
-            )
+            | processing_filter
         )
         .select_related("event")
         .order_by("updated_at", "created_at", "pk")
@@ -332,9 +333,9 @@ def get_pending_movie_jobs(limit=None):
     return list(queryset)
 
 
-def process_pending_movie_jobs(limit=None):
+def process_pending_movie_jobs(limit=None, include_processing=False):
     processed_movies = []
-    for movie in get_pending_movie_jobs(limit=limit):
+    for movie in get_pending_movie_jobs(limit=limit, include_processing=include_processing):
         processed_movies.append(process_generated_movie(movie))
     return processed_movies
 

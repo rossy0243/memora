@@ -678,6 +678,18 @@ class ProcessPendingMoviesCommandTests(TestCase):
 
         process_generated_movie.assert_called_once_with(movie)
 
+    @patch("processing.management.commands.process_pending_movies.get_pending_movie_jobs")
+    @patch("processing.management.commands.process_pending_movies.process_generated_movie")
+    def test_can_include_processing_movies(self, process_generated_movie, get_pending_movie_jobs):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PROCESSING)
+        get_pending_movie_jobs.return_value = [movie]
+        process_generated_movie.return_value = movie
+
+        call_command("process_pending_movies", "--include-processing")
+
+        get_pending_movie_jobs.assert_called_once_with(limit=5, include_processing=True)
+        process_generated_movie.assert_called_once_with(movie)
+
     @patch("processing.management.commands.process_pending_movies.process_generated_movie")
     def test_dry_run_does_not_process_movies(self, process_generated_movie):
         GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)

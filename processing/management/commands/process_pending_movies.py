@@ -25,6 +25,11 @@ class Command(BaseCommand):
             help="Continue a surveiller les jobs en attente.",
         )
         parser.add_argument(
+            "--include-processing",
+            action="store_true",
+            help="Reprend aussi les films deja marques en cours.",
+        )
+        parser.add_argument(
             "--sleep",
             type=int,
             default=30,
@@ -39,7 +44,10 @@ class Command(BaseCommand):
             sleep(options["sleep"])
 
     def process_once(self, options):
-        movies = get_pending_movie_jobs(limit=options["limit"])
+        movies = get_pending_movie_jobs(
+            limit=options["limit"],
+            include_processing=options["include_processing"],
+        )
 
         if not movies:
             self.stdout.write("Aucun film souvenir en attente.")
