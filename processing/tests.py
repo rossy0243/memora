@@ -28,6 +28,7 @@ from .services import (
     get_event_movie_schedule_at,
     get_pending_movie_jobs,
     get_movie_candidate_uploads,
+    process_generated_movie,
     process_pending_movie_jobs,
 )
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
@@ -366,6 +367,15 @@ class MovieGenerationServiceTests(TestCase):
 
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("Aucun media", movie.error_logs)
+
+    @patch("processing.services.analyze_event_media", side_effect=RuntimeError("analyse indisponible"))
+    def test_generate_event_movie_marks_failed_when_analysis_crashes(self, _analyze_event_media):
+        movie = create_event_movie_job(self.event)
+
+        processed = process_generated_movie(movie)
+
+        self.assertEqual(processed.status, GeneratedMovie.Status.FAILED)
+        self.assertIn("analyse indisponible", processed.error_logs)
 
     def test_create_event_movie_job_reuses_pending_job(self):
         first_job = create_event_movie_job(self.event)

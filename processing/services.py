@@ -351,8 +351,14 @@ def process_generated_movie(movie):
         return movie
 
     event = movie.event
-    analyze_event_media(event)
-    uploads = list(get_movie_candidate_uploads(event))
+    try:
+        analyze_event_media(event)
+        uploads = list(get_movie_candidate_uploads(event))
+    except Exception as exc:
+        movie.status = GeneratedMovie.Status.FAILED
+        movie.error_logs = str(exc)
+        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        return movie
 
     if not uploads:
         movie.status = GeneratedMovie.Status.FAILED
