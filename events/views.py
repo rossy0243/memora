@@ -238,7 +238,7 @@ def set_media_moderation_status(request, pk, upload_pk):
 @require_POST
 def generate_movie(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
-    create_event_movie_job(event)
+    create_event_movie_job(event, allow_retry=True)
     return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
 
 

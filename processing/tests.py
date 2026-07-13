@@ -387,6 +387,42 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("planifie", first_job.progress_message)
         self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
 
+    def test_create_event_movie_job_reuses_completed_movie(self):
+        completed_movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/film/movies/memora.mp4",
+        )
+
+        movie = create_event_movie_job(self.event)
+
+        self.assertEqual(movie, completed_movie)
+        self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
+
+    def test_create_event_movie_job_does_not_retry_failed_movie_by_default(self):
+        failed_movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.FAILED,
+            error_logs="provider error",
+        )
+
+        movie = create_event_movie_job(self.event)
+
+        self.assertEqual(movie, failed_movie)
+        self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
+
+    def test_create_event_movie_job_can_retry_failed_movie_when_requested(self):
+        GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.FAILED,
+            error_logs="provider error",
+        )
+
+        movie = create_event_movie_job(self.event, allow_retry=True)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 2)
+
     @override_settings(MEMORA_MOVIE_PROCESSING_STALE_MINUTES=5)
     def test_pending_movie_jobs_include_stale_processing_jobs(self):
         stale_movie = GeneratedMovie.objects.create(
@@ -654,6 +690,16 @@ class GenerateScheduledMoviesCommandTests(TestCase):
     def test_completed_movie_is_not_generated_again(self, create_movie_job):
         event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
         GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.COMPLETED)
+
+        call_command("generate_scheduled_movies")
+
+        create_movie_job.assert_not_called()
+
+    @override_settings(MEMORA_MOVIE_AUTOGENERATE_HOUR=0)
+    @patch("processing.management.commands.generate_scheduled_movies.create_event_movie_job")
+    def test_failed_movie_is_not_retried_automatically(self, create_movie_job):
+        event = self.create_event_with_video(timezone.localdate() - timedelta(days=1))
+        GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.FAILED)
 
         call_command("generate_scheduled_movies")
 

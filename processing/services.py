@@ -278,13 +278,7 @@ def get_scheduled_movie_events(now=None):
         if get_event_movie_schedule_at(event) > now:
             continue
 
-        has_existing_movie = event.generated_movies.filter(
-            status__in=[
-                GeneratedMovie.Status.PENDING,
-                GeneratedMovie.Status.PROCESSING,
-                GeneratedMovie.Status.COMPLETED,
-            ]
-        ).exists()
+        has_existing_movie = event.generated_movies.exists()
         if has_existing_movie:
             continue
 
@@ -296,12 +290,13 @@ def get_scheduled_movie_events(now=None):
     return scheduled_events
 
 
-def create_event_movie_job(event):
+def create_event_movie_job(event, allow_retry=False):
     existing_job = (
         event.generated_movies.filter(
             status__in=[
                 GeneratedMovie.Status.PENDING,
                 GeneratedMovie.Status.PROCESSING,
+                GeneratedMovie.Status.COMPLETED,
             ]
         )
         .order_by("-created_at")
@@ -309,6 +304,15 @@ def create_event_movie_job(event):
     )
     if existing_job:
         return existing_job
+
+    failed_job = (
+        event.generated_movies.filter(status=GeneratedMovie.Status.FAILED)
+        .order_by("-created_at")
+        .first()
+    )
+    if failed_job and not allow_retry:
+        return failed_job
+
     return GeneratedMovie.objects.create(
         event=event,
         status=GeneratedMovie.Status.PENDING,
@@ -346,7 +350,7 @@ def process_pending_movie_jobs(limit=None, include_processing=False):
 
 
 def generate_event_movie(event):
-    movie = create_event_movie_job(event)
+    movie = create_event_movie_job(event, allow_retry=True)
     return process_generated_movie(movie)
 
 
@@ -379,7 +383,7 @@ def process_generated_movie(movie):
     if shutil.which(ffmpeg_binary) is None and not Path(ffmpeg_binary).exists():
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = f"FFmpeg introuvable: {ffmpeg_binary}"
-        movie.progress_message = "FFmpeg est introuvable sur le serveur."
+        movie.progress_message = "La generation video n'est pas disponible pour le moment."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         return movie
 
@@ -552,7 +556,7 @@ def process_generated_movie(movie):
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
-        movie.progress_message = "La generation a ete interrompue."
+        movie.progress_message = "La generation a ete interrompue. Vous pouvez relancer le film."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
 
     return movie

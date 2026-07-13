@@ -520,7 +520,28 @@ class EventViewTests(TestCase):
         response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
 
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
-        create_event_movie_job.assert_called_once_with(event)
+        create_event_movie_job.assert_called_once_with(event, allow_retry=True)
+
+    def test_movie_status_panel_hides_technical_errors(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Erreur",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.FAILED,
+            progress_message="La generation a ete interrompue. Vous pouvez relancer le film.",
+            error_logs="An error occurred (403) when calling the HeadObject operation: Forbidden",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_status", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Vous pouvez relancer le film")
+        self.assertContains(response, "details techniques restent geres en interne")
+        self.assertNotContains(response, "HeadObject")
 
     @patch("events.views.create_event_movie_job")
     def test_other_organizer_cannot_generate_event_movie(self, create_event_movie_job):

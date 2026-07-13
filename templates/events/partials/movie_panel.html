@@ -45,8 +45,8 @@
       <li class="{% if latest_movie.progress_percent >= 78 %}is-done{% endif %}">Musique</li>
       <li class="{% if latest_movie.progress_percent >= 94 %}is-done{% endif %}">Finalisation</li>
     </ol>
-    {% if latest_movie.error_logs %}
-      <p class="muted-copy">{{ latest_movie.error_logs }}</p>
+    {% if latest_movie.status == "failed" %}
+      <p class="muted-copy">Memora n'a pas pu finaliser ce film. Vous pouvez le relancer, les details techniques restent geres en interne.</p>
     {% endif %}
   {% else %}
     <p class="muted-copy">
