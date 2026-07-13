@@ -720,6 +720,60 @@ class ProcessPendingMoviesCommandTests(TestCase):
         sleep_mock.assert_called_once_with(1)
 
 
+class ProcessEventMovieCommandTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(
+            username="organizer-event-movie",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Film Evenement",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    @patch("processing.management.commands.process_event_movie.process_generated_movie")
+    def test_processes_event_pending_movie(self, process_generated_movie):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
+        process_generated_movie.return_value = movie
+
+        call_command("process_event_movie", self.event.pk)
+
+        process_generated_movie.assert_called_once_with(movie)
+
+    @patch("processing.management.commands.process_event_movie.process_generated_movie")
+    def test_can_resume_processing_movie_when_requested(self, process_generated_movie):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PROCESSING)
+        process_generated_movie.return_value = movie
+
+        call_command("process_event_movie", self.event.pk, "--include-processing")
+
+        process_generated_movie.assert_called_once_with(movie)
+
+    @patch("processing.management.commands.process_event_movie.process_generated_movie")
+    def test_dry_run_does_not_process_event_movie(self, process_generated_movie):
+        GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
+        output = StringIO()
+
+        call_command("process_event_movie", self.event.pk, "--dry-run", stdout=output)
+
+        process_generated_movie.assert_not_called()
+        self.assertIn("[dry-run]", output.getvalue())
+
+    @patch("processing.management.commands.process_event_movie.process_generated_movie")
+    def test_marks_movie_failed_when_processing_crashes(self, process_generated_movie):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PROCESSING)
+        process_generated_movie.side_effect = RuntimeError("ffmpeg boom")
+
+        call_command("process_event_movie", self.event.pk, "--include-processing")
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
+        self.assertIn("ffmpeg boom", movie.error_logs)
+
+
 class CleanupExpiredMediaCommandTests(TestCase):
     def setUp(self):
         self.organizer = get_user_model().objects.create_user(
