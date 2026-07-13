@@ -26,6 +26,7 @@ from .services import (
     create_event_movie_job,
     generate_event_movie,
     get_event_movie_schedule_at,
+    get_pending_movie_jobs,
     get_movie_candidate_uploads,
     process_pending_movie_jobs,
 )
@@ -372,6 +373,26 @@ class MovieGenerationServiceTests(TestCase):
 
         self.assertEqual(first_job, second_job)
         self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
+
+    @override_settings(MEMORA_MOVIE_PROCESSING_STALE_MINUTES=5)
+    def test_pending_movie_jobs_include_stale_processing_jobs(self):
+        stale_movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+        )
+        recent_movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+        )
+        GeneratedMovie.objects.filter(pk=stale_movie.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=10)
+        )
+        stale_movie.refresh_from_db()
+
+        jobs = get_pending_movie_jobs()
+
+        self.assertIn(stale_movie, jobs)
+        self.assertNotIn(recent_movie, jobs)
 
     def test_process_pending_movie_jobs_processes_pending_jobs(self):
         movie = create_event_movie_job(self.event)

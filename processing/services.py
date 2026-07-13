@@ -8,6 +8,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.conf import settings
 from django.core.files.base import File
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -312,10 +313,19 @@ def create_event_movie_job(event):
 
 
 def get_pending_movie_jobs(limit=None):
+    stale_processing_before = timezone.now() - timedelta(
+        minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES
+    )
     queryset = (
-        GeneratedMovie.objects.filter(status=GeneratedMovie.Status.PENDING)
+        GeneratedMovie.objects.filter(
+            Q(status=GeneratedMovie.Status.PENDING)
+            | Q(
+                status=GeneratedMovie.Status.PROCESSING,
+                updated_at__lte=stale_processing_before,
+            )
+        )
         .select_related("event")
-        .order_by("created_at", "pk")
+        .order_by("updated_at", "created_at", "pk")
     )
     if limit:
         return list(queryset[:limit])
