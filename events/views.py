@@ -8,7 +8,7 @@ from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
-from processing.services import build_event_zip, create_event_movie_job
+from processing.services import build_event_zip, create_event_movie_job, get_event_movie_schedule_at
 from uploads.models import GuestUpload, UploadCategory
 
 from .forms import EventForm
@@ -106,9 +106,9 @@ class EventDetailView(OrganizerEventMixin, DetailView):
                 "media_stats": stats,
                 "category_stats": category_stats,
                 "latest_uploads": uploads[:8],
-                "latest_movie": self.object.generated_movies.order_by("-created_at").first(),
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
                 "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
+                **get_movie_panel_context(self.object),
             }
         )
         return context
@@ -240,6 +240,26 @@ def generate_movie(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     create_event_movie_job(event)
     return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
+
+
+@login_required
+def movie_status_panel(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    return render(request, "events/partials/movie_panel.html", get_movie_panel_context(event))
+
+
+def get_movie_panel_context(event):
+    latest_movie = event.generated_movies.order_by("-created_at").first()
+    return {
+        "event": event,
+        "latest_movie": latest_movie,
+        "movie_schedule_at": get_event_movie_schedule_at(event),
+        "movie_status_url": reverse("events:movie_status", kwargs={"pk": event.pk}),
+        "movie_is_live": bool(
+            latest_movie
+            and latest_movie.status in {"pending", "processing"}
+        ),
+    }
 
 
 @login_required

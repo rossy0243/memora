@@ -1,0 +1,75 @@
+<article
+  class="quick-panel quick-panel--movie"
+  data-movie-status-panel
+  data-status-url="{{ movie_status_url }}"
+  data-status="{% if latest_movie %}{{ latest_movie.status }}{% else %}scheduled{% endif %}"
+>
+  <div class="panel-title-row">
+    <div>
+      <p class="section__label">Film souvenir</p>
+      <h3>Video automatique</h3>
+    </div>
+    {% if latest_movie %}
+      <span class="status-pill {% if latest_movie.status == 'completed' %}status-pill--active{% elif latest_movie.status == 'failed' %}status-pill--danger{% endif %}">{{ latest_movie.get_status_display }}</span>
+    {% else %}
+      <span class="status-pill">Programme</span>
+    {% endif %}
+  </div>
+
+  {% if latest_movie and latest_movie.final_file %}
+    <div class="movie-progress movie-progress--complete">
+      <div class="movie-progress__meta">
+        <span>{{ latest_movie.progress_message|default:"Votre film souvenir est pret." }}</span>
+        <strong>100%</strong>
+      </div>
+      <div class="movie-progress__bar" aria-hidden="true">
+        <span style="width: 100%"></span>
+      </div>
+    </div>
+    <video class="movie-preview" src="{{ latest_movie.final_file.url }}" controls preload="metadata"></video>
+    <a class="button button--primary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
+  {% elif latest_movie %}
+    <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
+      <div class="movie-progress__meta">
+        <span>{{ latest_movie.progress_message|default:"Memora prepare automatiquement la video souvenir." }}</span>
+        <strong>{{ latest_movie.progress_percent|default:0 }}%</strong>
+      </div>
+      <div class="movie-progress__bar" aria-hidden="true">
+        <span style="width: {{ latest_movie.progress_percent|default:0 }}%"></span>
+      </div>
+    </div>
+    <ol class="movie-steps">
+      <li class="{% if latest_movie.progress_percent >= 5 %}is-done{% endif %}">Planification</li>
+      <li class="{% if latest_movie.progress_percent >= 18 %}is-done{% endif %}">Selection IA</li>
+      <li class="{% if latest_movie.progress_percent >= 24 %}is-done{% endif %}">Clips</li>
+      <li class="{% if latest_movie.progress_percent >= 78 %}is-done{% endif %}">Musique</li>
+      <li class="{% if latest_movie.progress_percent >= 94 %}is-done{% endif %}">Finalisation</li>
+    </ol>
+    {% if latest_movie.error_logs %}
+      <p class="muted-copy">{{ latest_movie.error_logs }}</p>
+    {% endif %}
+  {% else %}
+    <p class="muted-copy">
+      Generation automatique prevue le {{ movie_schedule_at|date:"d/m/Y" }} a {{ movie_schedule_at|date:"H:i" }}.
+      Vous pouvez aussi lancer un test maintenant.
+    </p>
+    <div class="movie-progress">
+      <div class="movie-progress__meta">
+        <span>En attente de l'horaire automatique.</span>
+        <strong>0%</strong>
+      </div>
+      <div class="movie-progress__bar" aria-hidden="true">
+        <span style="width: 0%"></span>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not latest_movie or latest_movie.status == "failed" %}
+    <form method="post" action="{% url 'events:generate_movie' event.pk %}">
+      {% csrf_token %}
+      <button class="button button--primary" type="submit">Generer le film maintenant</button>
+    </form>
+  {% elif latest_movie.status == "pending" or latest_movie.status == "processing" %}
+    <p class="muted-copy">Cette section se met a jour automatiquement.</p>
+  {% endif %}
+</article>

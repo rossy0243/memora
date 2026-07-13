@@ -309,7 +309,12 @@ def create_event_movie_job(event):
     )
     if existing_job:
         return existing_job
-    return GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PENDING)
+    return GeneratedMovie.objects.create(
+        event=event,
+        status=GeneratedMovie.Status.PENDING,
+        progress_percent=5,
+        progress_message="Film planifie. Memora attend le worker de generation.",
+    )
 
 
 def get_pending_movie_jobs(limit=None, include_processing=False):
@@ -352,28 +357,35 @@ def process_generated_movie(movie):
 
     event = movie.event
     try:
+        _update_movie_progress(movie, 10, "Analyse des souvenirs recus.")
         analyze_event_media(event)
+        _update_movie_progress(movie, 18, "Selection automatique des meilleurs moments.")
         uploads = list(get_movie_candidate_uploads(event))
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
-        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        movie.progress_message = "La selection automatique a echoue."
+        movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         return movie
 
     if not uploads:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = "Aucun media accepte disponible pour generer le film souvenir."
-        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        movie.progress_message = "Aucun souvenir valide disponible pour le film."
+        movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         return movie
 
     ffmpeg_binary = settings.MEMORA_FFMPEG_BINARY
     if shutil.which(ffmpeg_binary) is None and not Path(ffmpeg_binary).exists():
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = f"FFmpeg introuvable: {ffmpeg_binary}"
-        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        movie.progress_message = "FFmpeg est introuvable sur le serveur."
+        movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         return movie
 
     movie.status = GeneratedMovie.Status.PROCESSING
+    movie.progress_percent = max(movie.progress_percent, 22)
+    movie.progress_message = "Preparation du plan de montage."
     soundtrack = choose_movie_soundtrack(event, uploads)
     edit_decision_data = build_edit_decision_data(event, uploads, soundtrack)
     runway_ready = runway_is_ready()
@@ -388,6 +400,8 @@ def process_generated_movie(movie):
     movie.save(
         update_fields=[
             "status",
+            "progress_percent",
+            "progress_message",
             "render_provider",
             "music_mood",
             "music_track",
@@ -403,10 +417,22 @@ def process_generated_movie(movie):
             total_duration = 0
             runway_enhancements = []
             runway_enhanced_count = 0
+            clip_count = max(len(uploads), 1)
             for index, upload in enumerate(uploads, start=1):
+                clip_progress = 24 + int((index - 1) * 42 / clip_count)
+                _update_movie_progress(
+                    movie,
+                    clip_progress,
+                    f"Preparation du clip {index}/{clip_count}.",
+                )
                 clip_path = temp_path / f"clip_{index:04d}.mp4"
                 _build_movie_clip(upload, clip_path, ffmpeg_binary)
                 if _should_enhance_clip_with_runway(upload, runway_enhanced_count):
+                    _update_movie_progress(
+                        movie,
+                        min(clip_progress + 3, 68),
+                        f"Amelioration Runway du clip {index}/{clip_count}.",
+                    )
                     runway_clip_path = temp_path / f"clip_{index:04d}_runway.mp4"
                     try:
                         enhancement = enhance_clip_with_runway(
@@ -440,6 +466,7 @@ def process_generated_movie(movie):
                 clip_paths.append(clip_path)
                 total_duration += _estimated_movie_clip_duration(upload)
 
+            _update_movie_progress(movie, 68, "Assemblage des clips selectionnes.")
             movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
             if runway_enhanced_count:
                 movie.render_provider = "runway+ffmpeg"
@@ -466,6 +493,7 @@ def process_generated_movie(movie):
                 ]
             )
 
+            _update_movie_progress(movie, 78, "Mixage de la musique et des voix.")
             soundtrack_output_path = temp_path / f"memora_{_clean_name(event.title)}_soundtrack.mp4"
             soundtrack_output_path = _apply_soundtrack_if_available(
                 concat_output_path,
@@ -480,6 +508,7 @@ def process_generated_movie(movie):
                 "duration_seconds": settings.MEMORA_MOVIE_BADGE_DURATION_SECONDS,
                 "applied": False,
             }
+            _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
             try:
                 final_output_path = _apply_event_badge(
                     soundtrack_output_path,
@@ -494,10 +523,13 @@ def process_generated_movie(movie):
                 badge_data["error"] = str(exc)
             movie.edit_decision_data["badge"] = badge_data
 
+            _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
             with final_output_path.open("rb") as output_file:
                 movie.final_file.save(final_output_path.name, File(output_file), save=False)
 
         movie.status = GeneratedMovie.Status.COMPLETED
+        movie.progress_percent = 100
+        movie.progress_message = "Votre film souvenir est pret."
         movie.generated_at = timezone.now()
         movie.duration = timedelta(seconds=min(total_duration, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS))
         movie.error_logs = ""
@@ -505,6 +537,8 @@ def process_generated_movie(movie):
             update_fields=[
                 "final_file",
                 "status",
+                "progress_percent",
+                "progress_message",
                 "generated_at",
                 "duration",
                 "render_provider",
@@ -518,9 +552,16 @@ def process_generated_movie(movie):
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
-        movie.save(update_fields=["status", "error_logs", "updated_at"])
+        movie.progress_message = "La generation a ete interrompue."
+        movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
 
     return movie
+
+
+def _update_movie_progress(movie, percent, message):
+    movie.progress_percent = max(0, min(int(percent), 100))
+    movie.progress_message = message[:160]
+    movie.save(update_fields=["progress_percent", "progress_message", "updated_at"])
 
 
 def _should_enhance_clip_with_runway(upload, enhanced_count):

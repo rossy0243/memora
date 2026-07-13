@@ -367,6 +367,7 @@ class MovieGenerationServiceTests(TestCase):
 
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("Aucun media", movie.error_logs)
+        self.assertEqual(movie.progress_message, "Aucun souvenir valide disponible pour le film.")
 
     @patch("processing.services.analyze_event_media", side_effect=RuntimeError("analyse indisponible"))
     def test_generate_event_movie_marks_failed_when_analysis_crashes(self, _analyze_event_media):
@@ -382,6 +383,8 @@ class MovieGenerationServiceTests(TestCase):
         second_job = create_event_movie_job(self.event)
 
         self.assertEqual(first_job, second_job)
+        self.assertEqual(first_job.progress_percent, 5)
+        self.assertIn("planifie", first_job.progress_message)
         self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
 
     @override_settings(MEMORA_MOVIE_PROCESSING_STALE_MINUTES=5)
@@ -434,6 +437,8 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIsNotNone(movie.generated_at)
         self.assertLessEqual(movie.duration.total_seconds(), 600)
         self.assertEqual(movie.render_provider, "ffmpeg")
+        self.assertEqual(movie.progress_percent, 100)
+        self.assertEqual(movie.progress_message, "Votre film souvenir est pret.")
         self.assertTrue(movie.music_mood)
         self.assertIn("clips", movie.edit_decision_data)
         self.assertEqual(movie.edit_decision_data["badge"]["display_name"], "Lea & Sam")

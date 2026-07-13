@@ -953,6 +953,11 @@ h2 {
   background: var(--color-sage);
 }
 
+.status-pill--danger {
+  color: #7c2d36;
+  background: #f7d8dc;
+}
+
 .empty-state {
   padding: 24px;
 }
@@ -1039,6 +1044,74 @@ h2 {
   border-radius: var(--radius-md);
   background: var(--color-ink);
   aspect-ratio: 16 / 9;
+}
+
+.movie-progress {
+  display: grid;
+  gap: 8px;
+}
+
+.movie-progress__meta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  color: var(--color-body);
+  font-size: 0.92rem;
+}
+
+.movie-progress__meta strong {
+  color: var(--color-primary-active);
+  font-variant-numeric: tabular-nums;
+}
+
+.movie-progress__bar {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-surface-soft);
+}
+
+.movie-progress__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-primary), #d7a86e);
+  transition: width 260ms ease;
+}
+
+.movie-progress--complete .movie-progress__bar span {
+  background: linear-gradient(90deg, #6b9b72, var(--color-sage));
+}
+
+.movie-progress--failed .movie-progress__bar span {
+  background: #b85b66;
+}
+
+.movie-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.movie-steps li {
+  border: 1px solid var(--color-hairline);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--color-muted);
+  background: var(--color-surface);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.movie-steps li.is-done {
+  color: #25563d;
+  border-color: rgba(107, 155, 114, 0.3);
+  background: rgba(223, 231, 221, 0.72);
 }
 
 .section-heading {
@@ -2313,6 +2386,10 @@ body.camera-open {
 
   .quick-actions {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .movie-steps {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .stat-grid {

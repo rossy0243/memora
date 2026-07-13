@@ -14,6 +14,7 @@ urlpatterns = [
     path("<int:pk>/modifier/", views.EventUpdateView.as_view(), name="update"),
     path("<int:pk>/qr-code/", views.event_qr_code, name="qr_code"),
     path("<int:pk>/generer-film/", views.generate_movie, name="generate_movie"),
+    path("<int:pk>/film-statut/", views.movie_status_panel, name="movie_status"),
     path("<int:pk>/telecharger-zip/", views.download_event_zip, name="download_zip"),
     path("public/<slug:slug>/<slug:access_key>/", views.public_event_preview, name="public-preview"),
 ]

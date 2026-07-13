@@ -469,7 +469,42 @@ class EventViewTests(TestCase):
 
         self.assertContains(response, "Video automatique")
         self.assertContains(response, "Telecharger la video")
-        self.assertContains(response, "Generer le film")
+        self.assertContains(response, "100%")
+
+    def test_event_detail_displays_automatic_movie_schedule(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Programme",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Generation automatique prevue le 09/07/2026 a 12:00")
+        self.assertContains(response, "horaire automatique")
+
+    def test_owner_can_poll_movie_status_panel(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Statut",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.PROCESSING,
+            progress_percent=68,
+            progress_message="Assemblage des clips selectionnes.",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_status", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "68%")
+        self.assertContains(response, "Assemblage des clips selectionnes.")
 
     @patch("events.views.create_event_movie_job")
     def test_owner_can_generate_event_movie(self, create_event_movie_job):

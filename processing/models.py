@@ -32,6 +32,8 @@ class GeneratedMovie(models.Model):
     music_mood = models.CharField(max_length=80, blank=True)
     music_track = models.CharField(max_length=255, blank=True)
     edit_decision_data = models.JSONField(default=dict, blank=True)
+    progress_percent = models.PositiveSmallIntegerField(default=0)
+    progress_message = models.CharField(max_length=160, blank=True)
     generated_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)
     error_logs = models.TextField(blank=True)
