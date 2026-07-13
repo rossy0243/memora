@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -28,6 +29,7 @@ from .services import (
     get_event_movie_schedule_at,
     get_pending_movie_jobs,
     get_movie_candidate_uploads,
+    notify_generated_movie_ready,
     process_generated_movie,
     process_pending_movie_jobs,
 )
@@ -483,6 +485,47 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("drawtext", badge_command[badge_command.index("-vf") + 1])
         self.assertGreaterEqual(run_ffmpeg.call_count, 3)
 
+    @override_settings(
+        MEMORA_PUBLIC_BASE_URL="https://memora.example",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    )
+    def test_notify_generated_movie_ready_emails_organizer_once(self):
+        mail.outbox = []
+        self.organizer.email = "organizer@example.com"
+        self.organizer.save(update_fields=["email"])
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/film/movies/memora.mp4",
+            generated_at=timezone.now(),
+        )
+
+        first_result = notify_generated_movie_ready(movie)
+        second_result = notify_generated_movie_ready(movie)
+
+        movie.refresh_from_db()
+        self.assertTrue(first_result)
+        self.assertFalse(second_result)
+        self.assertIsNotNone(movie.organizer_notified_at)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Votre film souvenir Memora est pret", mail.outbox[0].subject)
+        self.assertIn("https://memora.example", mail.outbox[0].body)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_notify_generated_movie_ready_skips_missing_email(self):
+        mail.outbox = []
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/film/movies/memora.mp4",
+            generated_at=timezone.now(),
+        )
+
+        result = notify_generated_movie_ready(movie)
+
+        self.assertFalse(result)
+        self.assertEqual(len(mail.outbox), 0)
+
     @patch("processing.services._run_ffmpeg")
     def test_event_badge_uses_display_name_and_preserves_audio_mapping(self, run_ffmpeg):
         self.event.couple_name = "Camille & Noe"
@@ -823,6 +866,51 @@ class ProcessEventMovieCommandTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("ffmpeg boom", movie.error_logs)
+
+
+class NotifyReadyMoviesCommandTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="organizer-ready",
+            email="organizer-ready@example.com",
+            password="secret",
+        )
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Film Pret",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    @patch("processing.management.commands.notify_ready_movies.notify_generated_movie_ready")
+    def test_notify_ready_movies_dry_run_does_not_notify(self, notify_ready):
+        GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/film/movies/memora.mp4",
+            generated_at=timezone.now(),
+        )
+        output = StringIO()
+
+        call_command("notify_ready_movies", "--dry-run", stdout=output)
+
+        notify_ready.assert_not_called()
+        self.assertIn("[dry-run]", output.getvalue())
+
+    @patch("processing.management.commands.notify_ready_movies.notify_generated_movie_ready")
+    def test_notify_ready_movies_notifies_completed_movies(self, notify_ready):
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/film/movies/memora.mp4",
+            generated_at=timezone.now(),
+        )
+        notify_ready.return_value = True
+
+        call_command("notify_ready_movies")
+
+        notify_ready.assert_called_once_with(movie)
 
 
 class CleanupExpiredMediaCommandTests(TestCase):

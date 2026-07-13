@@ -26,11 +26,23 @@
             <div class="event-card__placeholder"></div>
           {% endif %}
           <div class="event-card__body">
-            <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
-              {% if event.is_active %}Actif{% else %}Inactif{% endif %}
-            </span>
+            <div class="event-card__status-row">
+              <span class="status-pill {% if event.is_active %}status-pill--active{% endif %}">
+                {% if event.is_active %}Actif{% else %}Inactif{% endif %}
+              </span>
+              <span class="status-pill {{ event.post_event_status.class }}">
+                {{ event.post_event_status.label }}
+              </span>
+            </div>
             <h2>{{ event.title }}</h2>
             <p>{{ event.event_date }}{% if event.location %} - {{ event.location }}{% endif %}</p>
+            {% if event.latest_movie and event.latest_movie.status == "completed" and event.latest_movie.final_file %}
+              <p>Votre film souvenir est disponible.</p>
+            {% elif event.latest_movie and event.latest_movie.status == "failed" %}
+              <p>Memora a besoin d'une relance pour finaliser le film.</p>
+            {% elif event.event_date < today %}
+              <p>Le film sera prepare automatiquement apres l'evenement.</p>
+            {% endif %}
             <a href="{% url 'events:detail' event.pk %}">Ouvrir</a>
           </div>
         </article>

@@ -920,6 +920,12 @@ h2 {
   padding: 18px;
 }
 
+.event-card__status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .event-card h2 {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;

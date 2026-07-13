@@ -35,6 +35,7 @@ class GeneratedMovie(models.Model):
     progress_percent = models.PositiveSmallIntegerField(default=0)
     progress_message = models.CharField(max_length=160, blank=True)
     generated_at = models.DateTimeField(blank=True, null=True)
+    organizer_notified_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)
     error_logs = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

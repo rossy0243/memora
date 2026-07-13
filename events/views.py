@@ -72,7 +72,7 @@ class EventDetailView(OrganizerEventMixin, DetailView):
             self.object.guest_uploads.filter(is_deleted=False)
             .exclude(moderation_status=GuestUpload.ModerationStatus.REJECTED)
             .select_related("category")
-            .order_by("-uploaded_at")
+            .order_by("-uploaded_at", "-pk")
         )
         stats = uploads.aggregate(
             total=Count("id"),
@@ -129,7 +129,7 @@ class EventMediaListView(OrganizerEventMixin, ListView):
         queryset = (
             GuestUpload.objects.filter(event=self.event, is_deleted=False)
             .select_related("category")
-            .order_by("-uploaded_at")
+            .order_by("-uploaded_at", "-pk")
         )
         self.selected_category = self.request.GET.get("category", "")
         self.selected_media_type = self.request.GET.get("type", "")

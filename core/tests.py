@@ -2,6 +2,7 @@ from pathlib import Path
 import base64
 import os
 import tempfile
+from datetime import date
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,8 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from memora import settings as memora_settings
+from events.models import Event, EventType
+from processing.models import GeneratedMovie
 
 from .checks import storage_configuration_check
 
@@ -48,6 +51,32 @@ class DashboardHomeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("events:create"), count=1)
+
+    def test_dashboard_home_displays_post_event_movie_status(self):
+        user = get_user_model().objects.create_user(
+            username="organizer",
+            email="organizer@example.com",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        event = Event.objects.create(
+            organizer=user,
+            title="Mariage termine",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/mariage/movies/memora.mp4",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("dashboard:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Film pret")
+        self.assertContains(response, "Votre film souvenir est disponible.")
 
 
 class HealthPageTests(SimpleTestCase):

@@ -8,7 +8,9 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from django.conf import settings
 from django.core.files.base import File
+from django.core.mail import send_mail
 from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -553,6 +555,7 @@ def process_generated_movie(movie):
                 "updated_at",
             ]
         )
+        notify_generated_movie_ready(movie)
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
@@ -560,6 +563,55 @@ def process_generated_movie(movie):
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
 
     return movie
+
+
+def notify_generated_movie_ready(movie):
+    movie.refresh_from_db()
+    if (
+        movie.status != GeneratedMovie.Status.COMPLETED
+        or movie.organizer_notified_at
+        or not movie.event.organizer.email
+    ):
+        return False
+
+    dashboard_url = _event_dashboard_url(movie.event)
+    message = (
+        f"Bonjour,\n\n"
+        f"Votre film souvenir Memora pour \"{movie.event.title}\" est pret.\n\n"
+        f"Vous pouvez le regarder et le telecharger ici :\n{dashboard_url}\n\n"
+        "Merci d'avoir confie vos souvenirs a Memora."
+    )
+    try:
+        send_mail(
+            subject=f"Votre film souvenir Memora est pret - {movie.event.title}",
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[movie.event.organizer.email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        movie.edit_decision_data["notification"] = {
+            "email_ready_failed": True,
+            "error": str(exc),
+        }
+        movie.save(update_fields=["edit_decision_data", "updated_at"])
+        return False
+
+    movie.organizer_notified_at = timezone.now()
+    movie.edit_decision_data["notification"] = {
+        "email_ready_sent": True,
+        "sent_at": movie.organizer_notified_at.isoformat(),
+    }
+    movie.save(update_fields=["organizer_notified_at", "edit_decision_data", "updated_at"])
+    return True
+
+
+def _event_dashboard_url(event):
+    path = reverse("events:detail", kwargs={"pk": event.pk})
+    base_url = settings.MEMORA_PUBLIC_BASE_URL.rstrip("/")
+    if not base_url:
+        return path
+    return f"{base_url}{path}"
 
 
 def _update_movie_progress(movie, percent, message):

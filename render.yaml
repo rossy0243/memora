@@ -32,6 +32,9 @@ services:
       - &env_csrf_origins
         key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: https://*.onrender.com
+      - &env_public_base_url
+        key: MEMORA_PUBLIC_BASE_URL
+        value: https://memora-web-ee0s.onrender.com
       - &env_ssl_redirect
         key: DJANGO_SECURE_SSL_REDIRECT
         value: "True"
@@ -215,6 +218,7 @@ services:
       - *env_debug
       - *env_allowed_hosts
       - *env_csrf_origins
+      - *env_public_base_url
       - *env_ssl_redirect
       - *env_session_secure
       - *env_csrf_secure
