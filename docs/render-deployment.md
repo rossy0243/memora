@@ -40,19 +40,15 @@ Backblaze B2, Cloudflare R2 et AWS S3 conviennent.
 
 ## Activation Google Video Intelligence
 
-La production Render garde pour l'instant l'analyse locale active :
-
-```text
-MEMORA_AI_ANALYSIS_PROVIDER=local_heuristic_v1
-MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED=False
-```
-
-Quand le compte de service Google sera pret, ajouter le fichier d'identifiants comme secret Render, definir `GOOGLE_APPLICATION_CREDENTIALS` vers ce chemin, puis passer :
+Ajouter le JSON du compte de service dans Render sous forme Base64 :
 
 ```text
 MEMORA_AI_ANALYSIS_PROVIDER=google_video_intelligence_v1
 MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED=True
+GOOGLE_APPLICATION_CREDENTIALS_B64=<service-account-json-encode-en-base64>
 ```
+
+Au demarrage, Memora materialise ce secret dans un fichier temporaire et renseigne `GOOGLE_APPLICATION_CREDENTIALS` pour la librairie Google.
 
 ## Notes de securite
 

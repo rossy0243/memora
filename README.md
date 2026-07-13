@@ -116,6 +116,8 @@ MEMORA_GOOGLE_VIDEO_INTELLIGENCE_LANGUAGE=fr-FR
 MEMORA_GOOGLE_VIDEO_INTELLIGENCE_TIMEOUT_SECONDS=180
 MEMORA_GOOGLE_VIDEO_INTELLIGENCE_USE_LATEST_MODEL=True
 GOOGLE_APPLICATION_CREDENTIALS=/chemin/vers/service-account.json
+# Ou sur Render, plus pratique pour une variable secrete :
+GOOGLE_APPLICATION_CREDENTIALS_B64=<service-account-json-encode-en-base64>
 ```
 
 Le provider Google enrichit le scoring avec labels video, detection de plans, contenu explicite, visages et transcription. Les voix et visages boostent les moments humains ; le contenu explicite penalise fortement la selection.

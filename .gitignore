@@ -1,4 +1,7 @@
 .env
+.secrets/
+*service-account*.json
+*credentials*.json
 .venv/
 .tools/
 .postgres/

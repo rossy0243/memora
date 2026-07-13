@@ -1,6 +1,14 @@
+from pathlib import Path
+import base64
+import os
+import tempfile
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
+
+from memora import settings as memora_settings
 
 from .checks import storage_configuration_check
 
@@ -78,3 +86,45 @@ class StorageConfigurationCheckTests(SimpleTestCase):
 
         self.assertEqual(len(errors), 3)
         self.assertTrue(all(error.id == "memora.E002" for error in errors))
+
+
+class GoogleCredentialsSettingsTests(SimpleTestCase):
+    def test_google_credentials_json_is_materialized_to_temp_file(self):
+        credentials = '{"type":"service_account","project_id":"memora-test"}'
+        previous_credentials_path = os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS_JSON": credentials}, clear=False):
+                    with patch("memora.settings.tempfile.gettempdir", return_value=temp_dir):
+                        memora_settings.materialize_google_application_credentials()
+
+                    credentials_path = Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+                    self.assertTrue(credentials_path.exists())
+                    self.assertEqual(credentials_path.read_text(encoding="utf-8"), credentials)
+        finally:
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS_JSON", None)
+            if previous_credentials_path:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = previous_credentials_path
+
+    def test_google_credentials_base64_is_materialized_to_temp_file(self):
+        credentials = '{"type":"service_account","project_id":"memora-test"}'
+        encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("ascii")
+        previous_credentials_path = os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                with patch.dict(os.environ, {"GOOGLE_APPLICATION_CREDENTIALS_B64": encoded_credentials}, clear=False):
+                    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS_JSON", None)
+                    with patch("memora.settings.tempfile.gettempdir", return_value=temp_dir):
+                        memora_settings.materialize_google_application_credentials()
+
+                    credentials_path = Path(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+                    self.assertTrue(credentials_path.exists())
+                    self.assertEqual(credentials_path.read_text(encoding="utf-8"), credentials)
+        finally:
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS_B64", None)
+            if previous_credentials_path:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = previous_credentials_path

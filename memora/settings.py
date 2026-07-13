@@ -1,5 +1,7 @@
 from pathlib import Path
+import base64
 import os
+import tempfile
 from urllib.parse import unquote, urlparse
 
 try:
@@ -12,6 +14,28 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 if load_dotenv:
     load_dotenv(BASE_DIR / ".env")
+
+
+def materialize_google_application_credentials():
+    credentials_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    credentials_b64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_B64", "").strip()
+    if not credentials_json or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not credentials_b64 or os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+            return
+        credentials_json = base64.b64decode(credentials_b64).decode("utf-8")
+
+    credentials_dir = Path(tempfile.gettempdir()) / "memora-google-credentials"
+    credentials_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    credentials_path = credentials_dir / "application_credentials.json"
+    credentials_path.write_text(credentials_json, encoding="utf-8")
+    try:
+        credentials_path.chmod(0o600)
+    except OSError:
+        pass
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path)
+
+
+materialize_google_application_credentials()
 
 
 def env_bool(name, default=False):
