@@ -1,9 +1,13 @@
 from datetime import timedelta
+import logging
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from uploads.models import GuestUpload
+
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -32,10 +36,12 @@ class Command(BaseCommand):
                 expired_ids.append(upload.id)
 
         if options["dry_run"]:
+            logger.info("Expired media cleanup dry-run count=%s", len(expired_ids))
             self.stdout.write(
                 self.style.WARNING(f"{len(expired_ids)} media seraient marques comme supprimes.")
             )
             return
 
         updated = GuestUpload.objects.filter(id__in=expired_ids).update(is_deleted=True)
+        logger.info("Expired media cleanup marked_deleted=%s", updated)
         self.stdout.write(self.style.SUCCESS(f"{updated} media marques comme supprimes."))

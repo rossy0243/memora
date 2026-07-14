@@ -15,6 +15,7 @@ __pycache__/
 db.sqlite3
 media/*
 !media/.gitkeep
+backups/
 staticfiles/
 .coverage
 htmlcov/

@@ -1,5 +1,6 @@
 from datetime import datetime, time, timedelta
 from io import BytesIO
+import logging
 from pathlib import Path
 import shutil
 import subprocess
@@ -20,6 +21,9 @@ from .analysis import analyze_event_media
 from .models import GeneratedMovie, MediaAnalysis
 from .runway import build_runway_montage_payload, enhance_clip_with_runway, runway_is_ready
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
+
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_ZIP_CATEGORY_FOLDERS = {
@@ -359,9 +363,11 @@ def generate_event_movie(event):
 def process_generated_movie(movie):
     movie.refresh_from_db()
     if movie.status not in {GeneratedMovie.Status.PENDING, GeneratedMovie.Status.PROCESSING}:
+        logger.info("Movie skipped movie=%s event=%s status=%s", movie.pk, movie.event_id, movie.status)
         return movie
 
     event = movie.event
+    logger.info("Movie processing started movie=%s event=%s", movie.pk, event.pk)
     try:
         _update_movie_progress(movie, 10, "Analyse des souvenirs recus.")
         analyze_event_media(event)
@@ -372,6 +378,7 @@ def process_generated_movie(movie):
         movie.error_logs = str(exc)
         movie.progress_message = "La selection automatique a echoue."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
+        logger.exception("Movie automatic selection failed movie=%s event=%s", movie.pk, event.pk)
         return movie
 
     if not uploads:
@@ -379,6 +386,7 @@ def process_generated_movie(movie):
         movie.error_logs = "Aucun media accepte disponible pour generer le film souvenir."
         movie.progress_message = "Aucun souvenir valide disponible pour le film."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
+        logger.warning("Movie failed without valid media movie=%s event=%s", movie.pk, event.pk)
         return movie
 
     ffmpeg_binary = settings.MEMORA_FFMPEG_BINARY
@@ -387,6 +395,7 @@ def process_generated_movie(movie):
         movie.error_logs = f"FFmpeg introuvable: {ffmpeg_binary}"
         movie.progress_message = "La generation video n'est pas disponible pour le moment."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
+        logger.error("Movie failed because FFmpeg is missing movie=%s event=%s binary=%s", movie.pk, event.pk, ffmpeg_binary)
         return movie
 
     movie.status = GeneratedMovie.Status.PROCESSING
@@ -555,12 +564,14 @@ def process_generated_movie(movie):
                 "updated_at",
             ]
         )
+        logger.info("Movie processing completed movie=%s event=%s", movie.pk, event.pk)
         notify_generated_movie_ready(movie)
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
         movie.progress_message = "La generation a ete interrompue. Vous pouvez relancer le film."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
+        logger.exception("Movie processing failed movie=%s event=%s", movie.pk, event.pk)
 
     return movie
 
@@ -572,6 +583,7 @@ def notify_generated_movie_ready(movie):
         or movie.organizer_notified_at
         or not movie.event.organizer.email
     ):
+        logger.info("Ready movie notification skipped movie=%s event=%s", movie.pk, movie.event_id)
         return False
 
     dashboard_url = _event_dashboard_url(movie.event)
@@ -590,6 +602,7 @@ def notify_generated_movie_ready(movie):
             fail_silently=False,
         )
     except Exception as exc:
+        logger.exception("Ready movie notification failed movie=%s event=%s", movie.pk, movie.event_id)
         movie.edit_decision_data["notification"] = {
             "email_ready_failed": True,
             "error": str(exc),
@@ -603,6 +616,7 @@ def notify_generated_movie_ready(movie):
         "sent_at": movie.organizer_notified_at.isoformat(),
     }
     movie.save(update_fields=["organizer_notified_at", "edit_decision_data", "updated_at"])
+    logger.info("Ready movie notification sent movie=%s event=%s", movie.pk, movie.event_id)
     return True
 
 

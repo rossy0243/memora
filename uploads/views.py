@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -7,6 +9,9 @@ from events.models import Event
 
 from .forms import GuestUploadForm
 from .services import ensure_session_key, get_client_ip, get_upload_limit_error, get_upload_quota
+
+
+logger = logging.getLogger(__name__)
 
 
 def guest_upload_create(request, slug, access_key):
@@ -24,6 +29,7 @@ def guest_upload_create(request, slug, access_key):
             limit_error = get_upload_limit_error(event, session_key, ip_address)
 
             if limit_error:
+                logger.warning("Guest upload blocked for event=%s reason=%s", event.pk, limit_error)
                 form.add_error(None, limit_error)
             else:
                 media_file = form.cleaned_data["media_file"]
@@ -41,9 +47,11 @@ def guest_upload_create(request, slug, access_key):
                 except Exception as exc:
                     if not is_storage_error(exc):
                         raise
+                    logger.exception("Guest upload storage error for event=%s", event.pk)
                     recover_from_storage_error()
                     form.add_error("media_file", STORAGE_UNAVAILABLE_MESSAGE)
                 else:
+                    logger.info("Guest upload accepted event=%s upload=%s type=%s", event.pk, upload.pk, upload.media_type)
                     return redirect(
                         reverse(
                             "uploads:thanks",

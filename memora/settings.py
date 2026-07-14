@@ -53,6 +53,11 @@ def env_float(name, default):
     return float(os.getenv(name, str(default)))
 
 
+def env_log_level(name="DJANGO_LOG_LEVEL", default="INFO"):
+    level = os.getenv(name, default).upper()
+    return level if level in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else default
+
+
 def database_from_url(url):
     parsed = urlparse(url)
     engine_by_scheme = {
@@ -233,6 +238,39 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS
 SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
 SECURE_REFERRER_POLICY = os.getenv("DJANGO_SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
 X_FRAME_OPTIONS = os.getenv("DJANGO_X_FRAME_OPTIONS", "DENY")
+
+LOG_LEVEL = env_log_level()
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "events": {"level": LOG_LEVEL},
+        "uploads": {"level": LOG_LEVEL},
+        "processing": {"level": LOG_LEVEL},
+        "core": {"level": LOG_LEVEL},
+    },
+}
 
 MEMORA_ALLOWED_UPLOAD_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]
 MEMORA_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp"]

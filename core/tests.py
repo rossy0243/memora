@@ -3,9 +3,11 @@ import base64
 import os
 import tempfile
 from datetime import date
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
@@ -85,6 +87,54 @@ class HealthPageTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"ok")
+
+
+class LoggingSettingsTests(SimpleTestCase):
+    def test_application_logging_is_configured_for_console_output(self):
+        self.assertIn("console", memora_settings.LOGGING["handlers"])
+        self.assertEqual(memora_settings.LOGGING["root"]["handlers"], ["console"])
+        self.assertIn("processing", memora_settings.LOGGING["loggers"])
+        self.assertIn("uploads", memora_settings.LOGGING["loggers"])
+
+
+class BackupDatabaseCommandTests(SimpleTestCase):
+    @override_settings(
+        DATABASES={
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": "memora",
+                "USER": "memora_user",
+                "PASSWORD": "secret-password",
+                "HOST": "localhost",
+                "PORT": "5432",
+            }
+        }
+    )
+    @patch("core.management.commands.backup_database.subprocess.run")
+    @patch("core.management.commands.backup_database.shutil.which", return_value="pg_dump")
+    def test_backup_database_runs_pg_dump_without_leaking_password(self, _which, run):
+        run.return_value.returncode = 0
+        run.return_value.stdout = ""
+        run.return_value.stderr = ""
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "memora.dump"
+            call_command("backup_database", "--output", str(output_path))
+
+        command = run.call_args.args[0]
+        env = run.call_args.kwargs["env"]
+        self.assertIn("--file", command)
+        self.assertIn(str(output_path), command)
+        self.assertNotIn("secret-password", command)
+        self.assertEqual(env["PGPASSWORD"], "secret-password")
+
+    @override_settings(DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}})
+    @patch("core.management.commands.backup_database.shutil.which", return_value="pg_dump")
+    def test_backup_database_rejects_non_postgresql_database(self, _which):
+        output = StringIO()
+
+        with self.assertRaisesMessage(Exception, "PostgreSQL"):
+            call_command("backup_database", stdout=output)
 
 
 class StorageConfigurationCheckTests(SimpleTestCase):

@@ -258,6 +258,30 @@ Verifier sans modifier :
 python manage.py cleanup_expired_media --dry-run
 ```
 
+## Securite et maintenance production
+
+Points de securite couverts par le MVP :
+
+- les liens publics utilisent un `public_access_key` aleatoire distinct du slug ;
+- les pages organisateur restent protegees par compte ;
+- la page publique du film n'est visible que lorsque le film est termine ;
+- les invites sont limites a 5 souvenirs par appareil, avec limites IP/evenement en plus ;
+- les extensions, types MIME, taille et duree video sont controles cote serveur ;
+- les videos invitees sont limitees a 10 secondes.
+
+Commandes utiles en exploitation :
+
+```bash
+python manage.py process_pending_movies --loop --sleep 30
+python manage.py process_event_movie <event_id> --include-processing
+python manage.py generate_scheduled_movies
+python manage.py notify_ready_movies
+python manage.py cleanup_expired_media --dry-run
+python manage.py backup_database --output backups/memora.dump
+```
+
+La sauvegarde utilise `pg_dump`. Le dossier `backups/` est ignore par Git pour eviter de versionner une sauvegarde locale.
+
 ## PostgreSQL local projet
 
 Pour eviter de dependre du PostgreSQL systeme, un cluster local de developpement peut etre lance depuis `.postgres/data` sur le port `55432`.

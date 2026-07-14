@@ -91,6 +91,17 @@ class EventModelTests(TestCase):
             ),
         )
 
+    def test_event_public_access_key_is_not_guessable(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Prive",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        self.assertGreaterEqual(len(event.public_access_key), 16)
+        self.assertNotEqual(event.public_access_key, event.slug)
+
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
 class EventViewTests(TestCase):

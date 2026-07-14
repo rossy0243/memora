@@ -4,6 +4,7 @@ import tempfile
 from unittest.mock import patch
 
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -276,6 +277,20 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Il vous reste 5 envois")
         self.assertContains(response, "Envoyer le souvenir")
         self.assertContains(response, "upload-progress.js")
+
+    def test_camera_javascript_covers_final_mobile_ux_states(self):
+        script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
+
+        self.assertIn("navigator.mediaDevices.getUserMedia", script)
+        self.assertIn("navigator.permissions.query", script)
+        self.assertIn("MediaRecorder", script)
+        self.assertIn("facingMode", script)
+        self.assertIn("Tournez le telephone", self.client.get(self.upload_url()).content.decode())
+        self.assertIn("Video en cours - stop pour terminer", script)
+        self.assertIn("Video en preparation", script)
+        self.assertIn("Connexion lente", script)
+        self.assertIn("L'envoi a echoue", script)
+        self.assertIn("capturePreview", script)
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
     def test_guest_upload_page_shows_remaining_upload_count(self):
