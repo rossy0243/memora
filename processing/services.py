@@ -19,7 +19,13 @@ from uploads.models import GuestUpload
 
 from .analysis import analyze_event_media
 from .models import GeneratedMovie, MediaAnalysis
-from .runway import build_runway_montage_payload, enhance_clip_with_runway, runway_is_ready
+from .runway import (
+    build_runway_montage_payload,
+    enhance_clip_with_runway,
+    render_final_movie_with_runway,
+    runway_final_is_ready,
+    runway_is_ready,
+)
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
 
 
@@ -434,140 +440,68 @@ def process_generated_movie(movie):
     try:
         with tempfile.TemporaryDirectory(prefix="memora_movie_") as temp_dir:
             temp_path = Path(temp_dir)
-            clip_paths = []
-            total_duration = 0
-            runway_enhancements = []
-            runway_enhanced_count = 0
-            clip_count = max(len(uploads), 1)
-            for index, upload in enumerate(uploads, start=1):
-                clip_progress = 24 + int((index - 1) * 42 / clip_count)
-                _update_movie_progress(
-                    movie,
-                    clip_progress,
-                    f"Preparation du clip {index}/{clip_count}.",
-                )
-                clip_path = temp_path / f"clip_{index:04d}.mp4"
-                _build_movie_clip(upload, clip_path, ffmpeg_binary)
-                if _should_enhance_clip_with_runway(upload, runway_enhanced_count):
-                    _update_movie_progress(
-                        movie,
-                        min(clip_progress + 3, 68),
-                        f"Amelioration Runway du clip {index}/{clip_count}.",
+            runway_final_rendered = False
+            total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
+
+            if runway_final_is_ready():
+                _update_movie_progress(movie, 28, "Montage final cinematic avec Runway.")
+                runway_final_path = temp_path / f"memora_{_clean_name(event.title)}_runway_final.mp4"
+                try:
+                    logger.info("Runway final render started movie=%s event=%s", movie.pk, event.pk)
+                    runway_final = render_final_movie_with_runway(
+                        event,
+                        uploads,
+                        edit_decision_data,
+                        runway_final_path,
                     )
-                    runway_clip_path = temp_path / f"clip_{index:04d}_runway.mp4"
+                    logger.info(
+                        "Runway final render completed movie=%s event=%s invocation=%s",
+                        movie.pk,
+                        event.pk,
+                        runway_final.get("invocation_id", ""),
+                    )
+                    movie.edit_decision_data["runway_final"] = runway_final
+                    movie.render_provider = "runway_final"
+                    output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+                    badge_data = _build_badge_data(event)
+                    _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
                     try:
-                        logger.info(
-                            "Runway enhancement started movie=%s event=%s upload=%s",
-                            movie.pk,
-                            event.pk,
-                            upload.pk,
+                        final_output_path = _apply_event_badge(
+                            runway_final_path,
+                            output_path,
+                            event,
+                            ffmpeg_binary,
+                            temp_path,
                         )
-                        enhancement = enhance_clip_with_runway(
-                            clip_path,
-                            runway_clip_path,
-                            prompt_text=edit_decision_data["runway"]["payload"]["style_prompt"],
-                        )
-                        enhancement.update(
-                            {
-                                "upload_id": upload.pk,
-                                "filename": upload.original_filename,
-                                "source_clip": clip_path.name,
-                            }
-                        )
-                        runway_enhancements.append(enhancement)
-                        logger.info(
-                            "Runway enhancement completed movie=%s event=%s upload=%s task=%s",
-                            movie.pk,
-                            event.pk,
-                            upload.pk,
-                            enhancement.get("task_id", ""),
-                        )
-                        clip_path = runway_clip_path
-                        runway_enhanced_count += 1
+                        badge_data["applied"] = final_output_path == output_path
                     except Exception as exc:
-                        logger.warning(
-                            "Runway enhancement failed movie=%s event=%s upload=%s error=%s",
-                            movie.pk,
-                            event.pk,
-                            upload.pk,
-                            exc,
-                        )
-                        runway_enhancements.append(
-                            {
-                                "upload_id": upload.pk,
-                                "filename": upload.original_filename,
-                                "source_clip": clip_path.name,
-                                "failed": True,
-                                "error": str(exc),
-                                "fallback": settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG,
-                            }
-                        )
-                        if not settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG:
-                            raise
-                clip_paths.append(clip_path)
-                total_duration += _estimated_movie_clip_duration(upload)
+                        final_output_path = runway_final_path
+                        badge_data["error"] = str(exc)
+                    movie.edit_decision_data["badge"] = badge_data
+                    _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
+                    with final_output_path.open("rb") as output_file:
+                        movie.final_file.save(final_output_path.name, File(output_file), save=False)
+                    runway_final_rendered = True
+                except Exception as exc:
+                    logger.warning(
+                        "Runway final render failed movie=%s event=%s error=%s",
+                        movie.pk,
+                        event.pk,
+                        exc,
+                    )
+                    movie.edit_decision_data["runway_final"] = {
+                        "ready": True,
+                        "failed": True,
+                        "error": str(exc),
+                        "fallback": "ffmpeg",
+                    }
 
-            _update_movie_progress(movie, 68, "Assemblage des clips selectionnes.")
-            movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
-            if runway_enhanced_count:
-                movie.render_provider = "runway+ffmpeg"
-
-            concat_file = temp_path / "clips.txt"
-            concat_file.write_text(
-                "".join(f"file '{path.as_posix()}'\n" for path in clip_paths),
-                encoding="utf-8",
-            )
-            concat_output_path = temp_path / f"memora_{_clean_name(event.title)}_base.mp4"
-            _run_ffmpeg(
-                [
-                    ffmpeg_binary,
-                    "-y",
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    str(concat_file),
-                    "-c",
-                    "copy",
-                    str(concat_output_path),
-                ]
-            )
-
-            _update_movie_progress(movie, 78, "Mixage de la musique et des voix.")
-            soundtrack_output_path = temp_path / f"memora_{_clean_name(event.title)}_soundtrack.mp4"
-            soundtrack_output_path = _apply_soundtrack_if_available(
-                concat_output_path,
-                soundtrack_output_path,
-                soundtrack,
-                ffmpeg_binary,
-            )
-            output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
-            badge_data = {
-                "enabled": settings.MEMORA_MOVIE_BADGE_ENABLED,
-                "display_name": _event_display_name(event),
-                "duration_seconds": None,
-                "display_mode": "full_movie",
-                "applied": False,
-            }
-            _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
-            try:
-                final_output_path = _apply_event_badge(
-                    soundtrack_output_path,
-                    output_path,
-                    event,
-                    ffmpeg_binary,
-                    temp_path,
-                )
-                badge_data["applied"] = final_output_path == output_path
-            except Exception as exc:
-                final_output_path = soundtrack_output_path
-                badge_data["error"] = str(exc)
-            movie.edit_decision_data["badge"] = badge_data
-
-            _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
-            with final_output_path.open("rb") as output_file:
-                movie.final_file.save(final_output_path.name, File(output_file), save=False)
+            if runway_final_rendered:
+                movie.edit_decision_data.setdefault("runway", {})["enhancements"] = []
+            else:
+                movie.edit_decision_data.setdefault("runway_final", {"ready": runway_final_is_ready()})
+                _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary)
+                total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
         movie.status = GeneratedMovie.Status.COMPLETED
         movie.progress_percent = 100
@@ -605,6 +539,135 @@ def process_generated_movie(movie):
         logger.exception("Movie processing failed movie=%s event=%s", movie.pk, event.pk)
 
     return movie
+
+
+def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary):
+    clip_paths = []
+    runway_enhancements = []
+    runway_enhanced_count = 0
+    clip_count = max(len(uploads), 1)
+    for index, upload in enumerate(uploads, start=1):
+        clip_progress = 24 + int((index - 1) * 42 / clip_count)
+        _update_movie_progress(
+            movie,
+            clip_progress,
+            f"Preparation du clip {index}/{clip_count}.",
+        )
+        clip_path = temp_path / f"clip_{index:04d}.mp4"
+        _build_movie_clip(upload, clip_path, ffmpeg_binary)
+        if _should_enhance_clip_with_runway(upload, runway_enhanced_count):
+            _update_movie_progress(
+                movie,
+                min(clip_progress + 3, 68),
+                f"Amelioration Runway du clip {index}/{clip_count}.",
+            )
+            runway_clip_path = temp_path / f"clip_{index:04d}_runway.mp4"
+            try:
+                logger.info(
+                    "Runway enhancement started movie=%s event=%s upload=%s",
+                    movie.pk,
+                    event.pk,
+                    upload.pk,
+                )
+                enhancement = enhance_clip_with_runway(
+                    clip_path,
+                    runway_clip_path,
+                    prompt_text=edit_decision_data["runway"]["payload"]["style_prompt"],
+                )
+                enhancement.update(
+                    {
+                        "upload_id": upload.pk,
+                        "filename": upload.original_filename,
+                        "source_clip": clip_path.name,
+                    }
+                )
+                runway_enhancements.append(enhancement)
+                logger.info(
+                    "Runway enhancement completed movie=%s event=%s upload=%s task=%s",
+                    movie.pk,
+                    event.pk,
+                    upload.pk,
+                    enhancement.get("task_id", ""),
+                )
+                clip_path = runway_clip_path
+                runway_enhanced_count += 1
+            except Exception as exc:
+                logger.warning(
+                    "Runway enhancement failed movie=%s event=%s upload=%s error=%s",
+                    movie.pk,
+                    event.pk,
+                    upload.pk,
+                    exc,
+                )
+                runway_enhancements.append(
+                    {
+                        "upload_id": upload.pk,
+                        "filename": upload.original_filename,
+                        "source_clip": clip_path.name,
+                        "failed": True,
+                        "error": str(exc),
+                        "fallback": settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG,
+                    }
+                )
+                if not settings.MEMORA_RUNWAY_FALLBACK_TO_FFMPEG:
+                    raise
+        clip_paths.append(clip_path)
+
+    _update_movie_progress(movie, 68, "Assemblage des clips selectionnes.")
+    movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
+    if runway_enhanced_count:
+        movie.render_provider = "runway+ffmpeg"
+
+    concat_file = temp_path / "clips.txt"
+    concat_file.write_text(
+        "".join(f"file '{path.as_posix()}'\n" for path in clip_paths),
+        encoding="utf-8",
+    )
+    concat_output_path = temp_path / f"memora_{_clean_name(event.title)}_base.mp4"
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+            "-c",
+            "copy",
+            str(concat_output_path),
+        ]
+    )
+
+    _update_movie_progress(movie, 78, "Mixage de la musique et des voix.")
+    soundtrack_output_path = temp_path / f"memora_{_clean_name(event.title)}_soundtrack.mp4"
+    soundtrack_output_path = _apply_soundtrack_if_available(
+        concat_output_path,
+        soundtrack_output_path,
+        choose_movie_soundtrack(event, uploads),
+        ffmpeg_binary,
+    )
+    output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+    badge_data = _build_badge_data(event)
+    _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
+    try:
+        final_output_path = _apply_event_badge(
+            soundtrack_output_path,
+            output_path,
+            event,
+            ffmpeg_binary,
+            temp_path,
+        )
+        badge_data["applied"] = final_output_path == output_path
+    except Exception as exc:
+        final_output_path = soundtrack_output_path
+        badge_data["error"] = str(exc)
+    movie.edit_decision_data["badge"] = badge_data
+
+    _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
+    with final_output_path.open("rb") as output_file:
+        movie.final_file.save(final_output_path.name, File(output_file), save=False)
 
 
 def notify_generated_movie_ready(movie):
@@ -671,6 +734,16 @@ def _should_enhance_clip_with_runway(upload, enhanced_count):
         and upload.media_type == GuestUpload.MediaType.VIDEO
         and enhanced_count < settings.MEMORA_RUNWAY_MAX_ENHANCED_CLIPS
     )
+
+
+def _build_badge_data(event):
+    return {
+        "enabled": settings.MEMORA_MOVIE_BADGE_ENABLED,
+        "display_name": _event_display_name(event),
+        "duration_seconds": None,
+        "display_mode": "full_movie",
+        "applied": False,
+    }
 
 
 def _clean_name(value):

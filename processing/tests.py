@@ -611,6 +611,70 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.edit_decision_data["runway"]["enhancements"][0]["task_id"], "task_123")
         enhance_clip.assert_called_once()
 
+    @override_settings(
+        MEMORA_RUNWAY_ENABLED=True,
+        MEMORA_RUNWAY_API_SECRET="test-key",
+        MEMORA_MOVIE_RENDER_PROVIDER="runway_final",
+        MEMORA_RUNWAY_WORKFLOW_ID="workflow_123",
+        MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True,
+    )
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services.render_final_movie_with_runway")
+    @patch("processing.services._run_ffmpeg")
+    def test_runway_final_generates_master_movie_before_badge(self, run_ffmpeg, render_final, _which):
+        self.create_upload(
+            "best.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="emotional",
+            duration=timedelta(seconds=8),
+        )
+
+        def create_badged_output(command):
+            Path(command[-1]).write_bytes(b"badged-runway-final")
+
+        def create_runway_output(_event, _uploads, _edit_decision_data, output_path):
+            output_path.write_bytes(b"runway-final")
+            return {"workflow_id": "workflow_123", "invocation_id": "invoke_123", "output_file": output_path.name}
+
+        run_ffmpeg.side_effect = create_badged_output
+        render_final.side_effect = create_runway_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertEqual(movie.render_provider, "runway_final")
+        self.assertEqual(movie.edit_decision_data["runway_final"]["invocation_id"], "invoke_123")
+        self.assertEqual(movie.edit_decision_data["badge"]["display_mode"], "full_movie")
+        render_final.assert_called_once()
+        self.assertEqual(run_ffmpeg.call_count, 1)
+
+    @override_settings(
+        MEMORA_RUNWAY_ENABLED=True,
+        MEMORA_RUNWAY_API_SECRET="test-key",
+        MEMORA_MOVIE_RENDER_PROVIDER="runway_final",
+        MEMORA_RUNWAY_WORKFLOW_ID="workflow_123",
+        MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True,
+    )
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services.render_final_movie_with_runway", side_effect=RuntimeError("workflow unavailable"))
+    @patch("processing.services._run_ffmpeg")
+    def test_runway_final_failure_falls_back_to_ffmpeg_movie(self, run_ffmpeg, render_final, _which):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        run_ffmpeg.side_effect = create_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertEqual(movie.render_provider, "ffmpeg")
+        self.assertTrue(movie.edit_decision_data["runway_final"]["failed"])
+        self.assertIn("workflow unavailable", movie.edit_decision_data["runway_final"]["error"])
+        render_final.assert_called_once()
+        self.assertGreaterEqual(run_ffmpeg.call_count, 3)
+
     def test_soundtrack_choice_and_edit_plan_are_generated(self):
         upload = self.create_upload(
             "dance.mp4",

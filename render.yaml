@@ -164,11 +164,14 @@ services:
         value: "True"
       - &env_render_provider
         key: MEMORA_MOVIE_RENDER_PROVIDER
-        value: runway
+        value: runway_final
       - &env_runway_enabled
         key: MEMORA_RUNWAY_ENABLED
         value: "True"
       - key: RUNWAYML_API_SECRET
+        sync: false
+      - &env_runway_workflow_id
+        key: MEMORA_RUNWAY_WORKFLOW_ID
         sync: false
       - &env_runway_workflow_version
         key: MEMORA_RUNWAY_WORKFLOW_VERSION

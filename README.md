@@ -138,9 +138,15 @@ MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True
 
 Memora stocke un plan de montage structure dans `GeneratedMovie.edit_decision_data` avec clips selectionnes, mood musical, strategie audio et payload Runway.
 
-Le mode Runway principal ne depend pas d'un workflow publie : Memora peut envoyer les meilleurs clips video a Runway via `video_to_video` (`gen4_aleph`), recuperer les segments ameliores, puis assembler le film final avec FFmpeg. FFmpeg reste responsable du montage complet 10 minutes, des photos, de la musique et du ducking voix/musique. Si Runway echoue et que `MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True`, le clip original normalise est conserve pour ne pas bloquer la generation.
+Modes de rendu :
 
-Un workflow publie Runway pourra etre ajoute plus tard pour des traitements plus specifiques, mais il n'est plus bloquant pour activer l'enhancement premium.
+- `ffmpeg` : Memora assemble le film localement avec FFmpeg.
+- `runway` : Memora ameliore certains clips video avec Runway, puis assemble le film final avec FFmpeg.
+- `runway_final` : Memora envoie un brief complet et les medias selectionnes a un workflow Runway publie pour produire le film souvenir final. FFmpeg reste utilise ensuite pour garantir le badge permanent, l'encodage final et le fallback.
+
+Le mode cible produit est `runway_final`. Il necessite `MEMORA_RUNWAY_WORKFLOW_ID` et des credits API Runway actifs. Si Runway echoue et que `MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True`, Memora revient au montage FFmpeg pour ne pas bloquer la livraison du film.
+
+Le workflow Runway doit accepter un objet `inputs` contenant le brief, les contraintes, la liste des medias selectionnes, le mood musical et la strategie audio.
 
 Analyser les medias en attente :
 
