@@ -1,13 +1,15 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
+from processing.models import GeneratedMovie
 from processing.services import build_event_zip, create_event_movie_job, get_event_movie_schedule_at
 from uploads.models import GuestUpload, UploadCategory
 
@@ -248,13 +250,68 @@ def movie_status_panel(request, pk):
     return render(request, "events/partials/movie_panel.html", get_movie_panel_context(event))
 
 
+@login_required
+def movie_ready_detail(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    latest_movie = _get_latest_movie(event)
+    ready_movie = _get_ready_movie(event)
+    return render(
+        request,
+        "events/movie_ready.html",
+        {
+            "event": event,
+            "latest_movie": latest_movie,
+            "ready_movie": ready_movie,
+            "movie_schedule_at": get_event_movie_schedule_at(event),
+            "movie_download_url": reverse("events:download_movie", kwargs={"pk": event.pk}),
+            "public_movie_url": request.build_absolute_uri(event.get_public_movie_url()),
+            "share_title": f"Film souvenir Memora - {event.title}",
+            "is_public_movie_page": False,
+        },
+    )
+
+
+def public_movie_share(request, slug, access_key):
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key)
+    ready_movie = _get_ready_movie(event)
+    if not ready_movie:
+        raise Http404("Film souvenir indisponible.")
+    return render(
+        request,
+        "events/movie_ready.html",
+        {
+            "event": event,
+            "latest_movie": ready_movie,
+            "ready_movie": ready_movie,
+            "public_movie_url": request.build_absolute_uri(event.get_public_movie_url()),
+            "share_title": f"Film souvenir Memora - {event.title}",
+            "is_public_movie_page": True,
+        },
+    )
+
+
+@login_required
+def download_event_movie(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    movie = _get_ready_movie(event)
+    if not movie:
+        raise Http404("Film souvenir indisponible.")
+
+    movie.final_file.open("rb")
+    filename = _movie_download_filename(event, movie)
+    response = FileResponse(movie.final_file, content_type="video/mp4")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 def get_movie_panel_context(event):
-    latest_movie = event.generated_movies.order_by("-created_at").first()
+    latest_movie = _get_latest_movie(event)
     return {
         "event": event,
         "latest_movie": latest_movie,
         "movie_schedule_at": get_event_movie_schedule_at(event),
         "movie_status_url": reverse("events:movie_status", kwargs={"pk": event.pk}),
+        "movie_page_url": reverse("events:movie_ready", kwargs={"pk": event.pk}),
         "movie_is_live": bool(
             latest_movie
             and latest_movie.status in {"pending", "processing"}
@@ -279,3 +336,25 @@ def download_event_zip(request, pk):
     response = HttpResponse(content, content_type="application/zip")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+
+def _get_latest_movie(event):
+    return event.generated_movies.order_by("-created_at").first()
+
+
+def _get_ready_movie(event):
+    return (
+        event.generated_movies.filter(
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file__isnull=False,
+        )
+        .exclude(final_file="")
+        .order_by("-generated_at", "-created_at")
+        .first()
+    )
+
+
+def _movie_download_filename(event, movie):
+    base_name = slugify(event.couple_name or event.title) or "film-souvenir"
+    extension = movie.final_file.name.rsplit(".", 1)[-1] if "." in movie.final_file.name else "mp4"
+    return f"memora-{base_name}.{extension}"

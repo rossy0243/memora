@@ -1105,6 +1105,71 @@ h2 {
   aspect-ratio: 16 / 9;
 }
 
+.movie-ready-page {
+  gap: 24px;
+}
+
+.movie-ready-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.movie-ready-player-card {
+  display: grid;
+  gap: 14px;
+}
+
+.movie-ready-player-shell {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: #111;
+  box-shadow: 0 20px 60px rgba(39, 36, 32, 0.16);
+}
+
+.movie-ready-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #111;
+}
+
+.movie-ready-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.movie-ready-side {
+  display: grid;
+  gap: 14px;
+}
+
+.movie-ready-card {
+  display: grid;
+  gap: 12px;
+}
+
+.movie-ready-card h2 {
+  margin: 0;
+  font-size: 1.28rem;
+}
+
+.movie-ready-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--color-primary-active);
+  background: var(--color-surface-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.movie-ready-empty {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+}
+
 .movie-progress {
   display: grid;
   gap: 8px;
@@ -2470,6 +2535,16 @@ body.camera-open {
 
   .movie-steps {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .movie-ready-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+    align-items: start;
+  }
+
+  .movie-ready-actions {
+    grid-template-columns: auto auto;
+    justify-content: start;
   }
 
   .stat-grid {

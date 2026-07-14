@@ -1,5 +1,6 @@
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 import shutil
 import tempfile
 from unittest.mock import patch
@@ -73,6 +74,22 @@ class EventModelTests(TestCase):
         self.assertEqual(event.guest_access_code, "AMOUR2026")
         self.assertTrue(event.requires_guest_access_code)
         self.assertTrue(event.check_guest_access_code("amour2026"))
+
+    def test_event_builds_public_movie_url(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Film",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        self.assertEqual(
+            event.get_public_movie_url(),
+            reverse(
+                "public_movie",
+                kwargs={"slug": event.slug, "access_key": event.public_access_key},
+            ),
+        )
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
@@ -469,8 +486,142 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
         self.assertContains(response, "Video automatique")
-        self.assertContains(response, "Telecharger la video")
+        self.assertContains(response, "Ouvrir le film")
+        self.assertContains(response, reverse("events:movie_ready", kwargs={"pk": event.pk}))
         self.assertContains(response, "100%")
+
+    def test_owner_can_view_ready_movie_page(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Pret",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            couple_name="Camille & Noe",
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/reception-film/movies/memora_reception_film.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Votre film est pret")
+        self.assertContains(response, "Camille &amp; Noe")
+        self.assertContains(response, "Telecharger le film")
+        self.assertContains(response, "Lien de partage")
+        self.assertContains(response, event.public_access_key)
+        self.assertContains(response, reverse("events:download_movie", kwargs={"pk": event.pk}))
+
+    def test_owner_movie_page_shows_pending_state_when_movie_is_not_ready(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film En Cours",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.PROCESSING,
+            progress_percent=42,
+            progress_message="Selection des meilleurs souvenirs.",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Film en preparation")
+        self.assertContains(response, "42%")
+        self.assertContains(response, "Selection des meilleurs souvenirs.")
+
+    def test_other_organizer_cannot_view_ready_movie_page(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Film Prive",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/reception-film/movies/private.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_movie_share_displays_completed_movie_without_login(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Partage",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/reception-film/movies/shared.mp4",
+        )
+
+        response = self.client.get(
+            reverse(
+                "public_movie",
+                kwargs={"slug": event.slug, "access_key": event.public_access_key},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Film pret")
+        self.assertContains(response, "Telecharger le film")
+        self.assertNotContains(response, "Retour dashboard")
+
+    def test_public_movie_share_hides_unfinished_movie(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Non Pret",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
+
+        response = self.client.get(
+            reverse(
+                "public_movie",
+                kwargs={"slug": event.slug, "access_key": event.public_access_key},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_owner_can_download_ready_movie(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Download",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            couple_name="Camille & Noe",
+        )
+        movie_name = "events/reception-film/movies/download.mp4"
+        movie_path = Path(TEST_MEDIA_ROOT) / movie_name
+        movie_path.parent.mkdir(parents=True, exist_ok=True)
+        movie_path.write_bytes(b"movie-bytes")
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file=movie_name,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:download_movie", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Disposition"], 'attachment; filename="memora-camille-noe.mp4"')
+        self.assertEqual(b"".join(response.streaming_content), b"movie-bytes")
 
     def test_event_detail_displays_automatic_movie_schedule(self):
         event = Event.objects.create(

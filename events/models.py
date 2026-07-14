@@ -83,6 +83,15 @@ class Event(models.Model):
             },
         )
 
+    def get_public_movie_url(self):
+        return reverse(
+            "public_movie",
+            kwargs={
+                "slug": self.slug,
+                "access_key": self.public_access_key,
+            },
+        )
+
     def get_event_type_display(self):
         return self.event_type.label
 

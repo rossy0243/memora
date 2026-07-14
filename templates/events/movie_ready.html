@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Film souvenir - {{ event.title }} - Memora{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell movie-ready-page">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Film souvenir</p>
+      <h1>{% if ready_movie %}Votre film est pret{% else %}Film en preparation{% endif %}</h1>
+      <p class="page-heading__meta">{{ event.title }} - {{ event.event_date }}</p>
+    </div>
+    {% if not is_public_movie_page %}
+      <div class="dashboard-command-actions">
+        <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">Retour dashboard</a>
+        {% if ready_movie %}
+          <a class="button button--primary" href="{{ movie_download_url }}">Telecharger</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if ready_movie %}
+    <section class="movie-ready-layout">
+      <article class="movie-ready-player-card">
+        <div class="movie-ready-player-shell">
+          <video class="movie-ready-player" src="{{ ready_movie.final_file.url }}" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="movie-ready-actions">
+          {% if is_public_movie_page %}
+            <a class="button button--primary" href="{{ ready_movie.final_file.url }}" download>Telecharger le film</a>
+          {% else %}
+            <a class="button button--primary" href="{{ movie_download_url }}">Telecharger le film</a>
+          {% endif %}
+          <button class="button button--secondary" type="button" data-share-url="{{ public_movie_url }}" data-share-title="{{ share_title }}">Partager</button>
+        </div>
+      </article>
+
+      <aside class="movie-ready-side">
+        <article class="detail-panel movie-ready-card">
+          <span class="status-pill status-pill--active">Film pret</span>
+          <h2>{{ event.couple_name|default:event.title }}</h2>
+          <p>Le film souvenir est disponible. Vous pouvez le regarder, le telecharger et le partager avec vos proches.</p>
+          <dl class="detail-list">
+            {% if ready_movie.generated_at %}
+              <div>
+                <dt>Genere le</dt>
+                <dd>{{ ready_movie.generated_at|date:"d/m/Y" }} a {{ ready_movie.generated_at|date:"H:i" }}</dd>
+              </div>
+            {% endif %}
+            {% if ready_movie.duration %}
+              <div>
+                <dt>Duree</dt>
+                <dd>{{ ready_movie.duration }}</dd>
+              </div>
+            {% endif %}
+            <div>
+              <dt>Format</dt>
+              <dd>Video souvenir Memora</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="detail-panel movie-ready-card">
+          <h2>Lien de partage</h2>
+          <p>Ce lien permet de regarder le film sans compte organisateur.</p>
+          <code id="public-movie-url">{{ public_movie_url }}</code>
+          <div class="quick-actions">
+            <button class="button button--secondary button--compact" type="button" data-copy-target="public-movie-url">Copier le lien</button>
+            <button class="button button--secondary button--compact" type="button" data-share-url="{{ public_movie_url }}" data-share-title="{{ share_title }}">Partager</button>
+          </div>
+        </article>
+      </aside>
+    </section>
+  {% else %}
+    <article class="detail-panel movie-ready-empty">
+      <span class="status-pill">En preparation</span>
+      <h2>Memora prepare le film automatiquement.</h2>
+      {% if latest_movie %}
+        <p>{{ latest_movie.progress_message|default:"La generation du film souvenir est en cours." }}</p>
+        <div class="movie-progress">
+          <div class="movie-progress__meta">
+            <span>Progression</span>
+            <strong>{{ latest_movie.progress_percent|default:0 }}%</strong>
+          </div>
+          <div class="movie-progress__bar" aria-hidden="true">
+            <span style="width: {{ latest_movie.progress_percent|default:0 }}%"></span>
+          </div>
+        </div>
+      {% else %}
+        <p>Generation automatique prevue le {{ movie_schedule_at|date:"d/m/Y" }} a {{ movie_schedule_at|date:"H:i" }}.</p>
+      {% endif %}
+      {% if not is_public_movie_page %}
+        <a class="button button--primary" href="{% url 'events:detail' event.pk %}">Voir le dashboard</a>
+      {% endif %}
+    </article>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/copy-to-clipboard.js' %}"></script>
+<script src="{% static 'js/share-movie.js' %}"></script>
+{% endblock %}

@@ -27,7 +27,10 @@
       </div>
     </div>
     <video class="movie-preview" src="{{ latest_movie.final_file.url }}" controls preload="metadata"></video>
-    <a class="button button--primary" href="{{ latest_movie.final_file.url }}" download>Telecharger la video</a>
+    <div class="quick-actions">
+      <a class="button button--primary" href="{{ movie_page_url }}">Ouvrir le film</a>
+      <a class="button button--secondary button--compact" href="{{ latest_movie.final_file.url }}" download>Telecharger</a>
+    </div>
   {% elif latest_movie %}
     <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
       <div class="movie-progress__meta">
