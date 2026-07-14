@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import subprocess
 import tempfile
 
@@ -10,6 +11,9 @@ from uploads.models import GuestUpload
 
 from .google_video import GOOGLE_PROVIDER, analyze_video_with_google
 from .models import MediaAnalysis
+
+
+logger = logging.getLogger(__name__)
 
 
 EMOTION_CATEGORY_BOOSTS = {
@@ -112,7 +116,19 @@ def process_media_analysis(analysis):
                 _extract_video_frame(source_path, frame_path)
                 metrics = _analyze_image(frame_path)
                 if _should_use_google_video_intelligence(upload):
+                    logger.info(
+                        "Google Video Intelligence analysis started upload=%s event=%s",
+                        upload.pk,
+                        upload.event_id,
+                    )
                     provider_payload = analyze_video_with_google(source_path)
+                    logger.info(
+                        "Google Video Intelligence analysis completed upload=%s event=%s labels=%s faces=%s",
+                        upload.pk,
+                        upload.event_id,
+                        len(provider_payload.get("labels", [])),
+                        provider_payload.get("face_track_count", 0),
+                    )
             else:
                 source_path = _copy_media_to_temporary_file(upload, temp_path)
                 metrics = _analyze_image(source_path)
@@ -150,6 +166,12 @@ def process_media_analysis(analysis):
             ]
         )
     except Exception as exc:
+        logger.warning(
+            "Media analysis failed upload=%s event=%s error=%s",
+            upload.pk,
+            upload.event_id,
+            exc,
+        )
         analysis.status = MediaAnalysis.Status.FAILED
         analysis.error_logs = str(exc)
         analysis.save(update_fields=["status", "error_logs", "updated_at"])

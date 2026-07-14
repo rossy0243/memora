@@ -493,9 +493,13 @@ class MovieGenerationServiceTests(TestCase):
         self.assertTrue(movie.music_mood)
         self.assertIn("clips", movie.edit_decision_data)
         self.assertEqual(movie.edit_decision_data["badge"]["display_name"], "Lea & Sam")
+        self.assertEqual(movie.edit_decision_data["badge"]["display_mode"], "full_movie")
+        self.assertIsNone(movie.edit_decision_data["badge"]["duration_seconds"])
         self.assertTrue(movie.edit_decision_data["badge"]["applied"])
         badge_command = run_ffmpeg.call_args_list[-1].args[0]
-        self.assertIn("drawtext", badge_command[badge_command.index("-vf") + 1])
+        badge_filter = badge_command[badge_command.index("-vf") + 1]
+        self.assertIn("drawtext", badge_filter)
+        self.assertNotIn("enable=", badge_filter)
         self.assertGreaterEqual(run_ffmpeg.call_count, 3)
         self.event.refresh_from_db()
         self.assertFalse(self.event.is_active)
@@ -564,6 +568,7 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("drawtext", command[command.index("-vf") + 1])
         self.assertIn("font='Arial'", command[command.index("-vf") + 1])
         self.assertIn("y=ih-126", command[command.index("-vf") + 1])
+        self.assertNotIn("enable=", command[command.index("-vf") + 1])
 
     def test_badge_text_is_shortened_for_clean_video_overlay(self):
         text = _shorten_badge_text("Un tres tres long nom affiche pour un evenement Memora")

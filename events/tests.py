@@ -474,6 +474,22 @@ class EventViewTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, "Evenement pas encore active", status_code=403)
 
+    def test_public_event_displays_closed_message_after_collection_is_closed(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception cloturee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            payment_status=Event.PaymentStatus.PAID,
+            is_active=False,
+        )
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "Evenement cloture", status_code=403)
+        self.assertContains(response, "La collecte des souvenirs est terminee", status_code=403)
+
     def test_event_detail_displays_media_dashboard(self):
         event = Event.objects.create(
             organizer=self.user,

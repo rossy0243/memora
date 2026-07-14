@@ -456,6 +456,12 @@ def process_generated_movie(movie):
                     )
                     runway_clip_path = temp_path / f"clip_{index:04d}_runway.mp4"
                     try:
+                        logger.info(
+                            "Runway enhancement started movie=%s event=%s upload=%s",
+                            movie.pk,
+                            event.pk,
+                            upload.pk,
+                        )
                         enhancement = enhance_clip_with_runway(
                             clip_path,
                             runway_clip_path,
@@ -469,9 +475,23 @@ def process_generated_movie(movie):
                             }
                         )
                         runway_enhancements.append(enhancement)
+                        logger.info(
+                            "Runway enhancement completed movie=%s event=%s upload=%s task=%s",
+                            movie.pk,
+                            event.pk,
+                            upload.pk,
+                            enhancement.get("task_id", ""),
+                        )
                         clip_path = runway_clip_path
                         runway_enhanced_count += 1
                     except Exception as exc:
+                        logger.warning(
+                            "Runway enhancement failed movie=%s event=%s upload=%s error=%s",
+                            movie.pk,
+                            event.pk,
+                            upload.pk,
+                            exc,
+                        )
                         runway_enhancements.append(
                             {
                                 "upload_id": upload.pk,
@@ -526,7 +546,8 @@ def process_generated_movie(movie):
             badge_data = {
                 "enabled": settings.MEMORA_MOVIE_BADGE_ENABLED,
                 "display_name": _event_display_name(event),
-                "duration_seconds": settings.MEMORA_MOVIE_BADGE_DURATION_SECONDS,
+                "duration_seconds": None,
+                "display_mode": "full_movie",
                 "applied": False,
             }
             _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
@@ -862,15 +883,13 @@ def _apply_event_badge(input_path, output_path, event, ffmpeg_binary, work_dir):
     brand_file.write_text("MEMORA", encoding="utf-8")
     title_file.write_text(_shorten_badge_text(display_name), encoding="utf-8")
 
-    duration = max(settings.MEMORA_MOVIE_BADGE_DURATION_SECONDS, 1)
-    enable = f"between(t\\,0\\,{duration})"
     brand_path = _escape_filter_path(brand_file)
     title_path = _escape_filter_path(title_file)
     video_filter = (
-        f"drawbox=x=44:y=ih-126:w=640:h=80:color=0x241F22@0.58:t=fill:enable='{enable}',"
-        f"drawbox=x=44:y=ih-126:w=5:h=80:color=0xA45D6A@0.96:t=fill:enable='{enable}',"
-        f"drawtext=font='Arial':textfile='{brand_path}':x=78:y=h-110:fontcolor=0xF5EAE4:fontsize=17:enable='{enable}',"
-        f"drawtext=font='Arial':textfile='{title_path}':x=78:y=h-86:fontcolor=white:fontsize=34:enable='{enable}'"
+        "drawbox=x=44:y=ih-126:w=640:h=80:color=0x241F22@0.58:t=fill,"
+        "drawbox=x=44:y=ih-126:w=5:h=80:color=0xA45D6A@0.96:t=fill,"
+        f"drawtext=font='Arial':textfile='{brand_path}':x=78:y=h-110:fontcolor=0xF5EAE4:fontsize=17,"
+        f"drawtext=font='Arial':textfile='{title_path}':x=78:y=h-86:fontcolor=white:fontsize=34"
     )
 
     _run_ffmpeg(

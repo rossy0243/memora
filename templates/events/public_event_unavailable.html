@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Evenement non active - Memora{% endblock %}
+{% block title %}{% if event.is_paid %}Evenement cloture{% else %}Evenement non active{% endif %} - Memora{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 
 {% block content %}
@@ -14,13 +14,14 @@
   <div class="public-event__shade" aria-hidden="true"></div>
   <div class="public-event__content">
     <p class="eyebrow">Memora</p>
-    <h1>Evenement pas encore active</h1>
     {% if not event.is_paid %}
+      <h1>Evenement pas encore active</h1>
       <p class="tagline">La collecte des souvenirs sera disponible des que l'organisateur aura active l'evenement.</p>
     {% else %}
-      <p class="tagline">La collecte des souvenirs est fermee pour cet evenement.</p>
+      <h1>Evenement cloture</h1>
+      <p class="tagline">La collecte des souvenirs est terminee. Le film souvenir est en preparation ou deja disponible aupres de l'organisateur.</p>
     {% endif %}
-    <p class="microcopy">Vous pouvez revenir sur ce lien un peu plus tard.</p>
+    <p class="microcopy">{% if event.is_paid %}Merci pour vos souvenirs.{% else %}Vous pouvez revenir sur ce lien un peu plus tard.{% endif %}</p>
   </div>
 </section>
 {% endblock %}
