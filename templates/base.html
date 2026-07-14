@@ -4,8 +4,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Memora{% endblock %}</title>
-  <meta name="description" content="Revivez votre evenement a travers les yeux de vos invites.">
+  <title>{% block title %}Memora - souvenirs d'événement{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Memora collecte les photos et vidéos de vos invités par QR Code, puis prépare un film souvenir automatique pour votre événement.{% endblock %}">
+  <meta name="robots" content="{% block robots %}index,follow{% endblock %}">
+  <link rel="canonical" href="{% block canonical_url %}{{ canonical_url }}{% endblock %}">
+  <meta property="og:site_name" content="{{ site_name|default:'Memora' }}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}Memora - Revivez votre événement à travers les yeux de vos invités{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Vos invités capturent les meilleurs moments sans application. Memora collecte, organise et prépare le film souvenir automatiquement.{% endblock %}">
+  <meta property="og:url" content="{% block og_url %}{{ canonical_url }}{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}{{ default_og_image }}{% endblock %}">
+  <meta property="og:image:alt" content="{% block og_image_alt %}Memora, plateforme de souvenirs d'événement{% endblock %}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{% block twitter_title %}Memora - souvenirs d'événement{% endblock %}">
+  <meta name="twitter:description" content="{% block twitter_description %}Collectez les photos et vidéos de vos invités par QR Code, sans application à installer.{% endblock %}">
+  <meta name="twitter:image" content="{% block twitter_image %}{{ default_og_image }}{% endblock %}">
+  <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{% static 'img/memora-mark.svg' %}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
@@ -13,16 +28,18 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
-    <a class="brand" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">Memora</a>
+    <a class="brand" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">
+      <img class="brand__mark" src="{% static 'img/memora-mark.svg' %}" alt="" width="36" height="36">
+      <span>Memora</span>
+    </a>
     <nav class="site-nav" aria-label="Navigation principale">
       {% if user.is_authenticated %}
-        <a href="{% url 'dashboard:home' %}">Mes evenements</a>
+        <a href="{% url 'dashboard:home' %}">Mes événements</a>
         <form method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
-          <button type="submit">Deconnexion</button>
+          <button type="submit">Déconnexion</button>
         </form>
       {% else %}
-        <a href="{% url 'accounts:login' %}">Connexion</a>
         <a href="{% url 'accounts:signup' %}">Inscription</a>
       {% endif %}
     </nav>
@@ -41,7 +58,10 @@
   <footer class="site-footer" aria-label="Pied de page">
     <div class="site-footer__inner">
       <div class="site-footer__brand">
-        <a class="site-footer__logo" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}">Memora</a>
+        <a class="site-footer__logo" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">
+          <img src="{% static 'img/memora-mark.svg' %}" alt="" width="42" height="42">
+          <span>Memora</span>
+        </a>
         <p>Revivez votre &eacute;v&eacute;nement &agrave; travers les yeux de vos invit&eacute;s.</p>
       </div>
       <div class="site-footer__promise">
@@ -55,7 +75,6 @@
           <a href="{% url 'dashboard:home' %}">Mes &eacute;v&eacute;nements</a>
         {% else %}
           <a href="{% url 'accounts:signup' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
-          <a href="{% url 'accounts:login' %}">Espace organisateur</a>
         {% endif %}
       </nav>
     </div>

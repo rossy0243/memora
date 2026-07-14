@@ -30,6 +30,10 @@ class HomePageTests(SimpleTestCase):
         self.assertContains(response, "Un film préparé automatiquement")
         self.assertContains(response, "59 USD")
         self.assertContains(response, "par événement")
+        self.assertContains(response, "og:title")
+        self.assertContains(response, "twitter:card")
+        self.assertContains(response, "canonical")
+        self.assertContains(response, "img/memora-mark.svg")
 
 
 class AuthenticatedHomePageTests(TestCase):
@@ -93,6 +97,25 @@ class HealthPageTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"ok")
+
+
+class SeoEndpointTests(SimpleTestCase):
+    def test_robots_txt_exposes_sitemap_and_blocks_private_areas(self):
+        response = self.client.get(reverse("core:robots"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sitemap:")
+        self.assertContains(response, "Disallow: /admin/")
+        self.assertContains(response, "Disallow: /dashboard/")
+        self.assertContains(response, "Disallow: /evenements/")
+
+    def test_sitemap_xml_lists_public_landing_only(self):
+        response = self.client.get(reverse("core:sitemap"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<urlset")
+        self.assertContains(response, reverse("core:home"))
+        self.assertNotContains(response, "/dashboard/")
 
 
 class LoggingSettingsTests(SimpleTestCase):

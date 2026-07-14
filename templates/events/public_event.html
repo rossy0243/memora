@@ -2,6 +2,11 @@
 {% load static %}
 
 {% block title %}{{ event.title }} - Memora{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block og_title %}{{ event.title }} - Memora{% endblock %}
+{% block og_description %}Ajoutez vos photos et vidéos à cet événement avec Memora, sans compte invité.{% endblock %}
+{% block twitter_title %}{{ event.title }} - Memora{% endblock %}
+{% block twitter_description %}Ajoutez un souvenir à cet événement avec Memora.{% endblock %}
 
 {% block content %}
 <section class="public-event">
