@@ -24,6 +24,12 @@ class HomePageTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Memora")
+        self.assertContains(response, "Memora ne se contente pas de stocker des photos.")
+        self.assertContains(response, "Une caméra pensée pour les invités")
+        self.assertContains(response, "Une collecte maîtrisée")
+        self.assertContains(response, "Un film préparé automatiquement")
+        self.assertContains(response, "59 USD")
+        self.assertContains(response, "par événement")
 
 
 class AuthenticatedHomePageTests(TestCase):

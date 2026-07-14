@@ -180,8 +180,9 @@ def public_event_preview(request, slug, access_key):
         Event,
         slug=slug,
         public_access_key=access_key,
-        is_active=True,
     )
+    if not event.can_accept_guest_uploads:
+        return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
     if event.requires_guest_access_code and not has_guest_access(request, event):
         access_error = ""
         if request.method == "POST":
@@ -240,6 +241,8 @@ def set_media_moderation_status(request, pk, upload_pk):
 @require_POST
 def generate_movie(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    if not event.is_paid:
+        return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
     create_event_movie_job(event, allow_retry=True)
     return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
 
@@ -272,7 +275,7 @@ def movie_ready_detail(request, pk):
 
 
 def public_movie_share(request, slug, access_key):
-    event = get_object_or_404(Event, slug=slug, public_access_key=access_key)
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, payment_status=Event.PaymentStatus.PAID)
     ready_movie = _get_ready_movie(event)
     if not ready_movie:
         raise Http404("Film souvenir indisponible.")

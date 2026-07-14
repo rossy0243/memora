@@ -19,6 +19,17 @@
     </div>
   </div>
 
+  {% if not event.is_paid %}
+    <article class="payment-required-panel">
+      <div>
+        <p class="section__label">Activation requise</p>
+        <h2>Paiement en attente</h2>
+        <p>Cet evenement sera accessible aux invites apres validation manuelle du paiement dans l'administration Django.</p>
+      </div>
+      <strong>{{ event.formatted_price }}</strong>
+    </article>
+  {% endif %}
+
   <section class="live-dashboard">
     <article class="live-dashboard__hero">
       <div>
@@ -66,12 +77,20 @@
         <div class="public-share-panel__body">
           <p class="section__label">Acces invite</p>
           <h3>QR code invite</h3>
-          <p class="muted-copy">A afficher sur les tables, le bar ou l'ecran d'accueil.</p>
+          {% if event.is_paid %}
+            <p class="muted-copy">A afficher sur les tables, le bar ou l'ecran d'accueil.</p>
+          {% else %}
+            <p class="muted-copy">Disponible apres activation de l'evenement.</p>
+          {% endif %}
           <code id="public-event-url">{{ public_event_url }}</code>
           <div class="quick-actions">
             <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
             <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>Telecharger QR</a>
-            <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>
+            {% if event.is_paid %}
+              <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>
+            {% else %}
+              <span class="status-pill status-pill--danger">Non active</span>
+            {% endif %}
           </div>
         </div>
         <img class="public-share-panel__qr" src="{{ event_qr_code_url }}" alt="QR code de {{ event.title }}">
@@ -104,6 +123,10 @@
         <div>
           <dt>Statut</dt>
           <dd>{% if event.is_active %}Actif{% else %}Inactif{% endif %}</dd>
+        </div>
+        <div>
+          <dt>Paiement</dt>
+          <dd>{% if event.is_paid %}Paye{% else %}En attente - {{ event.formatted_price }}{% endif %}</dd>
         </div>
       </dl>
     </article>

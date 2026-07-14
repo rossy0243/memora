@@ -228,6 +228,8 @@ class MovieGenerationServiceTests(TestCase):
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        self.event.mark_paid(provider="test")
+        self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
         self.category = self.event.upload_categories.get(code="ceremony")
 
     def create_upload(
@@ -370,6 +372,17 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("Aucun media", movie.error_logs)
         self.assertEqual(movie.progress_message, "Aucun souvenir valide disponible pour le film.")
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.is_active)
+        self.assertTrue(self.event.can_accept_guest_uploads)
+
+    def test_create_event_movie_job_requires_paid_event(self):
+        self.event.payment_status = Event.PaymentStatus.PENDING
+        self.event.paid_at = None
+        self.event.save(update_fields=["payment_status", "paid_at"])
+
+        with self.assertRaisesMessage(ValueError, "activation"):
+            create_event_movie_job(self.event)
 
     @patch("processing.services.analyze_event_media", side_effect=RuntimeError("analyse indisponible"))
     def test_generate_event_movie_marks_failed_when_analysis_crashes(self, _analyze_event_media):
@@ -484,6 +497,9 @@ class MovieGenerationServiceTests(TestCase):
         badge_command = run_ffmpeg.call_args_list[-1].args[0]
         self.assertIn("drawtext", badge_command[badge_command.index("-vf") + 1])
         self.assertGreaterEqual(run_ffmpeg.call_count, 3)
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.is_active)
+        self.assertFalse(self.event.can_accept_guest_uploads)
 
     @override_settings(
         MEMORA_PUBLIC_BASE_URL="https://memora.example",
@@ -681,6 +697,8 @@ class GenerateScheduledMoviesCommandTests(TestCase):
             event_type=self.event_type,
             event_date=event_date,
         )
+        event.mark_paid(provider="test")
+        event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
         GuestUpload.objects.create(
             event=event,
             category=event.upload_categories.get(code="dancefloor"),

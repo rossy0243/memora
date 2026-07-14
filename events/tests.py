@@ -102,6 +102,38 @@ class EventModelTests(TestCase):
         self.assertGreaterEqual(len(event.public_access_key), 16)
         self.assertNotEqual(event.public_access_key, event.slug)
 
+    def test_event_defaults_to_pending_manual_payment(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage a activer",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        self.assertEqual(event.payment_status, Event.PaymentStatus.PENDING)
+        self.assertFalse(event.is_paid)
+        self.assertFalse(event.can_accept_guest_uploads)
+        self.assertEqual(event.price_amount, 5900)
+        self.assertEqual(event.price_currency, "USD")
+        self.assertEqual(event.formatted_price, "59 USD")
+
+    def test_event_can_be_marked_paid_manually(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage paye",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        event.mark_paid(reference="manual-001", provider="admin")
+        event.save()
+
+        self.assertTrue(event.is_paid)
+        self.assertTrue(event.can_accept_guest_uploads)
+        self.assertEqual(event.payment_reference, "manual-001")
+        self.assertEqual(event.payment_provider, "admin")
+        self.assertIsNotNone(event.paid_at)
+
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
 class EventViewTests(TestCase):
@@ -122,6 +154,11 @@ class EventViewTests(TestCase):
             password="secret",
         )
         self.event_type = EventType.objects.get(code="wedding")
+
+    def mark_paid(self, event):
+        event.mark_paid(provider="test")
+        event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
+        return event
 
     def test_organizer_can_create_event(self):
         self.client.login(username="owner", password="secret")
@@ -145,6 +182,8 @@ class EventViewTests(TestCase):
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         self.assertEqual(event.organizer, self.user)
         self.assertEqual(event.slug, "mariage-de-lea-et-sam")
+        self.assertEqual(event.payment_status, Event.PaymentStatus.PENDING)
+        self.assertEqual(event.formatted_price, "59 USD")
         self.assertEqual(event.guest_access_code, "AMOUR2026")
         self.assertEqual(event.location, "")
         self.assertEqual(event.media_retention_days, 7)
@@ -160,10 +199,12 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Créer un événement")
         self.assertContains(response, "Nom affiché aux invités")
         self.assertContains(response, "Type d&#x27;événement personnalisé")
-        self.assertContains(response, "Collecte active")
+        self.assertContains(response, "Accès invité")
+        self.assertContains(response, "Sécurité après le scan")
         self.assertContains(response, "data-custom-event-type-field")
         self.assertContains(response, "data-custom-event-type-field hidden")
         self.assertContains(response, "event-form")
+        self.assertNotContains(response, "Collecte active")
         self.assertNotContains(response, "Lieu (optionnel)")
         self.assertNotContains(response, "Conservation des médias")
         self.assertNotContains(response, "Couple name")
@@ -367,6 +408,7 @@ class EventViewTests(TestCase):
             event_date=date(2026, 7, 8),
             welcome_message="Bienvenue dans nos souvenirs.",
         )
+        self.mark_paid(event)
 
         response = self.client.get(event.get_public_url())
 
@@ -383,6 +425,7 @@ class EventViewTests(TestCase):
             event_date=date(2026, 7, 8),
             guest_access_code="AMOUR2026",
         )
+        self.mark_paid(event)
 
         response = self.client.get(event.get_public_url())
         self.assertEqual(response.status_code, 200)
@@ -417,6 +460,19 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response_without_key.status_code, 404)
         self.assertEqual(response_with_wrong_key.status_code, 404)
+
+    def test_public_event_requires_payment_activation(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception non payee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "Evenement pas encore active", status_code=403)
 
     def test_event_detail_displays_media_dashboard(self):
         event = Event.objects.create(
@@ -573,6 +629,7 @@ class EventViewTests(TestCase):
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        self.mark_paid(event)
         GeneratedMovie.objects.create(
             event=event,
             status=GeneratedMovie.Status.COMPLETED,
@@ -677,6 +734,7 @@ class EventViewTests(TestCase):
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        self.mark_paid(event)
         create_event_movie_job.return_value = GeneratedMovie.objects.create(event=event)
         self.client.login(username="owner", password="secret")
 
@@ -684,6 +742,21 @@ class EventViewTests(TestCase):
 
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         create_event_movie_job.assert_called_once_with(event, allow_retry=True)
+
+    @patch("events.views.create_event_movie_job")
+    def test_owner_cannot_generate_movie_before_payment_activation(self, create_event_movie_job):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Non Paye",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:generate_movie", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        create_event_movie_job.assert_not_called()
 
     def test_movie_status_panel_hides_technical_errors(self):
         event = Event.objects.create(

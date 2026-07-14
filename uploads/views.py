@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def guest_upload_create(request, slug, access_key):
-    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, is_active=True)
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key)
+    if not event.can_accept_guest_uploads:
+        return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
     if not has_guest_access(request, event):
         return redirect(event.get_public_url())
 
@@ -76,7 +78,9 @@ def guest_upload_create(request, slug, access_key):
 
 
 def guest_upload_thanks(request, slug, access_key):
-    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, is_active=True)
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key)
+    if not event.can_accept_guest_uploads:
+        return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
     if not has_guest_access(request, event):
         return redirect(event.get_public_url())
     return render(request, "uploads/guest_upload_thanks.html", {"event": event})

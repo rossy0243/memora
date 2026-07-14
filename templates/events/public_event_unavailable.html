@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Evenement non active - Memora{% endblock %}
+
+{% block content %}
+<section class="public-event public-event--unavailable">
+  {% if event.cover_image %}
+    <img class="public-event__image" src="{{ event.cover_image.url }}" alt="">
+  {% else %}
+    <img class="public-event__image" src="{% static 'img/memora-hero.png' %}" alt="">
+  {% endif %}
+  <div class="public-event__shade" aria-hidden="true"></div>
+  <div class="public-event__content">
+    <p class="eyebrow">Memora</p>
+    <h1>Evenement pas encore active</h1>
+    {% if not event.is_paid %}
+      <p class="tagline">La collecte des souvenirs sera disponible des que l'organisateur aura active l'evenement.</p>
+    {% else %}
+      <p class="tagline">La collecte des souvenirs est fermee pour cet evenement.</p>
+    {% endif %}
+    <p class="microcopy">Vous pouvez revenir sur ce lien un peu plus tard.</p>
+  </div>
+</section>
+{% endblock %}

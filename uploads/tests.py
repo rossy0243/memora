@@ -181,6 +181,8 @@ class GuestUploadViewTests(TestCase):
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        self.event.mark_paid(provider="test")
+        self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
         self.category = self.event.upload_categories.get(code="ceremony")
 
     def upload_url(self, event=None, access_key=None):
@@ -243,6 +245,24 @@ class GuestUploadViewTests(TestCase):
 
         self.assertEqual(response_without_key.status_code, 404)
         self.assertEqual(response_with_wrong_key.status_code, 404)
+
+    def test_guest_upload_requires_paid_event(self):
+        self.event.payment_status = Event.PaymentStatus.PENDING
+        self.event.paid_at = None
+        self.event.save(update_fields=["payment_status", "paid_at"])
+        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "Evenement pas encore active", status_code=403)
+        self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_guest_upload_page_is_mobile_first(self):
         response = self.client.get(self.upload_url())

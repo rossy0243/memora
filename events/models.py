@@ -3,6 +3,7 @@ import secrets
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -30,6 +31,11 @@ class EventType(models.Model):
 
 
 class Event(models.Model):
+    class PaymentStatus(models.TextChoices):
+        PENDING = "pending", "En attente"
+        PAID = "paid", "Paye"
+        FAILED = "failed", "Echec"
+        REFUNDED = "refunded", "Rembourse"
 
     organizer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -63,6 +69,16 @@ class Event(models.Model):
         blank=True,
         null=True,
     )
+    payment_status = models.CharField(
+        max_length=24,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.PENDING,
+    )
+    price_amount = models.PositiveIntegerField(default=5900)
+    price_currency = models.CharField(max_length=3, default="USD")
+    paid_at = models.DateTimeField(blank=True, null=True)
+    payment_reference = models.CharField(max_length=120, blank=True)
+    payment_provider = models.CharField(max_length=40, blank=True, default="manual")
     is_active = models.BooleanField(default=True)
     media_retention_days = models.PositiveIntegerField(default=7)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -96,6 +112,24 @@ class Event(models.Model):
         return self.event_type.label
 
     @property
+    def is_paid(self):
+        return self.payment_status == self.PaymentStatus.PAID
+
+    @property
+    def can_accept_guest_uploads(self):
+        return self.is_active and self.is_paid
+
+    @property
+    def formatted_price(self):
+        return f"{self.price_amount / 100:.0f} {self.price_currency}"
+
+    def mark_paid(self, reference="", provider="manual"):
+        self.payment_status = self.PaymentStatus.PAID
+        self.paid_at = self.paid_at or timezone.now()
+        self.payment_reference = reference or self.payment_reference
+        self.payment_provider = provider or self.payment_provider or "manual"
+
+    @property
     def requires_guest_access_code(self):
         return bool(self.guest_access_code)
 
@@ -114,6 +148,12 @@ class Event(models.Model):
             self.slug = slug
         if not self.public_access_key:
             self.public_access_key = self._generate_public_access_key()
+        if not self.price_amount:
+            self.price_amount = settings.MEMORA_EVENT_PRICE_AMOUNT
+        if not self.price_currency:
+            self.price_currency = settings.MEMORA_EVENT_PRICE_CURRENCY
+        if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:
+            self.paid_at = timezone.now()
         self.guest_access_code = self._normalize_guest_access_code(self.guest_access_code)
         super().save(*args, **kwargs)
 

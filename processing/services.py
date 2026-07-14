@@ -277,7 +277,10 @@ def get_scheduled_movie_events(now=None):
     from events.models import Event
 
     now = timezone.localtime(now or timezone.now())
-    events = Event.objects.filter(is_active=True).order_by("event_date", "pk")
+    events = Event.objects.filter(
+        is_active=True,
+        payment_status=Event.PaymentStatus.PAID,
+    ).order_by("event_date", "pk")
 
     scheduled_events = []
     for event in events:
@@ -297,6 +300,9 @@ def get_scheduled_movie_events(now=None):
 
 
 def create_event_movie_job(event, allow_retry=False):
+    if not event.is_paid:
+        raise ValueError("Le film souvenir ne peut pas etre genere avant activation de l'evenement.")
+
     existing_job = (
         event.generated_movies.filter(
             status__in=[
@@ -564,6 +570,10 @@ def process_generated_movie(movie):
                 "updated_at",
             ]
         )
+        if event.is_active:
+            event.is_active = False
+            event.save(update_fields=["is_active", "updated_at"])
+            logger.info("Guest collection closed after movie completion event=%s movie=%s", event.pk, movie.pk)
         logger.info("Movie processing completed movie=%s event=%s", movie.pk, event.pk)
         notify_generated_movie_ready(movie)
     except Exception as exc:

@@ -86,8 +86,8 @@
 
     <section class="form-section">
       <div class="form-section__heading">
-        <p class="section__label">Collecte</p>
-        <h2>Accès et statut</h2>
+        <p class="section__label">Accès invité</p>
+        <h2>Sécurité après le scan</h2>
       </div>
 
       <label>
@@ -95,16 +95,6 @@
         {{ form.guest_access_code }}
         <small>{{ form.guest_access_code.help_text }}</small>
         {{ form.guest_access_code.errors }}
-      </label>
-
-      <label class="toggle-row">
-        {{ form.is_active }}
-        <span class="toggle-row__visual" aria-hidden="true"></span>
-        <span>
-          <strong>{{ form.is_active.label }}</strong>
-          <small>{{ form.is_active.help_text }}</small>
-        </span>
-        {{ form.is_active.errors }}
       </label>
     </section>
 

@@ -29,12 +29,10 @@ class EventForm(forms.ModelForm):
             "cover_image",
             "welcome_message",
             "guest_access_code",
-            "is_active",
         )
         widgets = {
             "event_date": forms.DateInput(attrs={"type": "date"}),
             "welcome_message": forms.Textarea(attrs={"rows": 4}),
-            "is_active": forms.CheckboxInput(attrs={"class": "toggle-input"}),
         }
         labels = {
             "title": "Nom de l'événement",
@@ -44,7 +42,6 @@ class EventForm(forms.ModelForm):
             "cover_image": "Image de couverture",
             "welcome_message": "Message d'accueil",
             "guest_access_code": "Code invité (optionnel)",
-            "is_active": "Collecte active",
         }
         help_texts = {
             "title": "Nom interne visible dans votre tableau de bord.",
@@ -53,7 +50,6 @@ class EventForm(forms.ModelForm):
             "event_date": "Les médias seront conservés 7 jours après cette date.",
             "welcome_message": "Une phrase courte suffit. Elle apparaît sur la page invitée.",
             "guest_access_code": "À utiliser seulement si vous voulez ajouter une sécurité après le QR code.",
-            "is_active": "Désactivez la collecte si vous ne voulez plus recevoir de souvenirs.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -112,6 +108,7 @@ class EventForm(forms.ModelForm):
         event_type = self.cleaned_data.get("event_type")
         custom_label = self.cleaned_data.get("custom_event_type_label")
         instance.media_retention_days = Event._meta.get_field("media_retention_days").default
+        instance.is_active = True
 
         if event_type and event_type.code == "other" and custom_label:
             custom_code = slugify(custom_label)[:40] or "evenement"
