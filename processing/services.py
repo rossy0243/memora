@@ -61,6 +61,29 @@ MOVIE_PHOTO_CATEGORY_SCORE_BOOSTS = {
     "reception": 6,
 }
 
+MOOD_COLOR_GRADE_FILTERS = {
+    "romantic_cinematic": (
+        "hue=s=1.08,"
+        "colorbalance=rs=0.06:gs=0.02:bs=-0.05:rm=0.04:gm=0.01:bm=-0.03"
+    ),
+    "cinematic_emotional": (
+        "hue=s=0.85,"
+        "colorbalance=rs=-0.02:bs=0.06:rm=-0.01:bm=0.03"
+    ),
+    "joyful_party": (
+        "hue=s=1.25,"
+        "colorbalance=rs=0.05:gs=0.02:rm=0.03"
+    ),
+    "warm_lounge": (
+        "hue=s=1.05,"
+        "colorbalance=rs=0.08:gs=0.03:bs=-0.06:rm=0.05:bm=-0.03"
+    ),
+    "elegant_warm": (
+        "hue=s=1.05,"
+        "colorbalance=rs=0.05:bs=-0.03:rm=0.03:bm=-0.02"
+    ),
+}
+
 
 class _StreamingZipBuffer:
     """File-like object for ZipFile to write into. Bytes are drained in
@@ -671,19 +694,37 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
     )
 
     _update_movie_progress(movie, 78, "Mixage de la musique et des voix.")
+    soundtrack = choose_movie_soundtrack(event, uploads)
     soundtrack_output_path = temp_path / f"memora_{_clean_name(event.title)}_soundtrack.mp4"
     soundtrack_output_path = _apply_soundtrack_if_available(
         concat_output_path,
         soundtrack_output_path,
-        choose_movie_soundtrack(event, uploads),
+        soundtrack,
         ffmpeg_binary,
     )
+
+    _update_movie_progress(movie, 84, "Application du grade couleur cinematique.")
+    color_grade_data = {"enabled": settings.MEMORA_MOVIE_COLOR_GRADE_ENABLED, "mood": soundtrack.mood}
+    graded_output_path = temp_path / f"memora_{_clean_name(event.title)}_graded.mp4"
+    try:
+        graded_output_path = _apply_color_grade(
+            soundtrack_output_path,
+            graded_output_path,
+            soundtrack.mood,
+            ffmpeg_binary,
+        )
+        color_grade_data["applied"] = graded_output_path != soundtrack_output_path
+    except Exception as exc:
+        graded_output_path = soundtrack_output_path
+        color_grade_data["error"] = str(exc)
+    movie.edit_decision_data["color_grade"] = color_grade_data
+
     output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
     badge_data = _build_badge_data(event)
     _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
     try:
         final_output_path = _apply_event_badge(
-            soundtrack_output_path,
+            graded_output_path,
             output_path,
             event,
             ffmpeg_binary,
@@ -691,7 +732,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
         )
         badge_data["applied"] = final_output_path == output_path
     except Exception as exc:
-        final_output_path = soundtrack_output_path
+        final_output_path = graded_output_path
         badge_data["error"] = str(exc)
     movie.edit_decision_data["badge"] = badge_data
 
@@ -794,6 +835,20 @@ def _estimated_movie_clip_duration(upload):
     return settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
 
 
+def _ken_burns_filter(duration_seconds):
+    frame_count = max(int(duration_seconds * 30), 1)
+    zoom_ratio = max(settings.MEMORA_MOVIE_KEN_BURNS_ZOOM_RATIO, 1.0)
+    zoom_step = (zoom_ratio - 1) / frame_count if zoom_ratio > 1 else 0
+    width = settings.MEMORA_MOVIE_WIDTH
+    height = settings.MEMORA_MOVIE_HEIGHT
+    return (
+        f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
+        f"crop={width * 2}:{height * 2},"
+        f"zoompan=z='min(zoom+{zoom_step:.6f},{zoom_ratio})':d={frame_count}:"
+        f"s={width}x{height}:fps=30,format=yuv420p"
+    )
+
+
 def _build_movie_clip(upload, output_path, ffmpeg_binary):
     if not upload.media_file:
         raise ValueError(f"Media sans fichier: {upload.pk}")
@@ -809,6 +864,11 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
 
         if upload.media_type == GuestUpload.MediaType.IMAGE:
             clip_duration = str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
+            image_filter = (
+                _ken_burns_filter(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
+                if settings.MEMORA_MOVIE_KEN_BURNS_ENABLED
+                else video_filter
+            )
             command = [
                 ffmpeg_binary,
                 "-y",
@@ -825,7 +885,7 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                 "-i",
                 "anullsrc=channel_layout=stereo:sample_rate=48000",
                 "-vf",
-                video_filter,
+                image_filter,
                 "-map",
                 "0:v:0",
                 "-map",
@@ -970,6 +1030,36 @@ def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_b
             "-b:a",
             "160k",
             "-shortest",
+            str(output_path),
+        ]
+    )
+    return output_path
+
+
+def _apply_color_grade(input_path, output_path, mood, ffmpeg_binary):
+    if not settings.MEMORA_MOVIE_COLOR_GRADE_ENABLED:
+        return input_path
+
+    video_filter = MOOD_COLOR_GRADE_FILTERS.get(mood, MOOD_COLOR_GRADE_FILTERS["elegant_warm"])
+
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(input_path),
+            "-vf",
+            video_filter,
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            settings.MEMORA_MOVIE_VIDEO_ENCODER,
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
     )

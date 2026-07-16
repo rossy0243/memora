@@ -21,6 +21,8 @@ from uploads.models import GuestUpload
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
+    MOOD_COLOR_GRADE_FILTERS,
+    _apply_color_grade,
     _apply_event_badge,
     _build_movie_clip,
     _shorten_badge_text,
@@ -217,6 +219,7 @@ class MovieGenerationServiceTests(TestCase):
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
+        Path(TEST_MEDIA_ROOT).mkdir(parents=True, exist_ok=True)
         self.organizer = get_user_model().objects.create_user(
             username="organizer",
             password="secret",
@@ -570,6 +573,51 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("y=ih-126", command[command.index("-vf") + 1])
         self.assertNotIn("enable=", command[command.index("-vf") + 1])
 
+    @patch("processing.services._run_ffmpeg")
+    def test_color_grade_applies_mood_filter(self, run_ffmpeg):
+        input_path = Path(TEST_MEDIA_ROOT) / "graded_input.mp4"
+        output_path = Path(TEST_MEDIA_ROOT) / "graded_output.mp4"
+        input_path.write_bytes(b"movie")
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"graded")
+
+        run_ffmpeg.side_effect = create_output
+
+        result = _apply_color_grade(input_path, output_path, "joyful_party", "ffmpeg")
+
+        self.assertEqual(result, output_path)
+        command = run_ffmpeg.call_args.args[0]
+        video_filter = command[command.index("-vf") + 1]
+        self.assertEqual(video_filter, MOOD_COLOR_GRADE_FILTERS["joyful_party"])
+
+    @patch("processing.services._run_ffmpeg")
+    def test_color_grade_falls_back_to_elegant_warm_for_unknown_mood(self, run_ffmpeg):
+        input_path = Path(TEST_MEDIA_ROOT) / "graded_input_unknown.mp4"
+        output_path = Path(TEST_MEDIA_ROOT) / "graded_output_unknown.mp4"
+        input_path.write_bytes(b"movie")
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"graded")
+
+        run_ffmpeg.side_effect = create_output
+
+        _apply_color_grade(input_path, output_path, "unknown_mood", "ffmpeg")
+
+        command = run_ffmpeg.call_args.args[0]
+        video_filter = command[command.index("-vf") + 1]
+        self.assertEqual(video_filter, MOOD_COLOR_GRADE_FILTERS["elegant_warm"])
+
+    @patch("processing.services._run_ffmpeg")
+    @override_settings(MEMORA_MOVIE_COLOR_GRADE_ENABLED=False)
+    def test_color_grade_passthrough_when_disabled(self, run_ffmpeg):
+        input_path = Path(TEST_MEDIA_ROOT) / "graded_input_disabled.mp4"
+
+        result = _apply_color_grade(input_path, Path(TEST_MEDIA_ROOT) / "unused.mp4", "joyful_party", "ffmpeg")
+
+        self.assertEqual(result, input_path)
+        run_ffmpeg.assert_not_called()
+
     def test_badge_text_is_shortened_for_clean_video_overlay(self):
         text = _shorten_badge_text("Un tres tres long nom affiche pour un evenement Memora")
 
@@ -749,6 +797,52 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("anullsrc=channel_layout=stereo:sample_rate=48000", command)
         self.assertIn("1:a:0", command)
         self.assertIn("-shortest", command)
+
+    @patch("processing.services._run_ffmpeg")
+    def test_movie_image_clip_uses_ken_burns_zoompan_by_default(self, run_ffmpeg):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "clip.mp4"
+            upload = SimpleNamespace(
+                pk=125,
+                media_file=SimpleUploadedFile("photo.jpg", make_test_image_bytes(), content_type="image/jpeg"),
+                media_type=GuestUpload.MediaType.IMAGE,
+                original_filename="photo.jpg",
+            )
+
+            def create_output(command):
+                output_path.write_bytes(b"movie-bytes")
+
+            run_ffmpeg.side_effect = create_output
+
+            _build_movie_clip(upload, output_path, "ffmpeg")
+
+        command = run_ffmpeg.call_args.args[0]
+        video_filter = command[command.index("-vf") + 1]
+        self.assertIn("zoompan", video_filter)
+
+    @patch("processing.services._run_ffmpeg")
+    @override_settings(MEMORA_MOVIE_KEN_BURNS_ENABLED=False)
+    def test_movie_image_clip_skips_ken_burns_when_disabled(self, run_ffmpeg):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "clip.mp4"
+            upload = SimpleNamespace(
+                pk=126,
+                media_file=SimpleUploadedFile("photo.jpg", make_test_image_bytes(), content_type="image/jpeg"),
+                media_type=GuestUpload.MediaType.IMAGE,
+                original_filename="photo.jpg",
+            )
+
+            def create_output(command):
+                output_path.write_bytes(b"movie-bytes")
+
+            run_ffmpeg.side_effect = create_output
+
+            _build_movie_clip(upload, output_path, "ffmpeg")
+
+        command = run_ffmpeg.call_args.args[0]
+        video_filter = command[command.index("-vf") + 1]
+        self.assertNotIn("zoompan", video_filter)
+        self.assertIn("pad=", video_filter)
 
 
 class GenerateScheduledMoviesCommandTests(TestCase):
