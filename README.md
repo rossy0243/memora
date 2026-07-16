@@ -35,7 +35,7 @@ Etapes realisees du MVP :
 - videos invitees limitees a 10 secondes avec verification serveur via FFprobe ;
 - generation automatique d'un premier film souvenir avec FFmpeg, planifiable a J+1 12h ;
 - analyse automatique des medias avec scores qualite, emotion, energie et selection film IA-ready ;
-- architecture preparee pour Google Video Intelligence, Runway et choix musical avec ducking de voix ;
+- integration preparee pour Google Video Intelligence, Runway, montage final `runway_final` et choix musical avec ducking de voix ;
 - suppression automatique preparee : les medias sont marques supprimes 7 jours apres la date de l'evenement.
 
 Les fonctionnalites de suppression physique des fichiers et traitement media avance asynchrone ne sont pas encore implementees.

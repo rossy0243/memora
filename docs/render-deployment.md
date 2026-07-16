@@ -16,6 +16,7 @@ Render demandera les valeurs marquees `sync: false` au premier import du Bluepri
 
 ```text
 RUNWAYML_API_SECRET
+MEMORA_RUNWAY_WORKFLOW_ID
 MEMORA_S3_ACCESS_KEY_ID
 MEMORA_S3_SECRET_ACCESS_KEY
 ```
@@ -53,6 +54,34 @@ GOOGLE_APPLICATION_CREDENTIALS_B64=<service-account-json-encode-en-base64>
 ```
 
 Au demarrage, Memora materialise ce secret dans un fichier temporaire et renseigne `GOOGLE_APPLICATION_CREDENTIALS` pour la librairie Google.
+
+## Activation Runway
+
+Le Blueprint configure Memora en mode cible :
+
+```text
+MEMORA_MOVIE_RENDER_PROVIDER=runway_final
+MEMORA_RUNWAY_ENABLED=True
+```
+
+Dans ce mode, Memora envoie a Runway un brief complet de film souvenir avec les medias selectionnes, le mood musical, la strategie audio et les contraintes de rendu. Runway produit le master final, puis FFmpeg reste utilise pour garantir le badge permanent, l'encodage final et le fallback.
+
+Secrets requis :
+
+```text
+RUNWAYML_API_SECRET=<cle-api-runway>
+MEMORA_RUNWAY_WORKFLOW_ID=<workflow-runway-publie>
+```
+
+Le compte Runway doit avoir des credits API actifs. Sans credits, Runway peut refuser les uploads ou les workflows avec une erreur `403`.
+
+Si `MEMORA_RUNWAY_WORKFLOW_ID` est absent ou si Runway echoue, Memora revient automatiquement au montage FFmpeg lorsque `MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True`.
+
+Modes disponibles :
+
+- `ffmpeg` : montage local complet par FFmpeg ;
+- `runway` : amelioration de certains clips par Runway, montage final par FFmpeg ;
+- `runway_final` : montage final confie a un workflow Runway publie, finition et fallback par FFmpeg.
 
 ## Notes de securite
 
