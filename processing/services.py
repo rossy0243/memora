@@ -1,5 +1,4 @@
 from datetime import datetime, time, timedelta
-from io import BytesIO
 import logging
 from pathlib import Path
 import shutil
@@ -63,9 +62,37 @@ MOVIE_PHOTO_CATEGORY_SCORE_BOOSTS = {
 }
 
 
-def build_event_zip(event):
+class _StreamingZipBuffer:
+    """File-like object for ZipFile to write into. Bytes are drained in
+    chunks by the caller instead of accumulating the whole archive in memory."""
+
+    def __init__(self):
+        self._chunks = []
+        self._size = 0
+
+    def write(self, data):
+        if data:
+            self._chunks.append(data)
+            self._size += len(data)
+        return len(data)
+
+    def tell(self):
+        return self._size
+
+    def flush(self):
+        pass
+
+    def drain(self):
+        chunks, self._chunks = self._chunks, []
+        return chunks
+
+
+def get_event_zip_filename(event):
+    return f"Memora_{_clean_name(event.title)}.zip"
+
+
+def iter_event_zip_chunks(event):
     root_name = f"Memora_{_clean_name(event.title)}"
-    buffer = BytesIO()
 
     uploads = (
         event.guest_uploads.filter(
@@ -77,6 +104,7 @@ def build_event_zip(event):
     )
 
     used_paths = set()
+    buffer = _StreamingZipBuffer()
     with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
         categories = list(event.upload_categories.filter(is_active=True).order_by("sort_order", "label"))
         category_folders = {
@@ -86,6 +114,7 @@ def build_event_zip(event):
 
         for folder_name in category_folders.values():
             archive.writestr(f"{root_name}/{folder_name}/", "")
+        yield from buffer.drain()
 
         for upload in uploads:
             if not upload.media_file:
@@ -93,18 +122,19 @@ def build_event_zip(event):
 
             folder_name = category_folders.get(upload.category_id, _category_folder_name(upload.category))
             archive_name = _build_archive_name(upload)
-            archive_path = f"{root_name}/{folder_name}/{archive_name}"
-            archive_path = _dedupe_path(archive_path, used_paths)
+            archive_path = _dedupe_path(f"{root_name}/{folder_name}/{archive_name}", used_paths)
 
             try:
                 upload.media_file.open("rb")
-                archive.writestr(archive_path, upload.media_file.read())
+                with archive.open(archive_path, "w") as destination:
+                    for chunk in upload.media_file.chunks():
+                        destination.write(chunk)
+                        yield from buffer.drain()
             finally:
                 upload.media_file.close()
+            yield from buffer.drain()
 
-    buffer.seek(0)
-    filename = f"{root_name}.zip"
-    return filename, buffer.getvalue()
+    yield from buffer.drain()
 
 
 def get_movie_candidate_uploads(event):

@@ -1,7 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.text import slugify
@@ -10,7 +10,12 @@ from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from processing.models import GeneratedMovie
-from processing.services import build_event_zip, create_event_movie_job, get_event_movie_schedule_at
+from processing.services import (
+    create_event_movie_job,
+    get_event_movie_schedule_at,
+    get_event_zip_filename,
+    iter_event_zip_chunks,
+)
 from uploads.models import GuestUpload, UploadCategory
 
 from .forms import EventForm
@@ -300,7 +305,14 @@ def download_event_movie(request, pk):
     if not movie:
         raise Http404("Film souvenir indisponible.")
 
-    movie.final_file.open("rb")
+    try:
+        movie.final_file.open("rb")
+    except Exception as exc:
+        if not is_storage_error(exc):
+            raise
+        recover_from_storage_error()
+        return HttpResponse(STORAGE_UNAVAILABLE_MESSAGE, status=503, content_type="text/plain")
+
     filename = _movie_download_filename(event, movie)
     response = FileResponse(movie.final_file, content_type="video/mp4")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -335,8 +347,11 @@ def event_qr_code(request, pk):
 @login_required
 def download_event_zip(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
-    filename, content = build_event_zip(event)
-    response = HttpResponse(content, content_type="application/zip")
+    filename = get_event_zip_filename(event)
+    # Streaming: headers are already sent once bytes start flowing, so a
+    # mid-stream storage failure surfaces as a truncated download rather
+    # than a clean error response.
+    response = StreamingHttpResponse(iter_event_zip_chunks(event), content_type="application/zip")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 

@@ -1108,7 +1108,7 @@ class EventViewTests(TestCase):
         self.assertEqual(response["Content-Type"], "application/zip")
         self.assertIn("Memora_reception_zip.zip", response["Content-Disposition"])
 
-        with ZipFile(BytesIO(response.content)) as archive:
+        with ZipFile(BytesIO(b"".join(response.streaming_content))) as archive:
             names = archive.namelist()
             self.assertIn("Memora_reception_zip/01_Ceremonie/", names)
             self.assertIn("Memora_reception_zip/06_Piste_de_danse/", names)
