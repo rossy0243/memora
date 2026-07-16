@@ -7,7 +7,20 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
+from uploads.models import MomentTemplate
+from uploads.services import (
+    get_available_moment_templates,
+    get_default_moment_templates_for_event_type,
+    get_event_type_moment_suggestions,
+    sync_event_upload_categories,
+)
+
 from .models import Event, EventType
+
+
+class MomentMultipleChoiceField(forms.MultipleChoiceField):
+    def valid_value(self, value):
+        return True
 
 
 class EventForm(forms.ModelForm):
@@ -18,6 +31,12 @@ class EventForm(forms.ModelForm):
         help_text="Exemple : baptême, gala, baby shower, soirée de famille.",
     )
 
+    moments = MomentMultipleChoiceField(
+        required=False,
+        label="Moments proposes aux invites",
+        help_text="Recherchez des moments existants ou ajoutez les votres. Ils alimenteront le select invite.",
+    )
+
     class Meta:
         model = Event
         fields = (
@@ -25,6 +44,7 @@ class EventForm(forms.ModelForm):
             "couple_name",
             "event_type",
             "custom_event_type_label",
+            "moments",
             "event_date",
             "cover_image",
             "welcome_message",
@@ -55,6 +75,8 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["event_type"].queryset = EventType.objects.filter(is_active=True)
+        self._moment_templates = list(get_available_moment_templates())
+        self.fields["moments"].choices = [(str(moment.pk), moment.label) for moment in self._moment_templates]
         placeholders = {
             "title": "Mariage de Camille & Noé, Anniversaire de Lina...",
             "couple_name": "Camille & Noé, Anniversaire de Lina, Gala Memora...",
@@ -86,6 +108,16 @@ class EventForm(forms.ModelForm):
                 "autocomplete": "off",
             }
         )
+        self.fields["moments"].widget.attrs.update(
+            {
+                "data-moment-select": "true",
+                "class": "form-control moment-native-select",
+            }
+        )
+        self.moment_suggestions_data = get_event_type_moment_suggestions()
+        self._add_existing_custom_moment_choices()
+        if self.instance and self.instance.pk:
+            self.fields["moments"].initial = self._initial_moment_values_for_event()
 
     def clean_custom_event_type_label(self):
         return (self.cleaned_data.get("custom_event_type_label") or "").strip()
@@ -105,8 +137,10 @@ class EventForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        is_new = instance.pk is None
         event_type = self.cleaned_data.get("event_type")
         custom_label = self.cleaned_data.get("custom_event_type_label")
+        moment_values = self.cleaned_data.get("moments") or []
         instance.media_retention_days = Event._meta.get_field("media_retention_days").default
         instance.is_active = True
 
@@ -130,7 +164,44 @@ class EventForm(forms.ModelForm):
         if commit:
             instance.save()
             self.save_m2m()
+            sync_event_upload_categories(
+                instance,
+                moment_values,
+                user=instance.organizer,
+                count_all_usage=is_new,
+            )
         return instance
+
+    def _add_existing_custom_moment_choices(self):
+        existing_values = []
+        if self.instance and self.instance.pk:
+            existing_values = self._initial_moment_values_for_event()
+
+        known_values = {str(value) for value, _ in self.fields["moments"].choices}
+        choices = list(self.fields["moments"].choices)
+        for value in existing_values:
+            if value in known_values:
+                continue
+            if value.startswith("new:"):
+                choices.append((value, value[4:]))
+            else:
+                moment = MomentTemplate.objects.filter(pk=value).first()
+                if not moment:
+                    continue
+                choices.append((value, moment.label))
+            known_values.add(value)
+        self.fields["moments"].choices = choices
+
+    def _initial_moment_values_for_event(self):
+        moments_by_code = {moment.code: moment for moment in MomentTemplate.objects.filter(is_active=True)}
+        values = []
+        for category in self.instance.upload_categories.filter(is_active=True).order_by("sort_order", "label"):
+            moment = moments_by_code.get(category.code)
+            if moment and moment.status != MomentTemplate.ModerationStatus.REJECTED:
+                values.append(str(moment.pk))
+            else:
+                values.append(f"new:{category.label}")
+        return values
 
     def clean_cover_image(self):
         cover_image = self.cleaned_data.get("cover_image")

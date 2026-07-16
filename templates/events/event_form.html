@@ -66,6 +66,21 @@
 
     <section class="form-section">
       <div class="form-section__heading">
+        <p class="section__label">Moments invites</p>
+        <h2>Ce que les invites pourront choisir</h2>
+      </div>
+
+      <label>
+        <span>{{ form.moments.label }}</span>
+        {{ form.moments }}
+        <small>{{ form.moments.help_text }}</small>
+        {{ form.moments.errors }}
+      </label>
+      {{ form.moment_suggestions_data|json_script:"moment-suggestions-data" }}
+    </section>
+
+    <section class="form-section">
+      <div class="form-section__heading">
         <p class="section__label">Page invitée</p>
         <h2>Accueil après le scan</h2>
       </div>
@@ -108,6 +123,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{% static 'js/event-form.js' %}"></script>
+<script src="{% static 'js/event-form.js' %}?v=moment-picker-2"></script>
 <script src="{% static 'js/form-submit-state.js' %}"></script>
 {% endblock %}

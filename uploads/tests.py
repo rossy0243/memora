@@ -13,7 +13,8 @@ from django.urls import reverse
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from events.models import Event, EventType
 
-from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
+from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryTemplate
+from .services import normalize_moment_label, sync_event_upload_categories
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -127,6 +128,79 @@ class UploadCategoryTests(TestCase):
 
         self.assertEqual(event.upload_categories.order_by("sort_order").first().code, "arrival")
         self.assertTrue(event.upload_categories.filter(code="other").exists())
+
+    def test_known_moments_are_loaded_into_global_library(self):
+        self.assertTrue(
+            MomentTemplate.objects.filter(
+                code="ceremony",
+                label="Ceremonie",
+                status=MomentTemplate.ModerationStatus.APPROVED,
+            ).exists()
+        )
+        self.assertTrue(
+            MomentTemplate.objects.filter(
+                code="dancefloor",
+                label="Piste de danse",
+                status=MomentTemplate.ModerationStatus.APPROVED,
+            ).exists()
+        )
+
+    def test_custom_moment_labels_are_normalized_for_better_ux(self):
+        self.assertEqual(normalize_moment_label("  PHOTO   BOOTH  "), "Photo booth")
+
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Soiree normalisee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        sync_event_upload_categories(
+            event,
+            ["new:  PHOTO   BOOTH  "],
+            user=self.organizer,
+            count_all_usage=True,
+        )
+
+        moment = MomentTemplate.objects.get(code="photo-booth")
+        self.assertEqual(moment.label, "Photo booth")
+        self.assertTrue(event.upload_categories.filter(code="photo-booth", label="Photo booth").exists())
+
+    @override_settings(MEMORA_MOMENT_AUTO_PROMOTION_USAGE_THRESHOLD=2)
+    def test_custom_moment_is_auto_promoted_after_repeated_usage(self):
+        first_event = Event.objects.create(
+            organizer=self.organizer,
+            title="Premier photobooth",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        sync_event_upload_categories(
+            first_event,
+            ["new:Photo booth"],
+            user=self.organizer,
+            count_all_usage=True,
+        )
+
+        moment = MomentTemplate.objects.get(code="photo-booth")
+        self.assertEqual(moment.status, MomentTemplate.ModerationStatus.PENDING)
+        self.assertEqual(moment.usage_count, 1)
+
+        second_event = Event.objects.create(
+            organizer=self.organizer,
+            title="Second photobooth",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 9),
+        )
+        sync_event_upload_categories(
+            second_event,
+            ["new:Photo booth"],
+            user=self.organizer,
+            count_all_usage=True,
+        )
+
+        moment.refresh_from_db()
+        self.assertEqual(moment.status, MomentTemplate.ModerationStatus.APPROVED)
+        self.assertEqual(moment.usage_count, 2)
+        self.assertIsNotNone(moment.auto_promoted_at)
 
 
 class GuestUploadModelTests(TestCase):

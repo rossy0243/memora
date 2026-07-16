@@ -1,6 +1,34 @@
 from django.contrib import admin
 
-from .models import GuestUpload, UploadCategory, UploadCategoryTemplate
+from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryTemplate
+
+
+@admin.register(MomentTemplate)
+class MomentTemplateAdmin(admin.ModelAdmin):
+    list_display = (
+        "label",
+        "code",
+        "status",
+        "usage_count",
+        "is_active",
+        "auto_promoted_at",
+        "created_by",
+    )
+    list_editable = ("status", "is_active")
+    list_filter = ("status", "is_active", "suggested_event_types", "auto_promoted_at")
+    search_fields = ("label", "code", "created_by__username", "created_by__email")
+    filter_horizontal = ("suggested_event_types",)
+    prepopulated_fields = {"code": ("label",)}
+    readonly_fields = ("usage_count", "auto_promoted_at", "created_at", "updated_at")
+    actions = ("approve_moments", "reject_moments")
+
+    @admin.action(description="Valider les moments selectionnes")
+    def approve_moments(self, request, queryset):
+        queryset.update(status=MomentTemplate.ModerationStatus.APPROVED, is_active=True)
+
+    @admin.action(description="Rejeter les moments selectionnes")
+    def reject_moments(self, request, queryset):
+        queryset.update(status=MomentTemplate.ModerationStatus.REJECTED, is_active=False)
 
 
 @admin.register(UploadCategoryTemplate)

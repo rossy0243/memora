@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
 
 
@@ -33,6 +34,46 @@ class UploadCategoryTemplate(models.Model):
 
     def __str__(self):
         return f"{self.label} - {self.event_type}"
+
+
+class MomentTemplate(models.Model):
+    class ModerationStatus(models.TextChoices):
+        PENDING = "pending", "A valider"
+        APPROVED = "approved", "Valide"
+        REJECTED = "rejected", "Rejete"
+
+    code = models.SlugField(max_length=40, unique=True)
+    label = models.CharField(max_length=80)
+    status = models.CharField(
+        max_length=16,
+        choices=ModerationStatus.choices,
+        default=ModerationStatus.PENDING,
+    )
+    is_active = models.BooleanField(default=True)
+    usage_count = models.PositiveIntegerField(default=0)
+    auto_promoted_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_moment_templates",
+        blank=True,
+        null=True,
+    )
+    suggested_event_types = models.ManyToManyField(
+        "events.EventType",
+        related_name="moment_templates",
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["label"]
+        verbose_name = "moment global"
+        verbose_name_plural = "moments globaux"
+
+    def __str__(self):
+        return self.label
 
 
 class UploadCategory(models.Model):

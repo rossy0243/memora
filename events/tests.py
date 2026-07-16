@@ -14,7 +14,7 @@ from PIL import Image
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
-from uploads.models import GuestUpload, UploadCategory
+from uploads.models import GuestUpload, MomentTemplate, UploadCategory
 
 from .models import Event, EventType
 
@@ -203,11 +203,44 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Sécurité après le scan")
         self.assertContains(response, "data-custom-event-type-field")
         self.assertContains(response, "data-custom-event-type-field hidden")
+        self.assertContains(response, "data-moment-select")
+        self.assertContains(response, "moment-suggestions-data")
         self.assertContains(response, "event-form")
         self.assertNotContains(response, "Collecte active")
         self.assertNotContains(response, "Lieu (optionnel)")
         self.assertNotContains(response, "Conservation des médias")
         self.assertNotContains(response, "Couple name")
+
+    def test_organizer_can_choose_and_add_event_moments(self):
+        ceremony = MomentTemplate.objects.get(code="ceremony")
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:create"),
+            {
+                "title": "Mariage moments choisis",
+                "couple_name": "Lea & Sam",
+                "event_type": self.event_type.pk,
+                "moments": [str(ceremony.pk), "new:After party"],
+                "event_date": "2026-07-08",
+                "location": "",
+                "welcome_message": "Partagez vos plus beaux souvenirs.",
+                "guest_access_code": "",
+                "is_active": "on",
+            },
+        )
+
+        event = Event.objects.get(title="Mariage moments choisis")
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        self.assertEqual(
+            list(event.upload_categories.filter(is_active=True).order_by("sort_order").values_list("code", flat=True)),
+            ["ceremony", "after-party"],
+        )
+        custom_moment = MomentTemplate.objects.get(code="after-party")
+        self.assertEqual(custom_moment.label, "After party")
+        self.assertEqual(custom_moment.status, MomentTemplate.ModerationStatus.PENDING)
+        self.assertEqual(custom_moment.usage_count, 1)
+        self.assertEqual(custom_moment.created_by, self.user)
 
     def test_custom_event_type_is_created_when_other_is_selected(self):
         other_type = EventType.objects.get(code="other")
