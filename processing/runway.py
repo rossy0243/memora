@@ -1,8 +1,14 @@
+import logging
 from pathlib import Path
 from time import sleep
 
 import httpx
 from django.conf import settings
+
+from .analysis import get_analysis_score
+
+
+logger = logging.getLogger(__name__)
 
 
 RUNWAY_PROVIDER = "runway"
@@ -35,7 +41,7 @@ def build_runway_montage_payload(event, uploads, edit_decision_data):
                 "upload_id": upload.pk,
                 "filename": upload.original_filename,
                 "category": upload.category.code,
-                "score": _analysis_score(upload),
+                "score": get_analysis_score(upload),
                 "duration": _duration(upload),
             }
             for upload in uploads
@@ -261,7 +267,8 @@ def _final_movie_brief(event, edit_decision_data):
 def _media_payload(upload):
     try:
         media_url = upload.media_file.url
-    except Exception:
+    except Exception as exc:
+        logger.debug("Unable to resolve media URL for upload=%s error=%s", upload.pk, exc)
         media_url = ""
     return {
         "upload_id": upload.pk,
@@ -270,7 +277,7 @@ def _media_payload(upload):
         "media_type": upload.media_type,
         "category": upload.category.code,
         "category_label": upload.category.label,
-        "score": _analysis_score(upload),
+        "score": get_analysis_score(upload),
         "duration": _duration(upload),
         "selected_for_movie": upload.is_selected_for_movie,
     }
@@ -278,13 +285,6 @@ def _media_payload(upload):
 
 def _event_display_name(event):
     return (event.couple_name or event.title or "").strip()
-
-
-def _analysis_score(upload):
-    try:
-        return round(upload.analysis.movie_score, 2)
-    except Exception:
-        return None
 
 
 def _duration(upload):

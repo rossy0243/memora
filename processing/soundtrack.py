@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+
+from .analysis import get_analysis_score
 
 
 SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
@@ -33,7 +36,7 @@ def choose_music_mood(event, uploads):
     for upload in uploads:
         try:
             tags.extend(upload.analysis.tags)
-        except Exception:
+        except ObjectDoesNotExist:
             continue
 
     if _contains_any(category_codes, {"dancefloor", "funny"}) or "energie" in tags:
@@ -97,7 +100,7 @@ def build_edit_decision_data(event, uploads, soundtrack):
                 "filename": upload.original_filename,
                 "category": upload.category.code,
                 "media_type": upload.media_type,
-                "score": _analysis_score(upload),
+                "score": get_analysis_score(upload),
                 "start": cursor,
                 "end": cursor + duration,
                 "duration": duration,
@@ -138,10 +141,3 @@ def _clip_duration(upload):
     if upload.duration:
         return min(int(upload.duration.total_seconds()), settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS)
     return settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
-
-
-def _analysis_score(upload):
-    try:
-        return round(upload.analysis.movie_score, 2)
-    except Exception:
-        return None

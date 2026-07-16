@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from PIL import Image, ImageFilter, ImageStat
 
@@ -94,6 +95,13 @@ def analyze_event_media(event):
     )
 
     return [process_media_analysis(analysis) for analysis in analyses]
+
+
+def get_analysis_score(upload):
+    try:
+        return round(upload.analysis.movie_score, 2)
+    except ObjectDoesNotExist:
+        return None
 
 
 def process_media_analysis(analysis):
