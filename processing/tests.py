@@ -12,6 +12,7 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
@@ -846,6 +847,65 @@ class MovieGenerationServiceTests(TestCase):
         video_filter = command[command.index("-vf") + 1]
         self.assertNotIn("zoompan", video_filter)
         self.assertIn("pad=", video_filter)
+
+
+class GeneratedMovieAdminActionTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="admin-organizer",
+            password="secret",
+        )
+        self.superuser = get_user_model().objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="secret",
+        )
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Admin",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    def test_regenerate_action_resets_completed_movie_to_pending(self):
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/final.mp4",
+            error_logs="ancienne erreur",
+            progress_percent=100,
+            progress_message="Termine.",
+        )
+        self.client.login(username="admin", password="secret")
+
+        self.client.post(
+            reverse("admin:processing_generatedmovie_changelist"),
+            {"action": "regenerate_movies", "_selected_action": [movie.pk]},
+        )
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertEqual(movie.error_logs, "")
+        self.assertEqual(movie.progress_percent, 0)
+        self.assertEqual(movie.progress_message, "")
+
+    def test_regenerate_action_skips_processing_movie(self):
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            progress_percent=42,
+        )
+        self.client.login(username="admin", password="secret")
+
+        self.client.post(
+            reverse("admin:processing_generatedmovie_changelist"),
+            {"action": "regenerate_movies", "_selected_action": [movie.pk]},
+        )
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PROCESSING)
+        self.assertEqual(movie.progress_percent, 42)
 
 
 class GenerateScheduledMoviesCommandTests(TestCase):
