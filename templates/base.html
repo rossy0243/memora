@@ -34,6 +34,7 @@
     </a>
     <nav class="site-nav" aria-label="Navigation principale">
       {% if user.is_authenticated %}
+        <span class="site-nav__user">{{ user.username }}</span>
         <a href="{% url 'dashboard:home' %}">Mes événements</a>
         <form method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
