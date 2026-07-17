@@ -575,16 +575,17 @@ class MovieGenerationServiceTests(TestCase):
 
     @patch("processing.services._run_ffmpeg")
     def test_color_grade_applies_mood_filter(self, run_ffmpeg):
-        input_path = Path(TEST_MEDIA_ROOT) / "graded_input.mp4"
-        output_path = Path(TEST_MEDIA_ROOT) / "graded_output.mp4"
-        input_path.write_bytes(b"movie")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "graded_input.mp4"
+            output_path = Path(temp_dir) / "graded_output.mp4"
+            input_path.write_bytes(b"movie")
 
-        def create_output(command):
-            Path(command[-1]).write_bytes(b"graded")
+            def create_output(command):
+                Path(command[-1]).write_bytes(b"graded")
 
-        run_ffmpeg.side_effect = create_output
+            run_ffmpeg.side_effect = create_output
 
-        result = _apply_color_grade(input_path, output_path, "joyful_party", "ffmpeg")
+            result = _apply_color_grade(input_path, output_path, "joyful_party", "ffmpeg")
 
         self.assertEqual(result, output_path)
         command = run_ffmpeg.call_args.args[0]
@@ -593,16 +594,17 @@ class MovieGenerationServiceTests(TestCase):
 
     @patch("processing.services._run_ffmpeg")
     def test_color_grade_falls_back_to_elegant_warm_for_unknown_mood(self, run_ffmpeg):
-        input_path = Path(TEST_MEDIA_ROOT) / "graded_input_unknown.mp4"
-        output_path = Path(TEST_MEDIA_ROOT) / "graded_output_unknown.mp4"
-        input_path.write_bytes(b"movie")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "graded_input_unknown.mp4"
+            output_path = Path(temp_dir) / "graded_output_unknown.mp4"
+            input_path.write_bytes(b"movie")
 
-        def create_output(command):
-            Path(command[-1]).write_bytes(b"graded")
+            def create_output(command):
+                Path(command[-1]).write_bytes(b"graded")
 
-        run_ffmpeg.side_effect = create_output
+            run_ffmpeg.side_effect = create_output
 
-        _apply_color_grade(input_path, output_path, "unknown_mood", "ffmpeg")
+            _apply_color_grade(input_path, output_path, "unknown_mood", "ffmpeg")
 
         command = run_ffmpeg.call_args.args[0]
         video_filter = command[command.index("-vf") + 1]
@@ -611,9 +613,10 @@ class MovieGenerationServiceTests(TestCase):
     @patch("processing.services._run_ffmpeg")
     @override_settings(MEMORA_MOVIE_COLOR_GRADE_ENABLED=False)
     def test_color_grade_passthrough_when_disabled(self, run_ffmpeg):
-        input_path = Path(TEST_MEDIA_ROOT) / "graded_input_disabled.mp4"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = Path(temp_dir) / "graded_input_disabled.mp4"
 
-        result = _apply_color_grade(input_path, Path(TEST_MEDIA_ROOT) / "unused.mp4", "joyful_party", "ffmpeg")
+            result = _apply_color_grade(input_path, Path(temp_dir) / "unused.mp4", "joyful_party", "ffmpeg")
 
         self.assertEqual(result, input_path)
         run_ffmpeg.assert_not_called()
