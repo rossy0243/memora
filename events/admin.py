@@ -2,6 +2,8 @@ from django.contrib import admin
 
 from uploads.models import UploadCategory
 
+from core.models import SiteConfiguration
+
 from .models import Event, EventType
 
 
@@ -60,7 +62,6 @@ class EventAdmin(admin.ModelAdmin):
         (
             "Paiement",
             {
-                "description": "Activation manuelle MVP : 1 evenement = 59 USD. Marquez l'evenement comme paye apres verification du paiement.",
                 "fields": (
                     "payment_status",
                     "price_amount",
@@ -96,6 +97,22 @@ class EventAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = list(super().get_fieldsets(request, obj))
+        current_price = SiteConfiguration.current().formatted_event_price
+        payment_title, payment_options = fieldsets[1]
+        fieldsets[1] = (
+            payment_title,
+            {
+                **payment_options,
+                "description": (
+                    "Activation manuelle MVP : le prix de reference actuel est "
+                    f"{current_price}. Marquez l'evenement comme paye apres verification du paiement."
+                ),
+            },
+        )
+        return fieldsets
 
     @admin.action(description="Marquer les evenements selectionnes comme payes")
     def mark_events_paid(self, request, queryset):

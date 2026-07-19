@@ -6,6 +6,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
+from core.models import SiteConfiguration, format_price_amount
+
 
 def event_cover_upload_path(instance, filename):
     return f"events/{instance.slug or 'pending'}/cover/{filename}"
@@ -74,8 +76,8 @@ class Event(models.Model):
         choices=PaymentStatus.choices,
         default=PaymentStatus.PENDING,
     )
-    price_amount = models.PositiveIntegerField(default=5900)
-    price_currency = models.CharField(max_length=3, default="USD")
+    price_amount = models.PositiveIntegerField(default=0)
+    price_currency = models.CharField(max_length=3, blank=True, default="")
     paid_at = models.DateTimeField(blank=True, null=True)
     payment_reference = models.CharField(max_length=120, blank=True)
     payment_provider = models.CharField(max_length=40, blank=True, default="manual")
@@ -121,7 +123,7 @@ class Event(models.Model):
 
     @property
     def formatted_price(self):
-        return f"{self.price_amount / 100:.0f} {self.price_currency}"
+        return format_price_amount(self.price_amount, self.price_currency)
 
     def mark_paid(self, reference="", provider="manual"):
         self.payment_status = self.PaymentStatus.PAID
@@ -148,10 +150,12 @@ class Event(models.Model):
             self.slug = slug
         if not self.public_access_key:
             self.public_access_key = self._generate_public_access_key()
-        if not self.price_amount:
-            self.price_amount = settings.MEMORA_EVENT_PRICE_AMOUNT
-        if not self.price_currency:
-            self.price_currency = settings.MEMORA_EVENT_PRICE_CURRENCY
+        if not self.price_amount or not self.price_currency:
+            site_configuration = SiteConfiguration.current()
+            if not self.price_amount:
+                self.price_amount = site_configuration.event_price_amount
+            if not self.price_currency:
+                self.price_currency = site_configuration.event_price_currency
         if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:
             self.paid_at = timezone.now()
         self.guest_access_code = self._normalize_guest_access_code(self.guest_access_code)
