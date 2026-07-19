@@ -16,9 +16,10 @@ from events.models import Event, EventType
 from processing.models import GeneratedMovie
 
 from .checks import storage_configuration_check
+from .models import SiteConfiguration
 
 
-class HomePageTests(SimpleTestCase):
+class HomePageTests(TestCase):
     def test_home_page_returns_success(self):
         response = self.client.get(reverse("core:home"))
 
@@ -34,6 +35,17 @@ class HomePageTests(SimpleTestCase):
         self.assertContains(response, "twitter:card")
         self.assertContains(response, "canonical")
         self.assertContains(response, "img/memora-mark.svg")
+
+    def test_home_page_uses_admin_event_price(self):
+        site_configuration = SiteConfiguration.current()
+        site_configuration.event_price_amount = 7900
+        site_configuration.event_price_currency = "EUR"
+        site_configuration.save()
+
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, "79 EUR")
+        self.assertNotContains(response, "59 USD")
 
 
 class AuthenticatedHomePageTests(TestCase):
@@ -87,7 +99,7 @@ class DashboardHomeTests(TestCase):
         response = self.client.get(reverse("dashboard:home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Film pret")
+        self.assertContains(response, "Film prêt")
         self.assertContains(response, "Votre film souvenir est disponible.")
 
 

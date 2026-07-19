@@ -388,7 +388,7 @@ def create_event_movie_job(event, allow_retry=False):
         event=event,
         status=GeneratedMovie.Status.PENDING,
         progress_percent=5,
-        progress_message="Film planifie. Memora attend le worker de generation.",
+        progress_message="Film planifié. Memora attend le worker de génération.",
     )
 
 
@@ -434,9 +434,9 @@ def process_generated_movie(movie):
     event = movie.event
     logger.info("Movie processing started movie=%s event=%s", movie.pk, event.pk)
     try:
-        _update_movie_progress(movie, 10, "Analyse des souvenirs recus.")
+        _update_movie_progress(movie, 10, "Analyse des souvenirs reçus.")
         analyze_event_media(event)
-        _update_movie_progress(movie, 18, "Selection automatique des meilleurs moments.")
+        _update_movie_progress(movie, 18, "Sélection automatique des meilleurs moments.")
         uploads = list(get_movie_candidate_uploads(event))
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
@@ -458,7 +458,7 @@ def process_generated_movie(movie):
     if shutil.which(ffmpeg_binary) is None and not Path(ffmpeg_binary).exists():
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = f"FFmpeg introuvable: {ffmpeg_binary}"
-        movie.progress_message = "La generation video n'est pas disponible pour le moment."
+        movie.progress_message = "La génération vidéo n'est pas disponible pour le moment."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         logger.error("Movie failed because FFmpeg is missing movie=%s event=%s binary=%s", movie.pk, event.pk, ffmpeg_binary)
         return movie
@@ -497,7 +497,7 @@ def process_generated_movie(movie):
             total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
             if runway_final_is_ready():
-                _update_movie_progress(movie, 28, "Montage final cinematic avec Runway.")
+                _update_movie_progress(movie, 28, "Montage final cinématique avec Runway.")
                 runway_final_path = temp_path / f"memora_{_clean_name(event.title)}_runway_final.mp4"
                 try:
                     logger.info("Runway final render started movie=%s event=%s", movie.pk, event.pk)
@@ -517,7 +517,7 @@ def process_generated_movie(movie):
                     movie.render_provider = "runway_final"
                     output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
                     badge_data = _build_badge_data(event)
-                    _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
+                    _update_movie_progress(movie, 88, "Ajout du badge premium de l'événement.")
                     try:
                         final_output_path = _apply_event_badge(
                             runway_final_path,
@@ -531,7 +531,7 @@ def process_generated_movie(movie):
                         final_output_path = runway_final_path
                         badge_data["error"] = str(exc)
                     movie.edit_decision_data["badge"] = badge_data
-                    _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
+                    _update_movie_progress(movie, 94, "Enregistrement de la vidéo finale.")
                     with final_output_path.open("rb") as output_file:
                         movie.final_file.save(final_output_path.name, File(output_file), save=False)
                     runway_final_rendered = True
@@ -558,7 +558,7 @@ def process_generated_movie(movie):
 
         movie.status = GeneratedMovie.Status.COMPLETED
         movie.progress_percent = 100
-        movie.progress_message = "Votre film souvenir est pret."
+        movie.progress_message = "Votre film souvenir est prêt."
         movie.generated_at = timezone.now()
         movie.duration = timedelta(seconds=min(total_duration, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS))
         movie.error_logs = ""
@@ -587,7 +587,7 @@ def process_generated_movie(movie):
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
-        movie.progress_message = "La generation a ete interrompue. Vous pouvez relancer le film."
+        movie.progress_message = "La génération a été interrompue. Vous pouvez relancer le film."
         movie.save(update_fields=["status", "error_logs", "progress_message", "updated_at"])
         logger.exception("Movie processing failed movie=%s event=%s", movie.pk, event.pk)
 
@@ -666,7 +666,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
                     raise
         clip_paths.append(clip_path)
 
-    _update_movie_progress(movie, 68, "Assemblage des clips selectionnes.")
+    _update_movie_progress(movie, 68, "Assemblage des clips sélectionnés.")
     movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
     if runway_enhanced_count:
         movie.render_provider = "runway+ffmpeg"
@@ -703,7 +703,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
         ffmpeg_binary,
     )
 
-    _update_movie_progress(movie, 84, "Application du grade couleur cinematique.")
+    _update_movie_progress(movie, 84, "Application du grade couleur cinématique.")
     color_grade_data = {"enabled": settings.MEMORA_MOVIE_COLOR_GRADE_ENABLED, "mood": soundtrack.mood}
     graded_output_path = temp_path / f"memora_{_clean_name(event.title)}_graded.mp4"
     try:
@@ -721,7 +721,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
 
     output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
     badge_data = _build_badge_data(event)
-    _update_movie_progress(movie, 88, "Ajout du badge premium de l'evenement.")
+    _update_movie_progress(movie, 88, "Ajout du badge premium de l'événement.")
     try:
         final_output_path = _apply_event_badge(
             graded_output_path,
@@ -736,7 +736,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
         badge_data["error"] = str(exc)
     movie.edit_decision_data["badge"] = badge_data
 
-    _update_movie_progress(movie, 94, "Enregistrement de la video finale.")
+    _update_movie_progress(movie, 94, "Enregistrement de la vidéo finale.")
     with final_output_path.open("rb") as output_file:
         movie.final_file.save(final_output_path.name, File(output_file), save=False)
 
@@ -754,13 +754,13 @@ def notify_generated_movie_ready(movie):
     dashboard_url = _event_dashboard_url(movie.event)
     message = (
         f"Bonjour,\n\n"
-        f"Votre film souvenir Memora pour \"{movie.event.title}\" est pret.\n\n"
-        f"Vous pouvez le regarder et le telecharger ici :\n{dashboard_url}\n\n"
-        "Merci d'avoir confie vos souvenirs a Memora."
+        f"Votre film souvenir Memora pour \"{movie.event.title}\" est prêt.\n\n"
+        f"Vous pouvez le regarder et le télécharger ici :\n{dashboard_url}\n\n"
+        "Merci d'avoir confié vos souvenirs à Memora."
     )
     try:
         send_mail(
-            subject=f"Votre film souvenir Memora est pret - {movie.event.title}",
+            subject=f"Votre film souvenir Memora est prêt - {movie.event.title}",
             message=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[movie.event.organizer.email],

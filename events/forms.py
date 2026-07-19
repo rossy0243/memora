@@ -33,8 +33,8 @@ class EventForm(forms.ModelForm):
 
     moments = MomentMultipleChoiceField(
         required=False,
-        label="Moments proposes aux invites",
-        help_text="Recherchez des moments existants ou ajoutez les votres. Ils alimenteront le select invite.",
+        label="Moments proposés aux invités",
+        help_text="Recherchez des moments existants ou ajoutez les vôtres. Vos invités les choisiront au moment d'envoyer un souvenir.",
     )
 
     class Meta:
@@ -213,13 +213,13 @@ class EventForm(forms.ModelForm):
 
         content_type = (getattr(cover_image, "content_type", "") or "").split(";")[0].lower()
         if content_type not in {"image/jpeg", "image/png", "image/webp"}:
-            raise forms.ValidationError("Ce format d'image n'est pas accepte.")
+            raise forms.ValidationError("Ce format d'image n'est pas accepté.")
 
         try:
             image = Image.open(cover_image)
             image.verify()
         except (UnidentifiedImageError, OSError):
-            raise forms.ValidationError("Cette image ne peut pas etre lue.")
+            raise forms.ValidationError("Cette image ne peut pas être lue.")
 
         cover_image.seek(0)
         image = Image.open(cover_image)

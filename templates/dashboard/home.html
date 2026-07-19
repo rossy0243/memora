@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Mes evenements - Memora{% endblock %}
+{% block title %}Mes événements - Memora{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 {% block body_class %}app-page{% endblock %}
 {% block header_class %}site-header--solid{% endblock %}
 
 {% block content %}
 <section class="app-shell">
-  <div class="page-heading">
+  <div class="page-heading reveal">
     <div>
       <p class="section__label">Espace organisateur</p>
-      <h1>Mes evenements</h1>
+      <h1>Mes événements</h1>
     </div>
     {% if events %}
-      <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+      <a class="button button--primary" href="{% url 'events:create' %}">Créer un événement</a>
     {% endif %}
   </div>
 
   {% if events %}
-    <div class="event-grid">
+    <div class="event-grid reveal-group">
       {% for event in events %}
         <article class="event-card">
           {% if event.cover_image %}
@@ -42,18 +42,18 @@
             {% elif event.latest_movie and event.latest_movie.status == "failed" %}
               <p>Memora a besoin d'une relance pour finaliser le film.</p>
             {% elif event.event_date < today %}
-              <p>Le film sera prepare automatiquement apres l'evenement.</p>
+              <p>Le film sera préparé automatiquement après l'événement.</p>
             {% endif %}
-            <a href="{% url 'events:detail' event.pk %}">Ouvrir</a>
+            <a class="event-card__link" href="{% url 'events:detail' event.pk %}">Ouvrir</a>
           </div>
         </article>
       {% endfor %}
     </div>
   {% else %}
-    <div class="empty-state">
-      <h2>Votre premier evenement commence ici.</h2>
-      <p>Creez une page publique simple, puis vous pourrez y connecter le QR code et l'upload invite.</p>
-      <a class="button button--primary" href="{% url 'events:create' %}">Creer un evenement</a>
+    <div class="empty-state reveal">
+      <h2>Votre premier événement commence ici.</h2>
+      <p>Créez une page publique simple, puis vous pourrez y connecter le QR code et l'upload invité.</p>
+      <a class="button button--primary" href="{% url 'events:create' %}">Créer un événement</a>
     </div>
   {% endif %}
 </section>

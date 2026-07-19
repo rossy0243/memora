@@ -14,7 +14,7 @@ from .models import GuestUpload, UploadCategory
 def _probe_video_duration(media_file):
     ffprobe_binary = settings.MEMORA_FFPROBE_BINARY
     if shutil.which(ffprobe_binary) is None and not Path(ffprobe_binary).exists():
-        raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+        raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
 
     original_position = media_file.tell() if hasattr(media_file, "tell") else None
     temporary_path = None
@@ -69,9 +69,9 @@ def _probe_video_duration(media_file):
                 if duration is not None:
                     return duration
 
-        raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+        raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired):
-        raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+        raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
     finally:
         if hasattr(media_file, "seek"):
             media_file.seek(original_position or 0)
@@ -144,15 +144,15 @@ class GuestUploadForm(forms.ModelForm):
         extension = Path(media_file.name).suffix.lower().lstrip(".")
 
         if extension not in settings.MEMORA_ALLOWED_UPLOAD_EXTENSIONS:
-            raise forms.ValidationError("Ce format n'est pas accepte.")
+            raise forms.ValidationError("Ce format n'est pas accepté.")
 
         allowed_content_types = settings.MEMORA_ALLOWED_UPLOAD_CONTENT_TYPES.get(extension, [])
         content_type = (media_file.content_type or "").split(";")[0].strip().lower()
         if content_type not in allowed_content_types:
-            raise forms.ValidationError("Ce format n'est pas accepte.")
+            raise forms.ValidationError("Ce format n'est pas accepté.")
 
         if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
-            raise forms.ValidationError("Cette video est trop lourde.")
+            raise forms.ValidationError("Cette vidéo est trop lourde.")
 
         if extension in settings.MEMORA_VIDEO_EXTENSIONS:
             duration_seconds = self._client_duration_seconds()
@@ -160,10 +160,10 @@ class GuestUploadForm(forms.ModelForm):
                 duration_seconds = _probe_video_duration(media_file)
             except forms.ValidationError:
                 if not duration_seconds or media_file.size > settings.MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE:
-                    raise forms.ValidationError("La duree de cette video ne peut pas etre verifiee.")
+                    raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
 
             if duration_seconds > settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
-                raise forms.ValidationError("Cette video depasse 10 secondes.")
+                raise forms.ValidationError("Cette vidéo dépasse 10 secondes.")
             self.media_duration = timedelta(seconds=duration_seconds)
 
         return media_file

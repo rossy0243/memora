@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Souvenir envoye - {{ event.title }}{% endblock %}
+{% block title %}Souvenir envoyé - {{ event.title }}{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 {% block body_class %}guest-page{% endblock %}
 {% block header_class %}site-header--solid{% endblock %}
@@ -11,13 +11,13 @@
   <div class="confirmation-card">
     <div class="confirmation-mark" aria-hidden="true">✓</div>
     <p class="section__label">Merci</p>
-    <h1>Souvenir envoye.</h1>
-    <p class="confirmation-copy">Merci, votre photo ou video a bien rejoint l'album de {{ event.title }}.</p>
+    <h1>Souvenir envoyé.</h1>
+    <p class="confirmation-copy">Merci, votre photo ou vidéo a bien rejoint l'album de {{ event.title }}.</p>
     <div class="confirmation-actions">
       <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Ajouter un autre souvenir</a>
-      <a class="button button--secondary" href="{{ event.get_public_url }}">Retour a l'evenement</a>
+      <a class="button button--secondary" href="{{ event.get_public_url }}">Retour à l'événement</a>
     </div>
-    <p class="confirmation-note">Aucun compte invite. Vous pouvez fermer cette page.</p>
+    <p class="confirmation-note">Aucun compte invité. Vous pouvez fermer cette page.</p>
   </div>
 </section>
 {% endblock %}

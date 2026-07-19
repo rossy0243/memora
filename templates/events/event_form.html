@@ -8,7 +8,7 @@
 
 {% block content %}
 <section class="app-shell app-shell--narrow">
-  <div class="page-heading">
+  <div class="page-heading reveal">
     <div>
       <p class="section__label">Événement</p>
       <h1>{% if object %}Modifier l'événement{% else %}Créer un événement{% endif %}</h1>
@@ -16,7 +16,7 @@
     </div>
   </div>
 
-  <form method="post" enctype="multipart/form-data" class="form-card event-form form-stack" data-event-form>
+  <form method="post" enctype="multipart/form-data" class="form-card event-form form-stack reveal" data-event-form>
     {% csrf_token %}
     {{ form.non_field_errors }}
 
@@ -66,8 +66,8 @@
 
     <section class="form-section">
       <div class="form-section__heading">
-        <p class="section__label">Moments invites</p>
-        <h2>Ce que les invites pourront choisir</h2>
+        <p class="section__label">Moments invités</p>
+        <h2>Ce que les invités pourront choisir</h2>
       </div>
 
       <label>

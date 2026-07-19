@@ -8,40 +8,40 @@
 
 {% block content %}
 <section class="app-shell">
-  <div class="page-heading">
+  <div class="page-heading reveal">
     <div>
       <p class="section__label">Dashboard organisateur</p>
       <h1>{{ event.title }}</h1>
       <p class="page-heading__meta">{{ event.event_date }} - {% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.get_event_type_display }}{% endif %}</p>
     </div>
     <div class="dashboard-command-actions">
-      <a class="button button--secondary" href="{{ event.get_public_url }}">Page invite</a>
+      <a class="button button--secondary" href="{{ event.get_public_url }}">Page invité</a>
       <a class="button button--primary" href="{% url 'events:update' event.pk %}">Modifier</a>
     </div>
   </div>
 
   {% if not event.is_paid %}
-    <article class="payment-required-panel">
+    <article class="payment-required-panel reveal">
       <div>
         <p class="section__label">Activation requise</p>
         <h2>Paiement en attente</h2>
-        <p>Cet evenement sera accessible aux invites apres validation manuelle du paiement par l'administrateur.</p>
+        <p>Cet événement sera accessible aux invités après validation manuelle du paiement par l'administrateur.</p>
       </div>
       <strong>{{ event.formatted_price }}</strong>
     </article>
   {% endif %}
 
   <section class="live-dashboard">
-    <article class="live-dashboard__hero">
+    <article class="live-dashboard__hero reveal">
       <div>
         <p class="section__label">Suivi en direct</p>
-        <h2>{% if event.is_active %}Collecte active{% else %}Collecte fermee{% endif %}</h2>
-        <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} recu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Gardez le QR code visible, Memora s'occupe du tri et du film souvenir.</p>
+        <h2>{% if event.is_active %}Collecte active{% else %}Collecte fermée{% endif %}</h2>
+        <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} reçu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Gardez le QR code visible, Memora s'occupe du tri et du film souvenir.</p>
         <div class="live-dashboard__signals">
           <span>{{ event.get_event_type_display }}</span>
-          <span>Film J+1 a 12:00</span>
+          <span>Film J+1 à 12:00</span>
           {% if event.requires_guest_access_code %}
-            <span>Code invite actif</span>
+            <span>Code invité actif</span>
           {% else %}
             <span>Lien secret actif</span>
           {% endif %}
@@ -54,7 +54,7 @@
       {% endif %}
     </article>
 
-    <div class="stat-grid stat-grid--live">
+    <div class="stat-grid stat-grid--live reveal-group">
       <article class="stat-card">
         <span>Souvenirs</span>
         <strong>{{ media_stats.total|default:0 }}</strong>
@@ -64,33 +64,33 @@
         <strong>{{ media_stats.photos|default:0 }}</strong>
       </article>
       <article class="stat-card">
-        <span>Videos</span>
+        <span>Vidéos</span>
         <strong>{{ media_stats.videos|default:0 }}</strong>
       </article>
       <article class="stat-card">
-        <span>Selection film</span>
+        <span>Sélection film</span>
         <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
       </article>
     </div>
 
-    <div class="live-dashboard__quick">
+    <div class="live-dashboard__quick reveal-group">
       <article class="quick-panel public-share-panel">
         <div class="public-share-panel__body">
-          <p class="section__label">Acces invite</p>
-          <h3>QR code invite</h3>
+          <p class="section__label">Accès invité</p>
+          <h3>QR code invité</h3>
           {% if event.is_paid %}
-            <p class="muted-copy">A afficher sur les tables, le bar ou l'ecran d'accueil.</p>
+            <p class="muted-copy">À afficher sur les tables, le bar ou l'écran d'accueil.</p>
           {% else %}
-            <p class="muted-copy">Disponible apres activation de l'evenement.</p>
+            <p class="muted-copy">Disponible après activation de l'événement.</p>
           {% endif %}
           <code id="public-event-url">{{ public_event_url }}</code>
           <div class="quick-actions">
             <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
-            <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>Telecharger QR</a>
+            <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>Télécharger QR</a>
             {% if event.is_paid %}
               <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>
             {% else %}
-              <span class="status-pill status-pill--danger">Non active</span>
+              <span class="status-pill status-pill--danger">Non activé</span>
             {% endif %}
           </div>
         </div>
@@ -101,12 +101,12 @@
     </div>
   </section>
 
-  <div class="dashboard-ops-grid">
+  <div class="dashboard-ops-grid reveal-group">
     <article class="detail-panel">
-      <h3>Parametres essentiels</h3>
+      <h3>Paramètres essentiels</h3>
       <dl class="detail-list">
         <div>
-          <dt>Nom affiche</dt>
+          <dt>Nom affiché</dt>
           <dd>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</dd>
         </div>
         <div>
@@ -114,12 +114,12 @@
           <dd>{{ event.get_event_type_display }}</dd>
         </div>
         <div>
-          <dt>Acces invite</dt>
+          <dt>Accès invité</dt>
           <dd>{% if event.requires_guest_access_code %}Code {{ event.guest_access_code }}{% else %}Lien secret{% endif %}</dd>
         </div>
         <div>
           <dt>Conservation</dt>
-          <dd>{{ event.media_retention_days }} jours apres l'evenement</dd>
+          <dd>{{ event.media_retention_days }} jours après l'événement</dd>
         </div>
         <div>
           <dt>Statut</dt>
@@ -127,7 +127,7 @@
         </div>
         <div>
           <dt>Paiement</dt>
-          <dd>{% if event.is_paid %}Paye{% else %}En attente - {{ event.formatted_price }}{% endif %}</dd>
+          <dd>{% if event.is_paid %}Payé{% else %}En attente - {{ event.formatted_price }}{% endif %}</dd>
         </div>
       </dl>
     </article>
@@ -145,26 +145,26 @@
           {% endfor %}
         </div>
       {% else %}
-        <p class="muted-copy">Aucun souvenir recu pour le moment.</p>
+        <p class="muted-copy">Aucun souvenir reçu pour le moment.</p>
       {% endif %}
     </article>
   </div>
 
   <section class="media-dashboard">
-    <div class="section-heading">
+    <div class="section-heading reveal">
       <div>
-        <p class="section__label">Souvenirs recus</p>
-        <h2>Medias invites</h2>
+        <p class="section__label">Souvenirs reçus</p>
+        <h2>Médias invités</h2>
       </div>
       <div class="section-actions">
-        <a class="button button--secondary" href="{% url 'events:media_list' event.pk %}">Voir tous les medias</a>
-        <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}">Telecharger ZIP</a>
+        <a class="button button--secondary" href="{% url 'events:media_list' event.pk %}">Voir tous les médias</a>
+        <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}">Télécharger ZIP</a>
       </div>
     </div>
 
-    <div class="media-panels media-panels--single">
+    <div class="media-panels media-panels--single reveal">
       <article class="detail-panel">
-        <h3>Repartition par moment</h3>
+        <h3>Répartition par moment</h3>
         <div class="category-list">
           {% for item in category_stats %}
             <div class="category-row">
@@ -177,14 +177,14 @@
     </div>
 
     {% if latest_uploads %}
-      <div class="media-grid">
+      <div class="media-grid reveal-group">
         {% for upload in latest_uploads %}
           <article class="media-tile">
             {% if upload.media_type == "image" %}
               <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
             {% else %}
               <div class="media-tile__video">
-                <span>Video</span>
+                <span>Vidéo</span>
               </div>
             {% endif %}
             <div>

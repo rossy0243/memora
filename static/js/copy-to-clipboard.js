@@ -9,7 +9,7 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
     try {
       await navigator.clipboard.writeText(text);
       const initialLabel = button.textContent;
-      button.textContent = "Copie";
+      button.textContent = "Copié !";
       window.setTimeout(() => {
         button.textContent = initialLabel;
       }, 1400);

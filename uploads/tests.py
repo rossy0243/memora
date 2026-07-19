@@ -79,7 +79,7 @@ class UploadCategoryTests(TestCase):
         first_event.upload_categories.filter(code="ceremony").update(label="Mairie")
 
         self.assertEqual(first_event.upload_categories.get(code="ceremony").label, "Mairie")
-        self.assertEqual(second_event.upload_categories.get(code="ceremony").label, "Ceremonie")
+        self.assertEqual(second_event.upload_categories.get(code="ceremony").label, "Cérémonie")
 
     def test_event_categories_are_copied_from_event_type_templates(self):
         brunch_type = EventType.objects.create(
@@ -133,7 +133,7 @@ class UploadCategoryTests(TestCase):
         self.assertTrue(
             MomentTemplate.objects.filter(
                 code="ceremony",
-                label="Ceremonie",
+                label="Cérémonie",
                 status=MomentTemplate.ModerationStatus.APPROVED,
             ).exists()
         )
@@ -335,7 +335,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "Evenement pas encore active", status_code=403)
+        self.assertContains(response, "Événement pas encore activé", status_code=403)
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_guest_upload_page_is_mobile_first(self):
@@ -343,9 +343,9 @@ class GuestUploadViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Prendre une photo ou filmer")
-        self.assertContains(response, "Selfie, camera arriere, filtres")
-        self.assertContains(response, "Camera Memora")
-        self.assertContains(response, "Lancer la camera")
+        self.assertContains(response, "Selfie, caméra arrière, filtres")
+        self.assertContains(response, "Caméra Memora")
+        self.assertContains(response, "Lancer la caméra")
         self.assertContains(response, "Selfie")
         self.assertContains(response, "REC")
         self.assertContains(response, "mode-toggle-button")
@@ -357,10 +357,10 @@ class GuestUploadViewTests(TestCase):
         self.assertNotContains(response, "stop-video-button")
         self.assertContains(response, "Noir blanc")
         self.assertContains(response, "Photo")
-        self.assertContains(response, "Video")
+        self.assertContains(response, "Vidéo")
         self.assertContains(response, "Ouvrir l'appareil natif")
-        self.assertContains(response, "Souvenir pret a envoyer")
-        self.assertContains(response, "Reprendre avec la camera")
+        self.assertContains(response, "Souvenir prêt à envoyer")
+        self.assertContains(response, "Reprendre avec la caméra")
         self.assertContains(response, "Moment obligatoire")
         self.assertNotContains(response, "Choisir le moment")
         self.assertContains(response, "obligatoire")
@@ -379,11 +379,11 @@ class GuestUploadViewTests(TestCase):
         self.assertIn("navigator.permissions.query", script)
         self.assertIn("MediaRecorder", script)
         self.assertIn("facingMode", script)
-        self.assertIn("Tournez le telephone", self.client.get(self.upload_url()).content.decode())
-        self.assertIn("Video en cours - stop pour terminer", script)
-        self.assertIn("Video en preparation", script)
+        self.assertIn("Tournez le téléphone", self.client.get(self.upload_url()).content.decode())
+        self.assertIn("Vidéo en cours - stop pour terminer", script)
+        self.assertIn("Vidéo en préparation", script)
         self.assertIn("Connexion lente", script)
-        self.assertIn("L'envoi a echoue", script)
+        self.assertIn("L'envoi a échoué", script)
         self.assertIn("capturePreview", script)
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
@@ -406,9 +406,9 @@ class GuestUploadViewTests(TestCase):
         response = self.client.get(self.thanks_url())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Souvenir envoye.")
+        self.assertContains(response, "Souvenir envoyé.")
         self.assertContains(response, "Ajouter un autre souvenir")
-        self.assertContains(response, "Retour a l'evenement")
+        self.assertContains(response, "Retour à l'événement")
         self.assertContains(response, "Vous pouvez fermer cette page")
 
     def test_guest_upload_requires_guest_access_code_when_enabled(self):
@@ -452,7 +452,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ce format n&#x27;est pas accepte.")
+        self.assertContains(response, "Ce format n&#x27;est pas accepté.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_rejects_invalid_content_type(self):
@@ -467,7 +467,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ce format n&#x27;est pas accepte.")
+        self.assertContains(response, "Ce format n&#x27;est pas accepté.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_rejects_category_from_another_event(self):
@@ -504,7 +504,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Cette video est trop lourde.")
+        self.assertContains(response, "Cette vidéo est trop lourde.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     @patch("uploads.forms._probe_video_duration", return_value=11)
@@ -520,7 +520,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Cette video depasse 10 secondes.")
+        self.assertContains(response, "Cette vidéo dépasse 10 secondes.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     @patch("uploads.forms._probe_video_duration", return_value=9.5)
@@ -542,7 +542,7 @@ class GuestUploadViewTests(TestCase):
 
     @patch(
         "uploads.forms._probe_video_duration",
-        side_effect=forms.ValidationError("La duree de cette video ne peut pas etre verifiee."),
+        side_effect=forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée."),
     )
     def test_accepts_memora_camera_duration_when_ffprobe_cannot_read_video(self, _probe_video_duration):
         media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
@@ -564,7 +564,7 @@ class GuestUploadViewTests(TestCase):
     @override_settings(MEMORA_MAX_UPLOAD_SIZE=50, MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE=4)
     @patch(
         "uploads.forms._probe_video_duration",
-        side_effect=forms.ValidationError("La duree de cette video ne peut pas etre verifiee."),
+        side_effect=forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée."),
     )
     def test_rejects_client_duration_fallback_for_large_unreadable_video(self, _probe_video_duration):
         media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
@@ -579,7 +579,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "La duree de cette video ne peut pas etre verifiee.")
+        self.assertContains(response, "La durée de cette vidéo ne peut pas être vérifiée.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)

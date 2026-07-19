@@ -18,7 +18,7 @@ document.querySelectorAll("[data-share-url]").forEach((button) => {
     try {
       await navigator.clipboard.writeText(url);
       const initialLabel = button.textContent;
-      button.textContent = "Lien copie";
+      button.textContent = "Lien copié";
       window.setTimeout(() => {
         button.textContent = initialLabel;
       }, 1400);

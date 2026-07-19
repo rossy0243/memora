@@ -10,8 +10,8 @@ class GeneratedMovie(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "En attente"
         PROCESSING = "processing", "En cours"
-        COMPLETED = "completed", "Termine"
-        FAILED = "failed", "Echec"
+        COMPLETED = "completed", "Terminé"
+        FAILED = "failed", "Échec"
 
     event = models.ForeignKey(
         "events.Event",
@@ -56,8 +56,8 @@ class MediaAnalysis(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "En attente"
         PROCESSING = "processing", "En cours"
-        COMPLETED = "completed", "Termine"
-        FAILED = "failed", "Echec"
+        COMPLETED = "completed", "Terminé"
+        FAILED = "failed", "Échec"
 
     upload = models.OneToOneField(
         "uploads.GuestUpload",

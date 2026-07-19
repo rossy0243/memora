@@ -7,15 +7,15 @@ from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryT
 
 
 FALLBACK_UPLOAD_CATEGORIES = [
-    ("ceremony", "Ceremonie", 1),
-    ("arrival", "Arrivee", 2),
+    ("ceremony", "Cérémonie", 1),
+    ("arrival", "Arrivée", 2),
     ("cocktail", "Cocktail", 3),
-    ("reception", "Reception", 4),
+    ("reception", "Réception", 4),
     ("speech", "Discours", 5),
     ("dancefloor", "Piste de danse", 6),
-    ("cake", "Gateau", 7),
-    ("funny", "Moment drole", 8),
-    ("emotional", "Moment emouvant", 9),
+    ("cake", "Gâteau", 7),
+    ("funny", "Moment drôle", 8),
+    ("emotional", "Moment émouvant", 9),
     ("other", "Autre", 10),
 ]
 

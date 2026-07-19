@@ -403,7 +403,7 @@ class MovieGenerationServiceTests(TestCase):
 
         self.assertEqual(first_job, second_job)
         self.assertEqual(first_job.progress_percent, 5)
-        self.assertIn("planifie", first_job.progress_message)
+        self.assertIn("planifié", first_job.progress_message)
         self.assertEqual(GeneratedMovie.objects.filter(event=self.event).count(), 1)
 
     def test_create_event_movie_job_reuses_completed_movie(self):
@@ -493,7 +493,7 @@ class MovieGenerationServiceTests(TestCase):
         self.assertLessEqual(movie.duration.total_seconds(), 600)
         self.assertEqual(movie.render_provider, "ffmpeg")
         self.assertEqual(movie.progress_percent, 100)
-        self.assertEqual(movie.progress_message, "Votre film souvenir est pret.")
+        self.assertEqual(movie.progress_message, "Votre film souvenir est prêt.")
         self.assertTrue(movie.music_mood)
         self.assertIn("clips", movie.edit_decision_data)
         self.assertEqual(movie.edit_decision_data["badge"]["display_name"], "Lea & Sam")
@@ -532,7 +532,7 @@ class MovieGenerationServiceTests(TestCase):
         self.assertFalse(second_result)
         self.assertIsNotNone(movie.organizer_notified_at)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("Votre film souvenir Memora est pret", mail.outbox[0].subject)
+        self.assertIn("Votre film souvenir Memora est prêt", mail.outbox[0].subject)
         self.assertIn("https://memora.example", mail.outbox[0].body)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")

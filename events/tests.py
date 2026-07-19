@@ -12,6 +12,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 
+from core.models import SiteConfiguration
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, MomentTemplate, UploadCategory
@@ -116,6 +117,23 @@ class EventModelTests(TestCase):
         self.assertEqual(event.price_amount, 5900)
         self.assertEqual(event.price_currency, "USD")
         self.assertEqual(event.formatted_price, "59 USD")
+
+    def test_event_uses_admin_configured_default_price(self):
+        site_configuration = SiteConfiguration.current()
+        site_configuration.event_price_amount = 7900
+        site_configuration.event_price_currency = "eur"
+        site_configuration.save()
+
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage avec nouveau prix",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        self.assertEqual(event.price_amount, 7900)
+        self.assertEqual(event.price_currency, "EUR")
+        self.assertEqual(event.formatted_price, "79 EUR")
 
     def test_event_can_be_marked_paid_manually(self):
         event = Event.objects.create(
@@ -462,7 +480,7 @@ class EventViewTests(TestCase):
 
         response = self.client.get(event.get_public_url())
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Entrez le code invite.")
+        self.assertContains(response, "Entrez le code invité.")
         self.assertNotContains(response, "Ajouter un souvenir")
 
         wrong_response = self.client.post(event.get_public_url(), {"guest_access_code": "NON"})
@@ -505,7 +523,7 @@ class EventViewTests(TestCase):
         response = self.client.get(event.get_public_url())
 
         self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "Evenement pas encore active", status_code=403)
+        self.assertContains(response, "Événement pas encore activé", status_code=403)
 
     def test_public_event_displays_closed_message_after_collection_is_closed(self):
         event = Event.objects.create(
@@ -520,8 +538,8 @@ class EventViewTests(TestCase):
         response = self.client.get(event.get_public_url())
 
         self.assertEqual(response.status_code, 403)
-        self.assertContains(response, "Evenement cloture", status_code=403)
-        self.assertContains(response, "La collecte des souvenirs est terminee", status_code=403)
+        self.assertContains(response, "Événement clôturé", status_code=403)
+        self.assertContains(response, "La collecte des souvenirs est terminée", status_code=403)
 
     def test_event_detail_displays_media_dashboard(self):
         event = Event.objects.create(
@@ -567,15 +585,15 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Dashboard organisateur")
-        self.assertContains(response, "Acces invite")
+        self.assertContains(response, "Accès invité")
         self.assertContains(response, "Suivi en direct")
         self.assertContains(response, "Collecte active")
-        self.assertContains(response, "QR code invite")
-        self.assertContains(response, "Parametres essentiels")
+        self.assertContains(response, "QR code invité")
+        self.assertContains(response, "Paramètres essentiels")
         self.assertContains(response, "Code AMOUR2026")
         self.assertContains(response, "AMOUR2026")
         self.assertContains(response, event.public_access_key)
-        self.assertContains(response, "Medias invites")
+        self.assertContains(response, "Médias invités")
         self.assertContains(response, "Derniers souvenirs")
         self.assertContains(response, "photo.jpg")
         self.assertContains(response, "video.mp4")
@@ -601,7 +619,7 @@ class EventViewTests(TestCase):
 
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
-        self.assertContains(response, "Video automatique")
+        self.assertContains(response, "Vidéo automatique")
         self.assertContains(response, "Ouvrir le film")
         self.assertContains(response, reverse("events:movie_ready", kwargs={"pk": event.pk}))
         self.assertContains(response, "100%")
@@ -624,9 +642,9 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Votre film est pret")
+        self.assertContains(response, "Votre film est prêt")
         self.assertContains(response, "Camille &amp; Noe")
-        self.assertContains(response, "Telecharger le film")
+        self.assertContains(response, "Télécharger le film")
         self.assertContains(response, "Lien de partage")
         self.assertContains(response, event.public_access_key)
         self.assertContains(response, reverse("events:download_movie", kwargs={"pk": event.pk}))
@@ -642,16 +660,16 @@ class EventViewTests(TestCase):
             event=event,
             status=GeneratedMovie.Status.PROCESSING,
             progress_percent=42,
-            progress_message="Selection des meilleurs souvenirs.",
+            progress_message="Sélection des meilleurs souvenirs.",
         )
         self.client.login(username="owner", password="secret")
 
         response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Film en preparation")
+        self.assertContains(response, "Film en préparation")
         self.assertContains(response, "42%")
-        self.assertContains(response, "Selection des meilleurs souvenirs.")
+        self.assertContains(response, "Sélection des meilleurs souvenirs.")
 
     def test_other_organizer_cannot_view_ready_movie_page(self):
         event = Event.objects.create(
@@ -693,8 +711,8 @@ class EventViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Film pret")
-        self.assertContains(response, "Telecharger le film")
+        self.assertContains(response, "Film prêt")
+        self.assertContains(response, "Télécharger le film")
         self.assertNotContains(response, "Retour dashboard")
 
     def test_public_movie_share_hides_unfinished_movie(self):
@@ -751,7 +769,7 @@ class EventViewTests(TestCase):
 
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
-        self.assertContains(response, "Generation automatique prevue le 09/07/2026 a 12:00")
+        self.assertContains(response, "Génération automatique prévue le 09/07/2026 à 12:00")
         self.assertContains(response, "horaire automatique")
 
     def test_owner_can_poll_movie_status_panel(self):
@@ -765,7 +783,7 @@ class EventViewTests(TestCase):
             event=event,
             status=GeneratedMovie.Status.PROCESSING,
             progress_percent=68,
-            progress_message="Assemblage des clips selectionnes.",
+            progress_message="Assemblage des clips sélectionnés.",
         )
         self.client.login(username="owner", password="secret")
 
@@ -773,7 +791,7 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "68%")
-        self.assertContains(response, "Assemblage des clips selectionnes.")
+        self.assertContains(response, "Assemblage des clips sélectionnés.")
 
     @patch("events.views.create_event_movie_job")
     def test_owner_can_generate_event_movie(self, create_event_movie_job):
@@ -825,7 +843,7 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:movie_status", kwargs={"pk": event.pk}))
 
         self.assertContains(response, "Vous pouvez relancer le film")
-        self.assertContains(response, "details techniques restent geres en interne")
+        self.assertContains(response, "détails techniques restent gérés en interne")
         self.assertNotContains(response, "HeadObject")
 
     @patch("events.views.create_event_movie_job")
@@ -855,7 +873,7 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
         self.assertContains(response, reverse("events:media_list", kwargs={"pk": event.pk}))
-        self.assertContains(response, "Voir tous les medias")
+        self.assertContains(response, "Voir tous les médias")
 
     def test_owner_can_browse_and_filter_event_media(self):
         event = Event.objects.create(

@@ -78,7 +78,7 @@
       previewVideo.load();
     }
     if (previewDetails) {
-      previewDetails.textContent = "Verifiez l'apercu, choisissez le moment, puis envoyez.";
+      previewDetails.textContent = "Vérifiez l'aperçu, choisissez le moment, puis envoyez.";
     }
   }
 
@@ -106,16 +106,16 @@
       liveVideo.classList.toggle("is-selfie", facingMode === "user");
     }
     if (lensToggleButton) {
-      lensToggleButton.textContent = facingMode === "user" ? "Arriere" : "Selfie";
-      lensToggleButton.setAttribute("aria-label", facingMode === "user" ? "Passer en camera arriere" : "Passer en selfie");
+      lensToggleButton.textContent = facingMode === "user" ? "Arrière" : "Selfie";
+      lensToggleButton.setAttribute("aria-label", facingMode === "user" ? "Passer en caméra arrière" : "Passer en selfie");
       lensToggleButton.disabled = isSwitchingCamera || isRecording;
       lensToggleButton.classList.toggle("is-active", facingMode === "environment");
       lensToggleButton.classList.toggle("is-selfie", facingMode === "user");
       lensToggleButton.classList.toggle("is-switching", isSwitchingCamera);
     }
     if (modeToggleButton) {
-      modeToggleButton.textContent = cameraMode === "photo" ? "Video" : "Photo";
-      modeToggleButton.setAttribute("aria-label", cameraMode === "photo" ? "Passer en video" : "Passer en photo");
+      modeToggleButton.textContent = cameraMode === "photo" ? "Vidéo" : "Photo";
+      modeToggleButton.setAttribute("aria-label", cameraMode === "photo" ? "Passer en vidéo" : "Passer en photo");
       modeToggleButton.disabled = isRecording;
       modeToggleButton.classList.toggle("is-active", cameraMode === "photo");
       modeToggleButton.classList.toggle("is-video", cameraMode === "video");
@@ -128,16 +128,16 @@
       cameraActionButton.setAttribute(
         "aria-label",
         isStoppingRecording
-          ? "Preparation de la video"
+          ? "Préparation de la vidéo"
           : isRecording
-            ? "Stopper la video"
+            ? "Stopper la vidéo"
             : cameraMode === "video"
-              ? "Lancer la video"
+              ? "Lancer la vidéo"
               : "Prendre la photo",
       );
       const label = cameraActionButton.querySelector("strong");
       if (label) {
-        label.textContent = isStoppingRecording ? "..." : isRecording ? "Stop" : cameraMode === "video" ? "Video" : "Photo";
+        label.textContent = isStoppingRecording ? "..." : isRecording ? "Stop" : cameraMode === "video" ? "Vidéo" : "Photo";
       }
     }
   }
@@ -174,7 +174,7 @@
     }
     const elapsed = Math.min((Date.now() - recordingStartedAt) / 1000, maxRecordingSeconds);
     recordingTimer.textContent = formatDuration(elapsed);
-    setCameraStatus("Video en cours - stop pour terminer");
+    setCameraStatus("Vidéo en cours - stop pour terminer");
   }
 
   function formatFileSize(bytes) {
@@ -211,21 +211,21 @@
 
   function cameraErrorMessage(error) {
     if (!error) {
-      return "La camera n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+      return "La caméra n'a pas pu s'ouvrir. Essayez l'appareil natif.";
     }
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
-      return "Autorisez la camera et le micro pour capturer avec Memora.";
+      return "Autorisez la caméra et le micro pour capturer avec Memora.";
     }
     if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      return "Aucune camera disponible. Utilisez l'appareil natif.";
+      return "Aucune caméra disponible. Utilisez l'appareil natif.";
     }
     if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-      return "La camera est deja utilisee par une autre application.";
+      return "La caméra est déjà utilisée par une autre application.";
     }
     if (error.name === "OverconstrainedError" || error.name === "ConstraintNotSatisfiedError") {
-      return "Cet objectif n'est pas disponible sur ce telephone.";
+      return "Cet objectif n'est pas disponible sur ce téléphone.";
     }
-    return "La camera n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+    return "La caméra n'a pas pu s'ouvrir. Essayez l'appareil natif.";
   }
 
   async function refreshCameraPermissionHint() {
@@ -235,11 +235,11 @@
     try {
       const permission = await navigator.permissions.query({ name: "camera" });
       if (permission.state === "granted") {
-        setPermissionNote("Camera autorisee. Vous pouvez capturer directement ici.", "ok");
+        setPermissionNote("Caméra autorisée. Vous pouvez capturer directement ici.", "ok");
       } else if (permission.state === "denied") {
-        setPermissionNote("Camera bloquee. Activez l'autorisation dans votre navigateur.", "warning");
+        setPermissionNote("Caméra bloquée. Activez l'autorisation dans votre navigateur.", "warning");
       } else {
-        setPermissionNote("Votre navigateur demandera l'autorisation camera et micro.");
+        setPermissionNote("Votre navigateur demandera l'autorisation caméra et micro.");
       }
       permission.onchange = refreshCameraPermissionHint;
     } catch {
@@ -304,7 +304,7 @@
       if (cameraStudio) {
         cameraStudio.classList.add("camera-studio--unsupported");
       }
-      setCameraStatus("Camera integree indisponible. Utilisez l'appareil natif.");
+      setCameraStatus("Caméra intégrée indisponible. Utilisez l'appareil natif.");
       return;
     }
 
@@ -314,12 +314,12 @@
     }
     setCameraOpen(true);
     updateCameraUi();
-    setCameraStatus(preservePanel ? "Changement de camera..." : "Ouverture de la camera...");
+    setCameraStatus(preservePanel ? "Changement de caméra..." : "Ouverture de la caméra...");
     try {
       cameraStream = await requestCameraStream();
       liveVideo.srcObject = cameraStream;
       liveVideo.style.filter = cameraFilters[activeFilter] || "none";
-      setCameraStatus(facingMode === "user" ? "Selfie actif" : "Camera arriere active");
+      setCameraStatus(facingMode === "user" ? "Selfie actif" : "Caméra arrière active");
       updateCameraUi();
     } catch (error) {
       setCameraOpen(false);
@@ -338,7 +338,7 @@
 
   function setCapturedFile(blob, filename, durationSeconds) {
     if (!fileInput || !window.DataTransfer || !window.File) {
-      setCameraStatus("Capture prete. Votre navigateur demande l'appareil natif.");
+      setCameraStatus("Capture prête. Votre navigateur demande l'appareil natif.");
       return;
     }
 
@@ -348,7 +348,7 @@
     pendingCapturedDuration = durationSeconds || null;
     fileInput.files = transfer.files;
     fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-    setCameraStatus("Souvenir pret a envoyer");
+    setCameraStatus("Souvenir prêt à envoyer");
   }
 
   function showPreviewAfterCapture(message) {
@@ -398,7 +398,7 @@
 
   function startVideoRecording() {
     if (!cameraStream || !window.MediaRecorder) {
-      setCameraStatus("Video integree indisponible. Utilisez l'appareil natif.");
+      setCameraStatus("Vidéo intégrée indisponible. Utilisez l'appareil natif.");
       return;
     }
 
@@ -429,7 +429,7 @@
       recordingStartedAt = 0;
       isStoppingRecording = false;
       setRecordingState(false);
-      showPreviewAfterCapture("Video prete");
+      showPreviewAfterCapture("Vidéo prête");
     });
     recorder.start();
     recordingStartedAt = Date.now();
@@ -438,7 +438,7 @@
     recordingTimeout = setTimeout(stopVideoRecording, maxRecordingSeconds * 1000);
     setRecordingState(true);
     showCameraFeedback("Enregistrement", "recording");
-    setCameraStatus("Video en cours - stop pour terminer");
+    setCameraStatus("Vidéo en cours - stop pour terminer");
   }
 
   function stopVideoRecording() {
@@ -455,8 +455,8 @@
     }
     if (recorder && recorder.state !== "inactive") {
       isStoppingRecording = true;
-      setCameraStatus("Video en preparation...");
-      showCameraFeedback("Preparation", "recording");
+      setCameraStatus("Vidéo en préparation...");
+      showCameraFeedback("Préparation", "recording");
       updateCameraUi();
       recorder.stop();
     }
@@ -464,7 +464,7 @@
 
   if (cameraStudio && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
     cameraStudio.classList.add("camera-studio--unsupported");
-    setPermissionNote("Camera integree indisponible. Utilisez l'appareil natif.", "warning");
+    setPermissionNote("Caméra intégrée indisponible. Utilisez l'appareil natif.", "warning");
   }
   refreshCameraPermissionHint();
   updateCameraUi();
@@ -498,7 +498,7 @@
         return;
       }
       cameraMode = cameraMode === "photo" ? "video" : "photo";
-      setCameraStatus(cameraMode === "photo" ? "Mode photo - appuyez au centre" : "Mode video - appuyez au centre");
+      setCameraStatus(cameraMode === "photo" ? "Mode photo - appuyez au centre" : "Mode vidéo - appuyez au centre");
       updateCameraUi();
     });
   }
@@ -536,7 +536,7 @@
   if (fileInput && selectedFileName) {
     fileInput.addEventListener("change", function () {
       const file = fileInput.files && fileInput.files[0];
-      selectedFileName.textContent = file ? "Souvenir pret : " + file.name : "JPG, PNG, WEBP, MP4, MOV ou WEBM.";
+      selectedFileName.textContent = file ? "Souvenir prêt : " + file.name : "JPG, PNG, WEBP, MP4, MOV ou WEBM.";
 
       clearPreview();
       const capturedDuration = pendingCapturedDuration;
@@ -550,7 +550,7 @@
       capturePreview.hidden = false;
       if (previewDetails) {
         const sizeLabel = formatFileSize(file.size);
-        previewDetails.textContent = sizeLabel ? "Apercu pret - " + sizeLabel + "." : "Apercu pret.";
+        previewDetails.textContent = sizeLabel ? "Aperçu prêt - " + sizeLabel + "." : "Aperçu prêt.";
       }
 
       if (file.type.indexOf("image/") === 0 && previewImage) {
@@ -558,7 +558,7 @@
         previewImage.hidden = false;
         if (previewDetails) {
           const sizeLabel = formatFileSize(file.size);
-          previewDetails.textContent = sizeLabel ? "Photo prete - " + sizeLabel + "." : "Photo prete.";
+          previewDetails.textContent = sizeLabel ? "Photo prête - " + sizeLabel + "." : "Photo prête.";
         }
         return;
       }
@@ -568,7 +568,7 @@
         previewVideo.hidden = false;
         if (previewDetails) {
           const sizeLabel = formatFileSize(file.size);
-          previewDetails.textContent = sizeLabel ? "Video prete - " + sizeLabel + "." : "Video prete.";
+          previewDetails.textContent = sizeLabel ? "Vidéo prête - " + sizeLabel + "." : "Vidéo prête.";
         }
         previewVideo.addEventListener("loadedmetadata", function handleMetadata() {
           const duration = previewVideo.duration;
@@ -576,7 +576,7 @@
             setClientDuration(duration);
             if (previewDetails) {
               const sizeLabel = formatFileSize(file.size);
-              const parts = ["Video prete", formatDuration(duration), sizeLabel].filter(Boolean);
+              const parts = ["Vidéo prête", formatDuration(duration), sizeLabel].filter(Boolean);
               previewDetails.textContent = parts.join(" - ") + ".";
             }
           }
@@ -618,7 +618,7 @@
       submitButton.textContent = "Envoi...";
     }
     if (progressText) {
-      progressText.textContent = "Preparation de l'envoi...";
+      progressText.textContent = "Préparation de l'envoi...";
     }
     slowUploadTimer = window.setTimeout(function () {
       if (progressText) {
@@ -627,7 +627,7 @@
     }, 8000);
     verySlowUploadTimer = window.setTimeout(function () {
       if (progressText) {
-        progressText.textContent = "Envoi toujours en cours. Les videos peuvent prendre plus de temps.";
+        progressText.textContent = "Envoi toujours en cours. Les vidéos peuvent prendre plus de temps.";
       }
     }, 20000);
 
@@ -670,7 +670,7 @@
       clearTimeout(slowUploadTimer);
       clearTimeout(verySlowUploadTimer);
       if (progressText) {
-        progressText.textContent = "L'envoi a echoue. Verifiez la connexion puis reessayez.";
+        progressText.textContent = "L'envoi a échoué. Vérifiez la connexion puis réessayez.";
       }
       if (submitButton) {
         submitButton.disabled = false;
@@ -682,7 +682,7 @@
       clearTimeout(slowUploadTimer);
       clearTimeout(verySlowUploadTimer);
       if (progressText) {
-        progressText.textContent = "L'envoi a ete interrompu.";
+        progressText.textContent = "L'envoi a été interrompu.";
       }
       if (submitButton) {
         submitButton.disabled = false;

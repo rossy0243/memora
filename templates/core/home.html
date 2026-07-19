@@ -29,10 +29,10 @@
 </section>
 
 <section class="flow" aria-label="Expérience invité">
-  <div class="flow__inner">
+  <div class="flow__inner reveal">
     <p class="section__label">Expérience invité</p>
     <h2>Un souvenir envoyé en quelques secondes.</h2>
-    <ol class="steps">
+    <ol class="steps reveal-group">
       <li>Scanner</li>
       <li>Capturer avec la caméra Memora</li>
       <li>Choisir le moment</li>
@@ -43,11 +43,11 @@
 
 <section class="difference" aria-label="Ce qui rend Memora différent">
   <div class="difference__inner">
-    <div>
+    <div class="reveal">
       <p class="section__label">Ce qui change</p>
       <h2>Memora ne se contente pas de stocker des photos.</h2>
     </div>
-    <div class="difference-grid">
+    <div class="difference-grid reveal-group">
       <article>
         <span>01</span>
         <h3>Une caméra pensée pour les invités</h3>
@@ -69,14 +69,14 @@
 
 <section class="pricing-band" aria-label="Prix Memora">
   <div class="pricing-band__inner">
-    <div>
+    <div class="reveal">
       <p class="section__label">Offre unique</p>
       <h2>Tout Memora pour un seul événement.</h2>
       <p>Une seule offre, sans option cachée : collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique.</p>
     </div>
-    <article class="pricing-card">
+    <article class="pricing-card reveal">
       <span>Memora événement</span>
-      <strong>59 USD</strong>
+      <strong>{{ memora_event_price }}</strong>
       <p>par événement</p>
       <a class="button button--primary" href="{% url 'events:create' %}">Créer mon événement</a>
     </article>
@@ -85,11 +85,11 @@
 
 <section id="foundation" class="foundation">
   <div class="foundation__inner">
-    <div class="foundation__copy">
+    <div class="foundation__copy reveal">
       <p class="section__label">Pour les organisateurs</p>
       <h2>Recevez les souvenirs de vos invités, sans courir après personne.</h2>
       <p>Créez votre événement, partagez le QR Code, puis laissez Memora collecter les photos et vidéos, limiter les abus et préparer automatiquement un film avec les meilleurs moments.</p>
-      <div class="feature-list">
+      <div class="feature-list reveal-group">
         <div>
           <strong>Collecte fluide</strong>
           <span>Les invités prennent une photo ou filment directement depuis leur téléphone, sans créer de compte.</span>
@@ -105,17 +105,55 @@
       </div>
     </div>
 
-    <div class="foundation__preview" aria-label="Aperçu du parcours invité">
+    <div class="foundation__preview reveal" aria-label="Aperçu du parcours invité">
       <div class="phone-preview">
-        <div class="phone-preview__media"></div>
+        <div class="phone-preview__media" role="img" aria-label="Caméra Memora en train de filmer la piste de danse">
+          <span class="phone-preview__rec" aria-hidden="true"><i></i>00:07</span>
+          <span class="phone-preview__shutter" aria-hidden="true"></span>
+        </div>
         <div class="phone-preview__body">
           <span class="phone-preview__label">Mariage de Camille &amp; Noé</span>
           <strong>Ajouter un souvenir</strong>
           <span>Cérémonie</span>
-          <span>Piste de danse</span>
+          <span class="is-active">Piste de danse</span>
           <span>Moment drôle</span>
         </div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="faq" aria-label="Questions fréquentes">
+  <div class="faq__inner">
+    <div class="reveal">
+      <p class="section__label">Questions fréquentes</p>
+      <h2>Ce que les organisateurs nous demandent.</h2>
+    </div>
+    <div class="faq__list reveal-group">
+      <details class="faq__item">
+        <summary>Mes invités doivent-ils installer une application ou créer un compte&nbsp;?</summary>
+        <p>Non. Vos invités scannent le QR Code de l'événement et arrivent directement sur la page Memora. Ils capturent leur photo ou vidéo depuis le navigateur de leur téléphone, sans installation ni compte.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Comment un invité envoie-t-il un souvenir&nbsp;?</summary>
+        <p>En quatre gestes&nbsp;: scanner le QR Code, capturer avec la caméra Memora, choisir le moment (cérémonie, cocktail, discours, piste de danse...), puis envoyer. Le souvenir arrive classé au bon endroit.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Comment garder une galerie propre, sans abus&nbsp;?</summary>
+        <p>Chaque invité dispose d'un nombre limité d'envois, et les formats, la taille et la durée des vidéos sont contrôlés. Vous récupérez une collecte maîtrisée, pas un vrac de fichiers.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Est-ce que je récupère toutes les photos et vidéos&nbsp;?</summary>
+        <p>Oui. En plus du film souvenir, vous téléchargez l'ensemble des médias de vos invités dans une archive ZIP.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Quand le film souvenir est-il prêt&nbsp;?</summary>
+        <p>Après l'événement, Memora analyse les médias reçus, sélectionne les meilleurs moments et assemble automatiquement le film final, prêt à regarder, télécharger et partager.</p>
+      </details>
+      <details class="faq__item">
+        <summary>Combien ça coûte&nbsp;?</summary>
+        <p>Une seule offre&nbsp;: {{ memora_event_price }} par événement, sans option cachée. Collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique inclus.</p>
+      </details>
     </div>
   </div>
 </section>

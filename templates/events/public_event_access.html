@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Acces invite - {{ event.title }} - Memora{% endblock %}
+{% block title %}Accès invité - {{ event.title }} - Memora{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 
 {% block content %}
@@ -15,10 +15,10 @@
   <div class="public-event__content public-event__content--access">
     <p class="eyebrow">{{ event.get_event_type_display }}</p>
     <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
-    <p class="tagline">Entrez le code invite.</p>
+    <p class="tagline">Entrez le code invité.</p>
     <form method="post" class="access-form">
       {% csrf_token %}
-      <label for="guest_access_code">Code d'acces</label>
+      <label for="guest_access_code">Code d'accès</label>
       <input id="guest_access_code" name="guest_access_code" type="text" inputmode="text" autocomplete="one-time-code" required autofocus>
       {% if access_error %}<p class="access-form__error">{{ access_error }}</p>{% endif %}
       <button class="button button--primary" type="submit">Continuer</button>

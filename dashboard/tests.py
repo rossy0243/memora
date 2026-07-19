@@ -37,7 +37,7 @@ class EventPostStatusTests(TestCase):
         movie = GeneratedMovie(status=GeneratedMovie.Status.COMPLETED, final_file="events/x/movies/final.mp4")
         event = self._build_event(self.today - timedelta(days=1), latest_movie=movie)
 
-        self.assertEqual(_event_post_status(event, self.today)["label"], "Film pret")
+        self.assertEqual(_event_post_status(event, self.today)["label"], "Film prêt")
 
     def test_processing_movie(self):
         movie = GeneratedMovie(status=GeneratedMovie.Status.PROCESSING)
@@ -49,18 +49,18 @@ class EventPostStatusTests(TestCase):
         movie = GeneratedMovie(status=GeneratedMovie.Status.PENDING)
         event = self._build_event(self.today - timedelta(days=1), latest_movie=movie)
 
-        self.assertEqual(_event_post_status(event, self.today)["label"], "Film programme")
+        self.assertEqual(_event_post_status(event, self.today)["label"], "Film programmé")
 
     def test_failed_movie_needs_retry(self):
         movie = GeneratedMovie(status=GeneratedMovie.Status.FAILED)
         event = self._build_event(self.today - timedelta(days=1), latest_movie=movie)
 
-        self.assertEqual(_event_post_status(event, self.today)["label"], "A relancer")
+        self.assertEqual(_event_post_status(event, self.today)["label"], "À relancer")
 
     def test_upcoming_event_without_movie(self):
         event = self._build_event(self.today + timedelta(days=5))
 
-        self.assertEqual(_event_post_status(event, self.today)["label"], "Avant evenement")
+        self.assertEqual(_event_post_status(event, self.today)["label"], "Avant événement")
 
     def test_event_day_without_movie(self):
         event = self._build_event(self.today)
@@ -70,7 +70,7 @@ class EventPostStatusTests(TestCase):
     def test_past_event_without_movie(self):
         event = self._build_event(self.today - timedelta(days=2))
 
-        self.assertEqual(_event_post_status(event, self.today)["label"], "Film prevu")
+        self.assertEqual(_event_post_status(event, self.today)["label"], "Film prévu")
 
 
 class DashboardHomeViewTests(TestCase):
@@ -133,4 +133,4 @@ class DashboardHomeViewTests(TestCase):
 
         response = self.client.get(reverse("dashboard:home"))
 
-        self.assertContains(response, "Film pret")
+        self.assertContains(response, "Film prêt")

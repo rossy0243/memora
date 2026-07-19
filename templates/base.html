@@ -24,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=account-menu-1">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=guest-ui-1">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
@@ -91,6 +91,23 @@
       <span>Souvenirs priv&eacute;s, sans application invit&eacute;.</span>
     </div>
   </footer>
+  <script>
+    (function () {
+      var targets = document.querySelectorAll(".reveal, .reveal-group");
+      if (!targets.length || !("IntersectionObserver" in window)) return;
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      document.documentElement.classList.add("reveal-ready");
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+      targets.forEach(function (el) { observer.observe(el); });
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

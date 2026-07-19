@@ -7,19 +7,19 @@
   <div class="panel-title-row">
     <div>
       <p class="section__label">Film souvenir</p>
-      <h3>Video automatique</h3>
+      <h3>Vidéo automatique</h3>
     </div>
     {% if latest_movie %}
       <span class="status-pill {% if latest_movie.status == 'completed' %}status-pill--active{% elif latest_movie.status == 'failed' %}status-pill--danger{% endif %}">{{ latest_movie.get_status_display }}</span>
     {% else %}
-      <span class="status-pill">Programme</span>
+      <span class="status-pill">Programmé</span>
     {% endif %}
   </div>
 
   {% if latest_movie and latest_movie.final_file %}
     <div class="movie-progress movie-progress--complete">
       <div class="movie-progress__meta">
-        <span>{{ latest_movie.progress_message|default:"Votre film souvenir est pret." }}</span>
+        <span>{{ latest_movie.progress_message|default:"Votre film souvenir est prêt." }}</span>
         <strong>100%</strong>
       </div>
       <div class="movie-progress__bar" aria-hidden="true">
@@ -29,12 +29,12 @@
     <video class="movie-preview" src="{{ latest_movie.final_file.url }}" controls preload="metadata"></video>
     <div class="quick-actions">
       <a class="button button--primary" href="{{ movie_page_url }}">Ouvrir le film</a>
-      <a class="button button--secondary button--compact" href="{{ latest_movie.final_file.url }}" download>Telecharger</a>
+      <a class="button button--secondary button--compact" href="{{ latest_movie.final_file.url }}" download>Télécharger</a>
     </div>
   {% elif latest_movie %}
     <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
       <div class="movie-progress__meta">
-        <span>{{ latest_movie.progress_message|default:"Memora prepare automatiquement la video souvenir." }}</span>
+        <span>{{ latest_movie.progress_message|default:"Memora prépare automatiquement la vidéo souvenir." }}</span>
         <strong>{{ latest_movie.progress_percent|default:0 }}%</strong>
       </div>
       <div class="movie-progress__bar" aria-hidden="true">
@@ -43,17 +43,17 @@
     </div>
     <ol class="movie-steps">
       <li class="{% if latest_movie.progress_percent >= 5 %}is-done{% endif %}">Planification</li>
-      <li class="{% if latest_movie.progress_percent >= 18 %}is-done{% endif %}">Selection IA</li>
+      <li class="{% if latest_movie.progress_percent >= 18 %}is-done{% endif %}">Sélection IA</li>
       <li class="{% if latest_movie.progress_percent >= 24 %}is-done{% endif %}">Clips</li>
       <li class="{% if latest_movie.progress_percent >= 78 %}is-done{% endif %}">Musique</li>
       <li class="{% if latest_movie.progress_percent >= 94 %}is-done{% endif %}">Finalisation</li>
     </ol>
     {% if latest_movie.status == "failed" %}
-      <p class="muted-copy">Memora n'a pas pu finaliser ce film. Vous pouvez le relancer, les details techniques restent geres en interne.</p>
+      <p class="muted-copy">Memora n'a pas pu finaliser ce film. Vous pouvez le relancer, les détails techniques restent gérés en interne.</p>
     {% endif %}
   {% else %}
     <p class="muted-copy">
-      Generation automatique prevue le {{ movie_schedule_at|date:"d/m/Y" }} a {{ movie_schedule_at|date:"H:i" }}.
+      Génération automatique prévue le {{ movie_schedule_at|date:"d/m/Y" }} à {{ movie_schedule_at|date:"H:i" }}.
       Vous pouvez aussi lancer un test maintenant.
     </p>
     <div class="movie-progress">
@@ -70,9 +70,9 @@
   {% if not latest_movie or latest_movie.status == "failed" %}
     <form method="post" action="{% url 'events:generate_movie' event.pk %}">
       {% csrf_token %}
-      <button class="button button--primary" type="submit">Generer le film maintenant</button>
+      <button class="button button--primary" type="submit">Générer le film maintenant</button>
     </form>
   {% elif latest_movie.status == "pending" or latest_movie.status == "processing" %}
-    <p class="muted-copy">Cette section se met a jour automatiquement.</p>
+    <p class="muted-copy">Cette section se met à jour automatiquement.</p>
   {% endif %}
 </article>
