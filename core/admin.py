@@ -20,6 +20,31 @@ class SiteConfigurationAdmin(admin.ModelAdmin):
             },
         ),
         ("Commission de parrainage", {"fields": ("commission_referral_amount",)}),
+        (
+            "Informations légales (CGU et confidentialité)",
+            {
+                "description": (
+                    "Ces valeurs alimentent automatiquement les pages CGU et Politique de "
+                    "confidentialité. Renseignez-les pour que les documents soient à jour."
+                ),
+                "fields": (
+                    "company_name",
+                    "legal_entity_name",
+                    "legal_registration_number",
+                    "legal_share_capital",
+                    "legal_publication_director",
+                    "legal_contact_email",
+                    "legal_address",
+                    "legal_country",
+                    "hosting_provider",
+                    "payment_provider_name",
+                    "refund_window_days",
+                    "data_protection_authority",
+                    "cgu_effective_date",
+                    "privacy_effective_date",
+                ),
+            },
+        ),
     )
     list_display = (
         "__str__",

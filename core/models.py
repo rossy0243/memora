@@ -47,6 +47,84 @@ class SiteConfiguration(models.Model):
         default=settings.MEMORA_COMMISSION_REFERRAL_AMOUNT,
         help_text="Commission en centimes versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
     )
+    company_name = models.CharField(
+        max_length=120,
+        default="Memora",
+        help_text="Nom commercial du produit, affiché partout (marque, pages légales).",
+    )
+    legal_entity_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Raison sociale de la société qui édite le service. Laisser vide pour reprendre le nom commercial.",
+    )
+    legal_contact_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="Adresse e-mail de contact affichée sur les pages légales.",
+    )
+    legal_address = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Adresse postale ou siège social affiché sur les pages légales.",
+    )
+    legal_country = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Pays / juridiction dont relèvent les CGU (ex. France, Belgique).",
+    )
+    legal_registration_number = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Numéro d'immatriculation de la société (ex. RCS Paris 000 000 000).",
+    )
+    legal_share_capital = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text="Capital social, mention légale facultative (ex. 10 000 €).",
+    )
+    legal_publication_director = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Directeur de la publication (mentions légales).",
+    )
+    hosting_provider = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Hébergeur du service, mentionné dans les mentions légales (ex. Render, OVH).",
+    )
+    payment_provider_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Prestataire de paiement (ex. Stripe). Utilisé dans les CGU et la confidentialité.",
+    )
+    refund_window_days = models.PositiveIntegerField(
+        default=14,
+        help_text="Délai de rétractation / remboursement en jours, à adapter selon votre politique.",
+    )
+    data_protection_authority = models.CharField(
+        max_length=160,
+        blank=True,
+        default="",
+        help_text="Autorité de contrôle compétente (ex. la CNIL en France).",
+    )
+    cgu_effective_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date d'entrée en vigueur des CGU. Vide = date du jour à l'affichage.",
+    )
+    privacy_effective_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date d'entrée en vigueur de la politique de confidentialité. Vide = date du jour à l'affichage.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -92,6 +170,14 @@ class SiteConfiguration(models.Model):
     @property
     def formatted_commission_referral(self):
         return format_price_amount(self.commission_referral_amount, self.event_price_currency)
+
+    @property
+    def effective_legal_entity_name(self):
+        return self.legal_entity_name.strip() or self.company_name
+
+    @property
+    def effective_data_protection_authority(self):
+        return self.data_protection_authority.strip() or "l'autorité de protection des données compétente"
 
     def save(self, *args, **kwargs):
         self.event_price_currency = (self.event_price_currency or "").strip().upper()

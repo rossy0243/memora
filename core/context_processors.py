@@ -18,7 +18,8 @@ def site_metadata(request):
     site_configuration = SiteConfiguration.current()
 
     return {
-        "site_name": "Memora",
+        "site_name": site_configuration.company_name or "Memora",
+        "company_name": site_configuration.company_name or "Memora",
         "site_url": site_url,
         "canonical_url": canonical_url,
         "default_og_image": default_og_image,

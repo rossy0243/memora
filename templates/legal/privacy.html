@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Politique de confidentialité - {{ site_name }}{% endblock %}
+{% block meta_description %}Politique de confidentialité du service {{ site_name }} : données collectées, finalités, bases légales, sous-traitants, durées de conservation et droits des personnes.{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+  <header class="legal-page__head">
+    <p class="section__label">{{ site_name }}</p>
+    <h1>Politique de confidentialité</h1>
+    <p class="legal-page__meta">En vigueur au {{ privacy_date|date:"d/m/Y" }} — {{ legal_entity }}</p>
+  </header>
+
+  <section>
+    <h2>1. Responsable du traitement</h2>
+    <p>Le responsable du traitement des données personnelles réalisé dans le cadre du service {{ site_name }} (le «&nbsp;Service&nbsp;») est {{ legal_entity }}{% if legal_address %}, {{ legal_address }}{% endif %}. Pour toute question relative à vos données&nbsp;: {{ legal_email|default:"à renseigner" }}.</p>
+  </section>
+
+  <section>
+    <h2>2. Données que nous collectons</h2>
+    <ul>
+      <li><strong>Données de compte (Organisateurs)&nbsp;:</strong> nom d'utilisateur, adresse e-mail, mot de passe (sous forme chiffrée), et données liées aux événements créés.</li>
+      <li><strong>Contenus (Invités)&nbsp;:</strong> photos et vidéos déposées, catégorie du souvenir et métadonnées techniques (date d'envoi, type et taille du média). Aucun compte n'est requis pour les Invités.</li>
+      <li><strong>Données de paiement&nbsp;:</strong> les informations de paiement sont traitées directement par notre prestataire {{ payment_provider_name|default:"de paiement" }}. {{ legal_entity }} ne stocke pas les numéros de carte bancaire.</li>
+      <li><strong>Données de rémunération&nbsp;:</strong> pour les Organisateurs participant au programme de commissions, les informations nécessaires au suivi et au versement des commissions.</li>
+      <li><strong>Données techniques&nbsp;:</strong> données de connexion et journaux nécessaires au fonctionnement, à la sécurité et à la prévention des abus.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Finalités et bases légales</h2>
+    <ul>
+      <li><strong>Fourniture du Service</strong> (collecte des souvenirs, création du film souvenir, mise à disposition des médias)&nbsp;: exécution du contrat.</li>
+      <li><strong>Dépôt de souvenirs par les Invités</strong>&nbsp;: consentement de l'Invité.</li>
+      <li><strong>Gestion des paiements et de la facturation</strong>&nbsp;: exécution du contrat et obligations légales.</li>
+      <li><strong>Sécurité, prévention des abus et amélioration du Service</strong>&nbsp;: intérêt légitime.</li>
+      <li><strong>Communications relatives à vos événements</strong>&nbsp;: exécution du contrat.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Destinataires et sous-traitants</h2>
+    <p>Les données sont accessibles à {{ legal_entity }} et à ses prestataires techniques agissant en qualité de sous-traitants, notamment&nbsp;:</p>
+    <ul>
+      <li><strong>Hébergement et infrastructure&nbsp;:</strong> {{ hosting_provider|default:"hébergeur du Service" }}.</li>
+      <li><strong>Stockage des médias&nbsp;:</strong> prestataire de stockage sécurisé des photos et vidéos.</li>
+      <li><strong>Paiement&nbsp;:</strong> {{ payment_provider_name|default:"prestataire de paiement" }}.</li>
+      <li><strong>Envoi d'e-mails&nbsp;:</strong> prestataire d'acheminement des notifications.</li>
+    </ul>
+    <p>Ces prestataires n'utilisent les données que pour fournir leurs services. Aucune donnée n'est vendue à des tiers.</p>
+  </section>
+
+  <section>
+    <h2>5. Transferts de données hors de votre pays</h2>
+    <p>Lorsque des données sont traitées en dehors de votre pays ou de l'Espace économique européen, {{ legal_entity }} s'assure que des garanties appropriées (telles que les clauses contractuelles types) encadrent ces transferts.</p>
+  </section>
+
+  <section>
+    <h2>6. Durées de conservation</h2>
+    <ul>
+      <li><strong>Souvenirs des Invités&nbsp;:</strong> conservés pendant la durée déterminée par l'Organisateur pour chaque événement, puis supprimés automatiquement.</li>
+      <li><strong>Données de compte&nbsp;:</strong> conservées tant que le compte est actif, puis pendant les délais légaux applicables.</li>
+      <li><strong>Données de facturation&nbsp;:</strong> conservées conformément aux obligations comptables et fiscales.</li>
+      <li><strong>Journaux techniques&nbsp;:</strong> conservés pendant une durée limitée à des fins de sécurité.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>7. Cookies</h2>
+    <p>Le Service utilise uniquement les cookies strictement nécessaires à son fonctionnement (session, sécurité). Aucun cookie publicitaire ou de suivi tiers n'est déposé sans votre consentement préalable.</p>
+  </section>
+
+  <section>
+    <h2>8. Décisions automatisées</h2>
+    <p>La sélection et le montage des souvenirs pour composer le film souvenir reposent sur un traitement automatisé. Ce traitement ne produit pas d'effet juridique ni de conséquence significative sur les personnes&nbsp;; il vise uniquement à assembler un film à partir des Contenus collectés.</p>
+  </section>
+
+  <section>
+    <h2>9. Vos droits</h2>
+    <p>Conformément à la réglementation applicable en matière de protection des données, vous disposez des droits suivants&nbsp;: accès, rectification, effacement, limitation, opposition, portabilité, et retrait du consentement à tout moment (sans effet rétroactif). Pour les exercer, contactez&nbsp;: {{ legal_email|default:"à renseigner" }}.</p>
+    <p>Un Invité souhaitant retirer un souvenir déposé peut en faire la demande auprès de l'Organisateur de l'événement ou à l'adresse ci-dessus. Vous pouvez également introduire une réclamation auprès de {{ data_protection_authority }}.</p>
+  </section>
+
+  <section>
+    <h2>10. Sécurité</h2>
+    <p>{{ legal_entity }} met en œuvre des mesures techniques et organisationnelles raisonnables (chiffrement des mots de passe, contrôle des accès, hébergement sécurisé) pour protéger les données contre tout accès, altération, perte ou divulgation non autorisés.</p>
+  </section>
+
+  <section>
+    <h2>11. Mineurs</h2>
+    <p>Le Service n'est pas destiné à la création de comptes par des mineurs. Lorsque des personnes mineures apparaissent sur des Souvenirs, il appartient à l'Invité et à l'Organisateur de s'assurer de disposer des autorisations nécessaires de leurs représentants légaux.</p>
+  </section>
+
+  <section>
+    <h2>12. Modification de la présente politique</h2>
+    <p>La présente politique peut être mise à jour à tout moment. La version applicable est celle en vigueur au moment de votre utilisation du Service. Voir aussi nos <a href="{% url 'core:terms' %}">Conditions Générales d'Utilisation</a>.</p>
+  </section>
+
+  <section>
+    <h2>13. Contact</h2>
+    <p>Pour toute question relative à vos données personnelles&nbsp;: {{ legal_email|default:"à renseigner" }}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
+  </section>
+</article>
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Conditions Générales d'Utilisation et de Vente - {{ site_name }}{% endblock %}
+{% block meta_description %}Conditions Générales d'Utilisation et de Vente du service {{ site_name }} : accès, compte, contenus des invités, tarifs, paiement, remboursement et responsabilités.{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+  <header class="legal-page__head">
+    <p class="section__label">{{ site_name }}</p>
+    <h1>Conditions Générales d'Utilisation et de Vente</h1>
+    <p class="legal-page__meta">En vigueur au {{ cgu_date|date:"d/m/Y" }} — {{ legal_entity }}</p>
+  </header>
+
+  <section>
+    <h2>1. Préambule et objet</h2>
+    <p>Les présentes Conditions Générales d'Utilisation et de Vente (les «&nbsp;CGU&nbsp;») ont pour objet de définir les modalités d'accès et d'utilisation du service {{ site_name }} (le «&nbsp;Service&nbsp;»), une plateforme permettant de collecter les photos et vidéos des invités d'un événement, puis de générer automatiquement un film souvenir. Elles régissent également les conditions de vente des prestations payantes du Service. Le Service est édité et exploité par {{ legal_entity }}.</p>
+  </section>
+
+  <section>
+    <h2>2. Mentions légales</h2>
+    <ul>
+      <li><strong>Éditeur&nbsp;:</strong> {{ legal_entity }}</li>
+      <li><strong>Adresse&nbsp;:</strong> {{ legal_address|default:"à renseigner" }}</li>
+      <li><strong>Immatriculation&nbsp;:</strong> {{ legal_registration_number|default:"à renseigner" }}</li>
+      <li><strong>Capital social&nbsp;:</strong> {{ legal_share_capital|default:"à renseigner" }}</li>
+      <li><strong>Directeur de la publication&nbsp;:</strong> {{ legal_publication_director|default:"à renseigner" }}</li>
+      <li><strong>Contact&nbsp;:</strong> {{ legal_email|default:"à renseigner" }}</li>
+      <li><strong>Hébergement&nbsp;:</strong> {{ hosting_provider|default:"à renseigner" }}</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Définitions</h2>
+    <ul>
+      <li><strong>Organisateur&nbsp;:</strong> personne disposant d'un compte {{ site_name }} qui crée et gère un événement.</li>
+      <li><strong>Invité&nbsp;:</strong> personne qui dépose des souvenirs sur un événement, sans création de compte.</li>
+      <li><strong>Événement&nbsp;:</strong> espace créé par un Organisateur pour collecter les souvenirs.</li>
+      <li><strong>Souvenir&nbsp;:</strong> photo ou vidéo déposée par un Invité.</li>
+      <li><strong>Film souvenir&nbsp;:</strong> vidéo assemblée automatiquement à partir des Souvenirs.</li>
+      <li><strong>Contenus&nbsp;:</strong> l'ensemble des données, médias et informations transmis via le Service.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>4. Acceptation et modification des CGU</h2>
+    <p>L'utilisation du Service suppose l'acceptation pleine et entière des présentes CGU. En créant un compte, en réglant une prestation ou en déposant un Souvenir, l'utilisateur reconnaît en avoir pris connaissance et les accepter. {{ legal_entity }} peut modifier les CGU à tout moment&nbsp;; la version applicable est celle en vigueur au moment de l'utilisation du Service ou de la commande.</p>
+  </section>
+
+  <section>
+    <h2>5. Description du Service</h2>
+    <p>{{ site_name }} permet à un Organisateur de créer un événement, de partager un QR Code, puis de collecter les photos et vidéos de ses Invités depuis leur téléphone, sans application ni compte pour les Invités. Après l'événement, {{ site_name }} prépare automatiquement un film souvenir et met à disposition les médias collectés, notamment sous forme d'archive téléchargeable.</p>
+  </section>
+
+  <section>
+    <h2>6. Inscription et compte Organisateur</h2>
+    <p>La création d'un compte requiert des informations exactes et à jour. L'Organisateur est responsable de la confidentialité de ses identifiants et de toute activité réalisée depuis son compte. {{ legal_entity }} peut suspendre ou clôturer un compte en cas de manquement aux présentes CGU.</p>
+  </section>
+
+  <section>
+    <h2>7. Accès Invité</h2>
+    <p>Les Invités accèdent à l'événement via un lien ou un QR Code, sans création de compte. L'Organisateur peut restreindre l'accès par un code. Le nombre d'envois, les formats, la taille et la durée des vidéos peuvent être limités afin de garantir la qualité de la collecte.</p>
+  </section>
+
+  <section>
+    <h2>8. Tarifs</h2>
+    <p>Les prestations payantes sont facturées au prix indiqué sur le Service, à savoir {{ memora_event_price }} par événement, sauf offre particulière. Les prix sont indiqués dans la devise affichée et peuvent, le cas échéant, être majorés des taxes applicables. Les prix peuvent évoluer&nbsp;; le prix applicable est celui affiché au moment de la validation de la commande.</p>
+  </section>
+
+  <section>
+    <h2>9. Commande et modalités de paiement</h2>
+    <p>La commande est validée lors du règlement du prix. Le paiement s'effectue en ligne, le cas échéant via notre prestataire de paiement {{ payment_provider_name|default:"partenaire" }}, selon les moyens de paiement proposés. {{ legal_entity }} ne conserve pas les données de carte bancaire, traitées de manière sécurisée par le prestataire de paiement. L'événement est activé après confirmation du paiement.</p>
+  </section>
+
+  <section>
+    <h2>10. Facturation</h2>
+    <p>Une facture ou un justificatif de paiement est mis à disposition de l'Organisateur pour chaque commande réglée. L'Organisateur s'engage à communiquer des informations de facturation exactes.</p>
+  </section>
+
+  <section>
+    <h2>11. Droit de rétractation et remboursement</h2>
+    <p>Conformément à la réglementation applicable, le consommateur dispose en principe d'un délai de rétractation de {{ refund_window_days }} jours à compter de la commande. Toutefois, s'agissant d'un contenu ou d'un service numérique fourni immédiatement, l'Organisateur peut être invité à renoncer expressément à ce droit lorsque l'exécution du Service commence avant la fin du délai (par exemple, dès l'activation de l'événement).</p>
+    <p>En dehors de ce cadre, une demande de remboursement peut être adressée à {{ legal_email|default:"notre contact" }}. Un remboursement pourra notamment être accordé en cas d'indisponibilité du Service imputable à {{ legal_entity }} empêchant l'utilisation de la prestation commandée. Les demandes sont examinées au cas par cas dans un délai raisonnable.</p>
+  </section>
+
+  <section>
+    <h2>12. Programme de rémunération des Organisateurs</h2>
+    <p>{{ site_name }} peut proposer un programme de commissions récompensant les Organisateurs, comprenant une commission sur leurs propres événements payés selon un palier, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'ils ont amenés. Les montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer. Le versement des commissions est subordonné aux conditions publiées&nbsp;; les commissions constituent, le cas échéant, un revenu dont la déclaration incombe à leur bénéficiaire.</p>
+  </section>
+
+  <section>
+    <h2>13. Contenus et droits sur les Souvenirs</h2>
+    <p>Chaque Invité garantit disposer des droits nécessaires sur les Souvenirs qu'il dépose et avoir recueilli, le cas échéant, l'autorisation des personnes apparaissant sur les médias (droit à l'image). L'Organisateur est responsable de l'usage qu'il fait des Souvenirs collectés. {{ legal_entity }} n'acquiert aucun droit de propriété sur les Souvenirs, qui restent la propriété de leurs auteurs, et bénéficie uniquement de la licence technique nécessaire pour héberger, traiter et restituer les Contenus afin de fournir le Service.</p>
+    <p>Il est interdit de déposer un contenu illicite, diffamatoire, violent, à caractère sexuel impliquant des mineurs, portant atteinte aux droits de tiers ou à la dignité des personnes. Tout contenu manifestement illicite pourra être retiré et signalé aux autorités compétentes.</p>
+  </section>
+
+  <section>
+    <h2>14. Propriété intellectuelle</h2>
+    <p>La marque {{ site_name }}, le Service, son interface, ses textes, logos et composants sont protégés par le droit de la propriété intellectuelle. Toute reproduction, représentation ou exploitation non autorisée est interdite. Cette clause ne porte pas sur les Souvenirs, qui appartiennent à leurs auteurs.</p>
+  </section>
+
+  <section>
+    <h2>15. Obligations de l'utilisateur et usages interdits</h2>
+    <p>L'utilisateur s'engage à utiliser le Service conformément aux CGU et à la loi. Il est notamment interdit de&nbsp;: contourner les mesures de sécurité, perturber le fonctionnement du Service, collecter des données de tiers sans base légale, usurper l'identité d'un tiers, ou utiliser le Service à des fins frauduleuses ou illicites.</p>
+  </section>
+
+  <section>
+    <h2>16. Disponibilité, maintenance et évolutions</h2>
+    <p>{{ legal_entity }} met en œuvre les moyens raisonnables pour assurer la disponibilité du Service, sans garantie d'absence d'interruption. Des opérations de maintenance ou des évolutions peuvent intervenir et modifier les fonctionnalités du Service.</p>
+  </section>
+
+  <section>
+    <h2>17. Garanties et responsabilité</h2>
+    <p>{{ legal_entity }} ne saurait être tenue responsable des Contenus déposés par les utilisateurs ni des usages qui en sont faits. Sa responsabilité est limitée aux dommages directs et prévisibles résultant d'une faute prouvée dans la fourniture du Service et, dans la mesure permise par la loi, ne saurait excéder le montant réglé par l'Organisateur pour la prestation concernée. Les garanties légales applicables aux consommateurs demeurent réservées.</p>
+  </section>
+
+  <section>
+    <h2>18. Force majeure</h2>
+    <p>La responsabilité de {{ legal_entity }} ne pourra être engagée en cas d'inexécution ou de retard résultant d'un cas de force majeure au sens de la loi et de la jurisprudence.</p>
+  </section>
+
+  <section>
+    <h2>19. Durée, suspension et résiliation</h2>
+    <p>L'Organisateur peut cesser d'utiliser le Service à tout moment et demander la suppression de son compte. {{ legal_entity }} peut suspendre ou résilier l'accès en cas de manquement aux CGU. Les médias sont conservés pendant une durée déterminée après l'événement, puis supprimés conformément à la <a href="{% url 'core:privacy' %}">Politique de confidentialité</a>.</p>
+  </section>
+
+  <section>
+    <h2>20. Données personnelles et cookies</h2>
+    <p>Le traitement des données personnelles et l'usage des cookies sont décrits dans la <a href="{% url 'core:privacy' %}">Politique de confidentialité</a>, qui fait partie intégrante des présentes CGU.</p>
+  </section>
+
+  <section>
+    <h2>21. Réclamations et médiation de la consommation</h2>
+    <p>Toute réclamation peut être adressée à {{ legal_email|default:"notre contact" }}. Conformément à la réglementation, le consommateur peut, en cas de litige non résolu, recourir gratuitement à un médiateur de la consommation. Les coordonnées du médiateur compétent sont communiquées sur demande.</p>
+  </section>
+
+  <section>
+    <h2>22. Cession</h2>
+    <p>{{ legal_entity }} peut céder ou transférer les présentes CGU, notamment dans le cadre d'une réorganisation ou d'une cession d'activité, sans que cela n'affecte les droits de l'utilisateur.</p>
+  </section>
+
+  <section>
+    <h2>23. Nullité partielle</h2>
+    <p>Si une stipulation des présentes CGU était déclarée nulle ou inapplicable, les autres stipulations conserveraient leur pleine force et effet.</p>
+  </section>
+
+  <section>
+    <h2>24. Droit applicable et litiges</h2>
+    <p>Les présentes CGU sont régies par le droit applicable en {{ legal_country|default:"votre juridiction" }}. En cas de litige, une solution amiable sera recherchée avant toute action contentieuse&nbsp;; à défaut, les tribunaux compétents seront saisis conformément aux règles applicables.</p>
+  </section>
+
+  <section>
+    <h2>25. Contact</h2>
+    <p>Pour toute question relative aux présentes CGU&nbsp;: {{ legal_email|default:"à renseigner" }}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
+  </section>
+</article>
+{% endblock %}

@@ -24,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=program-ui-1">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=legal-ui-2">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
@@ -89,10 +89,13 @@
         {% else %}
           <a href="{% url 'accounts:signup' %}">Cr&eacute;er un &eacute;v&eacute;nement</a>
         {% endif %}
+        <a href="{% url 'core:ambassador_program' %}">Programme Ambassadeur</a>
+        <a href="{% url 'core:terms' %}">CGU</a>
+        <a href="{% url 'core:privacy' %}">Confidentialit&eacute;</a>
       </nav>
     </div>
     <div class="site-footer__bottom">
-      <span>&copy; {% now "Y" %} Memora</span>
+      <span>&copy; {% now "Y" %} {{ site_name }}</span>
       <span>Souvenirs priv&eacute;s, sans application invit&eacute;.</span>
     </div>
   </footer>

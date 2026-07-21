@@ -82,6 +82,81 @@ class AmbassadorProgramPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class LegalPagesTests(TestCase):
+    def _configure(self, **fields):
+        config = SiteConfiguration.current()
+        for key, value in fields.items():
+            setattr(config, key, value)
+        config.save()
+        return config
+
+    def test_terms_page_renders_with_dynamic_values(self):
+        self._configure(
+            company_name="Memora",
+            legal_entity_name="Memora SAS",
+            legal_contact_email="legal@memora.test",
+            legal_country="France",
+            legal_registration_number="RCS Paris 123 456 789",
+            payment_provider_name="Stripe",
+            refund_window_days=30,
+            cgu_effective_date=date(2026, 1, 15),
+        )
+        response = self.client.get(reverse("core:terms"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Conditions Générales d'Utilisation")
+        self.assertContains(response, "Memora SAS")
+        self.assertContains(response, "legal@memora.test")
+        self.assertContains(response, "France")
+        self.assertContains(response, "15/01/2026")
+        self.assertContains(response, "RCS Paris 123 456 789")
+        self.assertContains(response, "Stripe")
+        self.assertContains(response, "30 jours")
+        self.assertContains(response, "remboursement", status_code=200)
+        self.assertContains(response, "paiement")
+
+    def test_privacy_page_renders_with_dynamic_values(self):
+        self._configure(
+            legal_entity_name="Memora SAS",
+            legal_contact_email="legal@memora.test",
+            payment_provider_name="Stripe",
+            data_protection_authority="la CNIL",
+            privacy_effective_date=date(2026, 2, 20),
+        )
+        response = self.client.get(reverse("core:privacy"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Politique de confidentialité")
+        self.assertContains(response, "Memora SAS")
+        self.assertContains(response, "20/02/2026")
+        self.assertContains(response, "Stripe")
+        self.assertContains(response, "la CNIL")
+
+    def test_data_protection_authority_has_generic_fallback(self):
+        self._configure(data_protection_authority="")
+        response = self.client.get(reverse("core:privacy"))
+        self.assertContains(response, "autorité de protection des données compétente")
+
+    def test_entity_name_falls_back_to_company_name(self):
+        self._configure(company_name="MonProduit", legal_entity_name="")
+        response = self.client.get(reverse("core:terms"))
+        self.assertContains(response, "MonProduit")
+
+    def test_company_name_is_dynamic_in_footer(self):
+        self._configure(company_name="MarquePerso")
+        response = self.client.get(reverse("core:home"))
+        self.assertContains(response, "MarquePerso")
+
+    def test_footer_links_to_legal_pages(self):
+        response = self.client.get(reverse("core:home"))
+        self.assertContains(response, reverse("core:terms"))
+        self.assertContains(response, reverse("core:privacy"))
+
+    def test_legal_pages_are_public(self):
+        for name in ("core:terms", "core:privacy"):
+            self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+
 class AuthenticatedHomePageTests(TestCase):
     def test_authenticated_organizer_is_redirected_to_dashboard(self):
         user = get_user_model().objects.create_user(
