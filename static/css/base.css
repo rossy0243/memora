@@ -3368,6 +3368,109 @@ body.camera-open {
   transition-delay: 0.35s;
 }
 
+.earnings-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+  border: 1px solid rgba(216, 180, 106, 0.45);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  background:
+    linear-gradient(135deg, rgba(216, 180, 106, 0.12), rgba(255, 255, 255, 0)),
+    var(--color-surface);
+}
+
+.earnings-panel--medium {
+  border-color: rgba(120, 150, 210, 0.45);
+  background:
+    linear-gradient(135deg, rgba(120, 150, 210, 0.12), rgba(255, 255, 255, 0)),
+    var(--color-surface);
+}
+
+.earnings-panel--premium {
+  border-color: rgba(159, 79, 95, 0.45);
+  background:
+    linear-gradient(135deg, rgba(159, 79, 95, 0.14), rgba(255, 255, 255, 0)),
+    var(--color-surface);
+}
+
+.earnings-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.earnings-panel__heading h2 {
+  margin: 0;
+}
+
+.earnings-panel__progress {
+  margin: 0;
+  color: var(--color-body);
+  font-weight: 600;
+}
+
+.tier-badge,
+.site-account__tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: #6b5218;
+  background: rgba(216, 180, 106, 0.28);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tier-badge--medium {
+  color: #2f4a80;
+  background: rgba(120, 150, 210, 0.26);
+}
+
+.tier-badge--premium {
+  color: #7c2d3a;
+  background: rgba(159, 79, 95, 0.22);
+}
+
+.site-account__tag {
+  justify-self: start;
+  margin: 4px 10px 2px;
+}
+
+.earnings-panel__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.earnings-panel__referral {
+  display: grid;
+  gap: 10px;
+}
+
+.earnings-panel__referral p {
+  margin: 0;
+  color: var(--color-body);
+}
+
+.earnings-panel__referral code {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--color-primary-active);
+  background: var(--color-surface-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.earnings-panel__referral .button {
+  justify-self: start;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .phone-preview__rec i {
     animation: none;

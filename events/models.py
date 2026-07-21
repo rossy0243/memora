@@ -160,6 +160,10 @@ class Event(models.Model):
             self.paid_at = timezone.now()
         self.guest_access_code = self._normalize_guest_access_code(self.guest_access_code)
         super().save(*args, **kwargs)
+        if self.payment_status == self.PaymentStatus.PAID:
+            from accounts.services import record_event_commissions
+
+            record_event_commissions(self)
 
     @classmethod
     def _generate_public_access_key(cls):

@@ -15,6 +15,10 @@ def signup(request):
             login(request, user)
             return redirect("dashboard:home")
     else:
-        form = OrganizerSignupForm()
+        initial = {}
+        referral_code = (request.GET.get("parrain") or "").strip().upper()
+        if referral_code:
+            initial["referral_code"] = referral_code
+        form = OrganizerSignupForm(initial=initial)
 
     return render(request, "accounts/signup.html", {"form": form})

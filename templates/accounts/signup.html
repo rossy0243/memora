@@ -7,9 +7,9 @@
 
 {% block content %}
 <section class="auth-shell">
-  <div class="auth-card">
+  <div class="auth-card reveal">
     <p class="section__label">Nouvel organisateur</p>
-    <h1>Creer votre espace</h1>
+    <h1>Créer votre espace</h1>
     <form method="post" class="form-stack">
       {% csrf_token %}
       {{ form.non_field_errors }}
@@ -17,12 +17,13 @@
         <label>
           {{ field.label }}
           {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
           {{ field.errors }}
         </label>
       {% endfor %}
       <button class="button button--primary" type="submit">Commencer</button>
     </form>
-    <p class="form-note">Deja inscrit ? <a href="{% url 'accounts:login' %}">Se connecter</a></p>
+    <p class="form-note">Déjà inscrit ? <a href="{% url 'accounts:login' %}">Se connecter</a></p>
   </div>
 </section>
 {% endblock %}

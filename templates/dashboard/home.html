@@ -17,6 +17,57 @@
     {% endif %}
   </div>
 
+  {% if earnings_panel %}
+    <article class="earnings-panel earnings-panel--{{ earnings_panel.tier }} reveal">
+      <div class="earnings-panel__heading">
+        <div>
+          <p class="section__label">Mes gains</p>
+          <h2>{{ earnings_panel.current_rate }} par événement payé</h2>
+        </div>
+        <span class="tier-badge tier-badge--{{ earnings_panel.tier }}">{{ earnings_panel.tier_label }}</span>
+      </div>
+      {% if earnings_panel.next_tier_label %}
+        <p class="earnings-panel__progress">Encore {{ earnings_panel.events_to_next_tier }} événement{{ earnings_panel.events_to_next_tier|pluralize }} payé{{ earnings_panel.events_to_next_tier|pluralize }} pour passer au palier {{ earnings_panel.next_tier_label }}.</p>
+      {% else %}
+        <p class="earnings-panel__progress">Vous êtes au palier maximum. Merci pour votre fidélité !</p>
+      {% endif %}
+      <div class="earnings-panel__stats">
+        <div class="stat-card">
+          <span>En attente</span>
+          <strong>{{ earnings_panel.pending }}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Déjà versé</span>
+          <strong>{{ earnings_panel.paid }}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Événements payés</span>
+          <strong>{{ earnings_panel.paid_count }}</strong>
+        </div>
+        <div class="stat-card">
+          <span>Filleuls</span>
+          <strong>{{ earnings_panel.referred_count }}</strong>
+        </div>
+      </div>
+      <div class="earnings-panel__referral">
+        <p>Partagez votre lien de parrainage : chaque événement payé d'un organisateur que vous avez amené vous rapporte une commission.</p>
+        <code id="referral-url">{{ earnings_panel.referral_url }}</code>
+        <button class="button button--secondary button--compact" type="button" data-copy-target="referral-url">Copier mon lien de parrainage</button>
+      </div>
+      {% if earnings_panel.entries %}
+        <div class="latest-media-list">
+          {% for entry in earnings_panel.entries %}
+            <div class="latest-media-row">
+              <span>{{ entry.get_kind_display }} - {{ entry.get_status_display }}</span>
+              <strong>{{ entry.formatted_amount }} - {{ entry.event.title }}</strong>
+              <small>{{ entry.created_at|date:"d/m/Y" }}</small>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </article>
+  {% endif %}
+
   {% if events %}
     <div class="event-grid reveal-group">
       {% for event in events %}
@@ -57,4 +108,9 @@
     </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'js/copy-to-clipboard.js' %}"></script>
 {% endblock %}

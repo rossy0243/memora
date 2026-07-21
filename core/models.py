@@ -23,6 +23,30 @@ class SiteConfiguration(models.Model):
         default=settings.MEMORA_EVENT_PRICE_CURRENCY,
         help_text="Code devise ISO sur 3 lettres, par exemple USD ou EUR.",
     )
+    commission_starter_amount = models.PositiveIntegerField(
+        default=settings.MEMORA_COMMISSION_STARTER_AMOUNT,
+        help_text="Commission en centimes par événement payé pour le palier Starter. Exemple : 500 pour 5 USD.",
+    )
+    commission_medium_amount = models.PositiveIntegerField(
+        default=settings.MEMORA_COMMISSION_MEDIUM_AMOUNT,
+        help_text="Commission en centimes par événement payé pour le palier Medium. Exemple : 1000 pour 10 USD.",
+    )
+    commission_premium_amount = models.PositiveIntegerField(
+        default=settings.MEMORA_COMMISSION_PREMIUM_AMOUNT,
+        help_text="Commission en centimes par événement payé pour le palier Premium. Exemple : 2000 pour 20 USD.",
+    )
+    tier_medium_min_events = models.PositiveIntegerField(
+        default=settings.MEMORA_TIER_MEDIUM_MIN_EVENTS,
+        help_text="Nombre d'événements payés à partir duquel l'organisateur passe Medium. Exemple : 51.",
+    )
+    tier_premium_min_events = models.PositiveIntegerField(
+        default=settings.MEMORA_TIER_PREMIUM_MIN_EVENTS,
+        help_text="Nombre d'événements payés à partir duquel l'organisateur passe Premium. Exemple : 101.",
+    )
+    commission_referral_amount = models.PositiveIntegerField(
+        default=settings.MEMORA_COMMISSION_REFERRAL_AMOUNT,
+        help_text="Commission en centimes versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -35,6 +59,39 @@ class SiteConfiguration(models.Model):
     @property
     def formatted_event_price(self):
         return format_price_amount(self.event_price_amount, self.event_price_currency)
+
+    def tier_for_paid_count(self, paid_count):
+        """Palier (starter/medium/premium) pour le n-ième événement payé."""
+        if paid_count >= self.tier_premium_min_events:
+            return "premium"
+        if paid_count >= self.tier_medium_min_events:
+            return "medium"
+        return "starter"
+
+    def commission_amount_for_paid_count(self, paid_count):
+        """Montant en centimes gagné pour le n-ième événement payé de l'organisateur."""
+        tier = self.tier_for_paid_count(paid_count)
+        return {
+            "starter": self.commission_starter_amount,
+            "medium": self.commission_medium_amount,
+            "premium": self.commission_premium_amount,
+        }[tier]
+
+    @property
+    def formatted_commission_starter(self):
+        return format_price_amount(self.commission_starter_amount, self.event_price_currency)
+
+    @property
+    def formatted_commission_medium(self):
+        return format_price_amount(self.commission_medium_amount, self.event_price_currency)
+
+    @property
+    def formatted_commission_premium(self):
+        return format_price_amount(self.commission_premium_amount, self.event_price_currency)
+
+    @property
+    def formatted_commission_referral(self):
+        return format_price_amount(self.commission_referral_amount, self.event_price_currency)
 
     def save(self, *args, **kwargs):
         self.event_price_currency = (self.event_price_currency or "").strip().upper()
