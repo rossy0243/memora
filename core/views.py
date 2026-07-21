@@ -20,6 +20,10 @@ def home(request):
     return render(request, "core/home.html")
 
 
+def ambassador_program(request):
+    return render(request, "core/ambassador_program.html")
+
+
 def health(request):
     return HttpResponse("ok", content_type="text/plain")
 
@@ -43,6 +47,7 @@ def robots_txt(request):
 
 def sitemap_xml(request):
     home_url = absolute_public_url(request, reverse("core:home"))
+    program_url = absolute_public_url(request, reverse("core:ambassador_program"))
     lastmod = timezone.now().date().isoformat()
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -51,6 +56,12 @@ def sitemap_xml(request):
     <lastmod>{lastmod}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>{program_url}</loc>
+    <lastmod>{lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>
 """

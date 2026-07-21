@@ -47,6 +47,40 @@ class HomePageTests(TestCase):
         self.assertContains(response, "79 EUR")
         self.assertNotContains(response, "59 USD")
 
+    def test_home_shows_ambassador_program_teaser(self):
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, "Programme Ambassadeur")
+        self.assertContains(response, reverse("core:ambassador_program"))
+
+
+class AmbassadorProgramPageTests(TestCase):
+    def test_page_renders_with_dynamic_amounts(self):
+        config = SiteConfiguration.current()
+        config.event_price_currency = "USD"
+        config.commission_starter_amount = 500
+        config.commission_medium_amount = 1000
+        config.commission_premium_amount = 2000
+        config.commission_referral_amount = 500
+        config.tier_medium_min_events = 51
+        config.tier_premium_min_events = 101
+        config.save()
+
+        response = self.client.get(reverse("core:ambassador_program"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Programme Ambassadeur")
+        self.assertContains(response, "5 USD")
+        self.assertContains(response, "10 USD")
+        self.assertContains(response, "20 USD")
+        self.assertContains(response, "Jusqu'à 50 événements")
+        self.assertContains(response, "De 51 à 100 événements")
+        self.assertContains(response, "Plus de 100 événements")
+
+    def test_page_is_reachable_without_login(self):
+        response = self.client.get(reverse("core:ambassador_program"))
+        self.assertEqual(response.status_code, 200)
+
 
 class AuthenticatedHomePageTests(TestCase):
     def test_authenticated_organizer_is_redirected_to_dashboard(self):
@@ -127,6 +161,7 @@ class SeoEndpointTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "<urlset")
         self.assertContains(response, reverse("core:home"))
+        self.assertContains(response, reverse("core:ambassador_program"))
         self.assertNotContains(response, "/dashboard/")
 
 

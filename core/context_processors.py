@@ -23,4 +23,10 @@ def site_metadata(request):
         "canonical_url": canonical_url,
         "default_og_image": default_og_image,
         "memora_event_price": site_configuration.formatted_event_price,
+        "memora_commission_starter": site_configuration.formatted_commission_starter,
+        "memora_commission_medium": site_configuration.formatted_commission_medium,
+        "memora_commission_premium": site_configuration.formatted_commission_premium,
+        "memora_commission_referral": site_configuration.formatted_commission_referral,
+        "memora_tier_medium_min": site_configuration.tier_medium_min_events,
+        "memora_tier_premium_min": site_configuration.tier_premium_min_events,
     }

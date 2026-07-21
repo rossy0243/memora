@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Programme Ambassadeur - Gagnez avec Memora{% endblock %}
+{% block meta_description %}Gagnez de l'argent avec Memora : une commission sur chacun de vos événements payés, jusqu'à {{ memora_commission_premium }}, plus {{ memora_commission_referral }} pour chaque événement vendu par un organisateur que vous parrainez.{% endblock %}
+{% block og_title %}Programme Ambassadeur Memora - Gagnez sur chaque événement{% endblock %}
+{% block og_description %}Plus vous organisez d'événements, plus votre commission monte. Parrainez d'autres organisateurs et touchez une commission sur leurs événements.{% endblock %}
+{% block twitter_title %}Programme Ambassadeur Memora{% endblock %}
+{% block twitter_description %}Une commission sur vos événements payés et sur ceux de vos filleuls.{% endblock %}
+
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="program-hero">
+  <div class="program-hero__inner reveal">
+    <p class="section__label">Programme Ambassadeur</p>
+    <h1>Gagnez à chaque événement.</h1>
+    <p class="program-hero__lead">Memora récompense les organisateurs qui font vivre la plateforme. Plus vous créez d'événements payés, plus votre commission monte&nbsp;— et vous touchez aussi une commission sur chaque organisateur que vous amenez.</p>
+    <div class="program-hero__actions">
+      <a class="button button--primary" href="{% url 'accounts:signup' %}">Créer mon espace organisateur</a>
+      <a class="button button--secondary" href="#parrainage">Comment ça marche</a>
+    </div>
+  </div>
+</section>
+
+<section class="program-tiers" aria-label="Paliers de commission">
+  <div class="program-tiers__inner">
+    <div class="reveal">
+      <p class="section__label">Vos commissions</p>
+      <h2>Une commission sur chacun de vos événements payés.</h2>
+      <p class="program-tiers__intro">Votre palier est calculé automatiquement d'après le nombre d'événements payés que vous avez organisés. Il ne fait que monter.</p>
+    </div>
+    <div class="tier-cards reveal-group">
+      <article class="tier-card">
+        <span class="tier-badge tier-badge--starter">Starter</span>
+        <strong class="tier-card__amount">{{ memora_commission_starter }}</strong>
+        <span class="tier-card__unit">par événement payé</span>
+        <p class="tier-card__range">Jusqu'à {{ memora_tier_medium_min|add:"-1" }} événements</p>
+      </article>
+      <article class="tier-card tier-card--medium">
+        <span class="tier-badge tier-badge--medium">Medium</span>
+        <strong class="tier-card__amount">{{ memora_commission_medium }}</strong>
+        <span class="tier-card__unit">par événement payé</span>
+        <p class="tier-card__range">De {{ memora_tier_medium_min }} à {{ memora_tier_premium_min|add:"-1" }} événements</p>
+      </article>
+      <article class="tier-card tier-card--premium">
+        <span class="tier-badge tier-badge--premium">Premium</span>
+        <strong class="tier-card__amount">{{ memora_commission_premium }}</strong>
+        <span class="tier-card__unit">par événement payé</span>
+        <p class="tier-card__range">Plus de {{ memora_tier_premium_min|add:"-1" }} événements</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="parrainage" class="program-referral" aria-label="Parrainage">
+  <div class="program-referral__inner">
+    <div class="reveal">
+      <p class="section__label">Parrainage</p>
+      <h2>Amenez d'autres organisateurs, gagnez avec eux.</h2>
+      <p>Partagez votre lien de parrainage depuis votre tableau de bord. Dès qu'un organisateur que vous avez amené vend un événement, Memora vous verse <strong>{{ memora_commission_referral }}</strong>&nbsp;— pour chacun de ses événements payés, sans limite.</p>
+      <ol class="program-steps reveal-group">
+        <li><strong>Partagez</strong> votre lien de parrainage unique.</li>
+        <li><strong>Ils s'inscrivent</strong> et créent leurs événements.</li>
+        <li><strong>Vous touchez</strong> {{ memora_commission_referral }} à chaque événement qu'ils vendent.</li>
+      </ol>
+      <div class="program-referral__actions">
+        <a class="button button--primary" href="{% url 'accounts:signup' %}">Rejoindre le programme</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="closing-band">
+  <div class="closing-band__inner">
+    <p class="section__label">Prêt à commencer</p>
+    <h2>Créez votre premier événement et lancez vos gains.</h2>
+    <a class="button button--primary" href="{% url 'accounts:signup' %}">Créer mon espace organisateur</a>
+  </div>
+</section>
+{% endblock %}
