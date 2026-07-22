@@ -24,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=legal-ui-2">
+  <link rel="stylesheet" href="{% static 'css/base.css' %}?v=guest-ui-3">
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
@@ -32,6 +32,7 @@
       <img class="brand__mark" src="{% static 'img/memora-mark.svg' %}" alt="" width="36" height="36">
       <span>Memora</span>
     </a>
+    {% block site_nav %}
     <nav class="site-nav" aria-label="Navigation principale">
       {% if user.is_authenticated %}
         <details class="site-account">
@@ -56,6 +57,7 @@
         <a href="{% url 'accounts:signup' %}">Inscription</a>
       {% endif %}
     </nav>
+    {% endblock %}
   </header>
 
   <main>

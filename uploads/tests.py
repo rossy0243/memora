@@ -343,7 +343,9 @@ class GuestUploadViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Prendre une photo ou filmer")
-        self.assertContains(response, "Selfie, caméra arrière, filtres")
+        # L'invite doit savoir a quel evenement il contribue.
+        self.assertContains(response, self.event.title)
+        self.assertNotContains(response, "Inscription")
         self.assertContains(response, "Caméra Memora")
         self.assertContains(response, "Lancer la caméra")
         self.assertContains(response, "Selfie")

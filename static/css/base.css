@@ -2347,7 +2347,60 @@ h2 {
 }
 
 .guest-upload-heading {
+  position: relative;
   margin-bottom: 24px;
+}
+
+/* Avec une photo de couverture, l'invite voit tout de suite l'evenement auquel il contribue. */
+.guest-upload-heading--cover {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 26px 20px 22px;
+  color: #fff;
+}
+
+.guest-upload-heading__cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.guest-upload-heading__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(36, 31, 34, 0.58), rgba(36, 31, 34, 0.88));
+}
+
+.guest-upload-heading__content {
+  position: relative;
+  z-index: 1;
+}
+
+.guest-upload-heading--cover .section__label {
+  color: var(--color-champagne);
+}
+
+.guest-upload-heading__welcome {
+  margin: 0 0 6px;
+  font-size: 1.02rem;
+  line-height: 1.5;
+}
+
+.guest-upload-heading--cover .guest-upload-heading__welcome {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.guest-upload-heading__hint {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* Specificite volontairement renforcee : `.guest-upload-heading p:last-child`
+   imposait sinon un gris fonce, illisible sur la photo de couverture. */
+.guest-upload-heading--cover .guest-upload-heading__content .guest-upload-heading__hint {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .guest-upload-heading h1,
@@ -2389,28 +2442,39 @@ h2 {
   list-style: none;
 }
 
+/* Information discrete, pas un avertissement : le quota ne doit pas ouvrir la page. */
 .upload-quota {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 14px;
-  border: 1px solid rgba(120, 83, 55, 0.18);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  color: var(--color-ink);
-  background: #fff7ee;
+  gap: 12px;
+  padding: 0 2px;
+  color: var(--color-muted);
 }
 
 .upload-quota span {
   color: var(--color-muted);
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .upload-quota strong {
-  color: var(--color-primary);
-  font-size: 0.96rem;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
   text-align: right;
+}
+
+/* Quand la limite est atteinte, la mention redevient visible. */
+.upload-quota--full {
+  border: 1px solid rgba(159, 79, 95, 0.28);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  background: #fff3f3;
+}
+
+.upload-quota--full strong {
+  color: var(--color-primary);
 }
 
 .upload-quota--full {
@@ -2706,7 +2770,8 @@ body.camera-open {
 }
 
 .camera-controls {
-  grid-template-columns: minmax(76px, 0.8fr) minmax(104px, 1fr) minmax(76px, 0.8fr);
+  /* Minimums reduits : a 375px, 76+104+76 + gaps + padding depassait le cadre. */
+  grid-template-columns: minmax(60px, 0.8fr) minmax(96px, 1fr) minmax(60px, 0.8fr);
   align-items: center;
   justify-items: center;
   border: 1px solid rgba(255, 255, 255, 0.12);

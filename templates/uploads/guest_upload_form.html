@@ -6,13 +6,25 @@
 {% block body_class %}guest-page{% endblock %}
 {% block header_class %}site-header--solid{% endblock %}
 
+{# Un invite n'est pas un prospect : pas de lien d'inscription sur son parcours. #}
+{% block site_nav %}{% endblock %}
+
 {% block content %}
 <section class="guest-upload-shell">
-  <div class="guest-upload-heading">
-    <p class="section__label">{{ event.get_event_type_display }}</p>
-    <h1>Prendre une photo ou filmer</h1>
-    <p>Selfie, caméra arrière, filtres, vidéo 10 secondes max.</p>
-  </div>
+  <header class="guest-upload-heading{% if event.cover_image %} guest-upload-heading--cover{% endif %}">
+    {% if event.cover_image %}
+      <img class="guest-upload-heading__cover" src="{{ event.cover_image.url }}" alt="">
+      <div class="guest-upload-heading__shade" aria-hidden="true"></div>
+    {% endif %}
+    <div class="guest-upload-heading__content">
+      <p class="section__label">{{ event.get_event_type_display }}</p>
+      <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
+      {% if event.welcome_message %}
+        <p class="guest-upload-heading__welcome">{{ event.welcome_message }}</p>
+      {% endif %}
+      <p class="guest-upload-heading__hint">Prendre une photo ou filmer &mdash; vidéo 10 secondes max.</p>
+    </div>
+  </header>
 
   <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}">
     {% csrf_token %}
