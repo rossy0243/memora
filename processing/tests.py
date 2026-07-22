@@ -19,6 +19,7 @@ from PIL import Image
 from events.models import Event, EventType
 from uploads.models import GuestUpload
 
+from . import services
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
@@ -509,8 +510,12 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.edit_decision_data["badge"]["display_mode"], "full_movie")
         self.assertIsNone(movie.edit_decision_data["badge"]["duration_seconds"])
         self.assertTrue(movie.edit_decision_data["badge"]["applied"])
-        badge_command = run_ffmpeg.call_args_list[-1].args[0]
-        badge_filter = badge_command[badge_command.index("-vf") + 1]
+        # Le badge n'est plus le dernier appel ffmpeg : les declinaisons sont rendues apres.
+        badge_filter = next(
+            call.args[0][call.args[0].index("-vf") + 1]
+            for call in reversed(run_ffmpeg.call_args_list)
+            if "-vf" in call.args[0] and "drawtext" in call.args[0][call.args[0].index("-vf") + 1]
+        )
         self.assertIn("drawtext", badge_filter)
         self.assertNotIn("enable=", badge_filter)
         self.assertGreaterEqual(run_ffmpeg.call_count, 3)
@@ -678,6 +683,8 @@ class MovieGenerationServiceTests(TestCase):
         MEMORA_MOVIE_RENDER_PROVIDER="runway_final",
         MEMORA_RUNWAY_WORKFLOW_ID="workflow_123",
         MEMORA_RUNWAY_FALLBACK_TO_FFMPEG=True,
+        # Ce test isole le chemin Runway du film heros : pas de declinaisons.
+        MEMORA_MOVIE_VARIANTS_ENABLED=False,
     )
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services.render_final_movie_with_runway")
@@ -859,6 +866,74 @@ class MovieGenerationServiceTests(TestCase):
         video_filter = command[command.index("-filter_complex") + 1]
         self.assertNotIn("zoompan", video_filter)
         self.assertIn("gblur", video_filter)
+
+
+class MovieVariantTests(TestCase):
+    """Declinaisons integrale et teaser : elles ne doivent jamais casser le film heros."""
+
+    def test_variant_returns_none_without_uploads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = services.build_movie_variant(
+                SimpleNamespace(pk=1, title="Soiree"),
+                [],
+                Path(temp_dir),
+                "ffmpeg",
+                label="teaser",
+            )
+        self.assertIsNone(result)
+
+    @patch("processing.services._apply_soundtrack_if_available")
+    @patch("processing.services.choose_movie_soundtrack")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services._build_movie_clip")
+    def test_variant_renders_at_requested_size(
+        self, build_clip, run_ffmpeg, choose_soundtrack, apply_soundtrack
+    ):
+        build_clip.side_effect = lambda upload, path, binary, width=None, height=None: path.write_bytes(b"clip")
+        apply_soundtrack.side_effect = lambda source, target, soundtrack, binary: source
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = services.build_movie_variant(
+                SimpleNamespace(pk=7, title="Soiree Memora"),
+                [SimpleNamespace(pk=1), SimpleNamespace(pk=2)],
+                Path(temp_dir),
+                "ffmpeg",
+                label="teaser",
+                width=1080,
+                height=1920,
+            )
+            self.assertIsNotNone(result)
+
+        # Le format demande est bien transmis a chaque clip.
+        for call in build_clip.call_args_list:
+            self.assertEqual(call.kwargs["width"], 1080)
+            self.assertEqual(call.kwargs["height"], 1920)
+        run_ffmpeg.assert_called()
+
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services._build_movie_clip", side_effect=RuntimeError("clip casse"))
+    def test_variant_survives_broken_clips(self, _build_clip, run_ffmpeg):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = services.build_movie_variant(
+                SimpleNamespace(pk=9, title="Soiree"),
+                [SimpleNamespace(pk=1)],
+                Path(temp_dir),
+                "ffmpeg",
+                label="integrale",
+            )
+        self.assertIsNone(result)
+        run_ffmpeg.assert_not_called()
+
+    @override_settings(MEMORA_MOVIE_VARIANTS_ENABLED=False)
+    @patch("processing.services.build_movie_variant")
+    def test_variants_can_be_disabled(self, build_variant):
+        services._render_movie_variants(
+            SimpleNamespace(pk=1),
+            SimpleNamespace(pk=1),
+            Path("."),
+            "ffmpeg",
+        )
+        build_variant.assert_not_called()
 
 
 class GeneratedMovieAdminActionTests(TestCase):

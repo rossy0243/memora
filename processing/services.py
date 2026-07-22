@@ -603,6 +603,8 @@ def process_generated_movie(movie):
                 _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary)
                 total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
+            _render_movie_variants(movie, event, temp_path, ffmpeg_binary)
+
         movie.status = GeneratedMovie.Status.COMPLETED
         movie.progress_percent = 100
         movie.progress_message = "Votre film souvenir est prêt."
@@ -612,6 +614,10 @@ def process_generated_movie(movie):
         movie.save(
             update_fields=[
                 "final_file",
+                "full_file",
+                "teaser_file",
+                "full_duration",
+                "teaser_duration",
                 "status",
                 "progress_percent",
                 "progress_message",
@@ -882,13 +888,13 @@ def _estimated_movie_clip_duration(upload):
     return settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
 
 
-def _ken_burns_filter(duration_seconds):
+def _ken_burns_filter(duration_seconds, width=None, height=None):
     """Zoom lent centre, applique apres la composition du cadre."""
     frame_count = max(int(duration_seconds * 30), 1)
     zoom_ratio = max(settings.MEMORA_MOVIE_KEN_BURNS_ZOOM_RATIO, 1.0)
     zoom_step = (zoom_ratio - 1) / frame_count if zoom_ratio > 1 else 0
-    width = settings.MEMORA_MOVIE_WIDTH
-    height = settings.MEMORA_MOVIE_HEIGHT
+    width = width or settings.MEMORA_MOVIE_WIDTH
+    height = height or settings.MEMORA_MOVIE_HEIGHT
     return (
         f"zoompan=z='min(zoom+{zoom_step:.6f},{zoom_ratio})':d={frame_count}:"
         "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
@@ -896,10 +902,10 @@ def _ken_burns_filter(duration_seconds):
     )
 
 
-def _blurred_background_chain():
+def _blurred_background_chain(width=None, height=None):
     """Remplit le cadre avec une version floutee du media, au lieu de barres noires."""
-    width = settings.MEMORA_MOVIE_WIDTH
-    height = settings.MEMORA_MOVIE_HEIGHT
+    width = width or settings.MEMORA_MOVIE_WIDTH
+    height = height or settings.MEMORA_MOVIE_HEIGHT
     # On floute sur une miniature puis on reagrandit : meme rendu, bien moins de CPU.
     blur_width = max(width // 8, 16)
     blur_height = max(height // 8, 16)
@@ -915,15 +921,15 @@ def _blurred_background_chain():
     )
 
 
-def _frame_filter_complex(ken_burns_duration=None):
+def _frame_filter_complex(ken_burns_duration=None, width=None, height=None):
     """Compose chaque plan en plein cadre (fond floute + media net centre)."""
-    width = settings.MEMORA_MOVIE_WIDTH
-    height = settings.MEMORA_MOVIE_HEIGHT
+    width = width or settings.MEMORA_MOVIE_WIDTH
+    height = height or settings.MEMORA_MOVIE_HEIGHT
 
     if settings.MEMORA_MOVIE_BACKGROUND_BLUR_ENABLED:
         chain = (
             "[0:v]split=2[bg][fg];"
-            f"[bg]{_blurred_background_chain()}[bgb];"
+            f"[bg]{_blurred_background_chain(width, height)}[bgb];"
             f"[fg]scale={width}:{height}:force_original_aspect_ratio=decrease[fgs];"
             "[bgb][fgs]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2"
         )
@@ -934,23 +940,25 @@ def _frame_filter_complex(ken_burns_duration=None):
         )
 
     if ken_burns_duration is not None and settings.MEMORA_MOVIE_KEN_BURNS_ENABLED:
-        chain += "," + _ken_burns_filter(ken_burns_duration)
+        chain += "," + _ken_burns_filter(ken_burns_duration, width=width, height=height)
 
     return chain + ",fps=30,format=yuv420p[v]"
 
 
-def _build_movie_clip(upload, output_path, ffmpeg_binary):
+def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=None):
     if not upload.media_file:
         raise ValueError(f"Media sans fichier: {upload.pk}")
 
     input_path = _copy_media_to_temporary_file(upload, output_path.parent)
     try:
-        video_filter = _frame_filter_complex()
+        video_filter = _frame_filter_complex(width=width, height=height)
 
         if upload.media_type == GuestUpload.MediaType.IMAGE:
             clip_duration = str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
             image_filter = _frame_filter_complex(
-                ken_burns_duration=settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+                ken_burns_duration=settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS,
+                width=width,
+                height=height,
             )
             command = [
                 ffmpeg_binary,
@@ -1057,6 +1065,142 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
         _run_ffmpeg(command)
     finally:
         input_path.unlink(missing_ok=True)
+
+
+def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
+    """Produit l'integrale et le teaser vertical en plus du film heros.
+
+    Ces declinaisons sont un bonus : toute erreur est journalisee sans jamais
+    compromettre le film principal deja rendu.
+    """
+    if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
+        return
+
+    variants = (
+        (
+            "integrale",
+            settings.MEMORA_MOVIE_FULL_DURATION_SECONDS,
+            None,
+            None,
+            "full_file",
+            "full_duration",
+        ),
+        (
+            "teaser",
+            settings.MEMORA_MOVIE_TEASER_DURATION_SECONDS,
+            settings.MEMORA_MOVIE_TEASER_WIDTH,
+            settings.MEMORA_MOVIE_TEASER_HEIGHT,
+            "teaser_file",
+            "teaser_duration",
+        ),
+    )
+
+    for label, max_duration, width, height, file_field, duration_field in variants:
+        try:
+            uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
+            if not uploads:
+                continue
+
+            variant_path = build_movie_variant(
+                event,
+                uploads,
+                temp_path,
+                ffmpeg_binary,
+                label=label,
+                width=width,
+                height=height,
+            )
+            if not variant_path:
+                continue
+
+            with Path(variant_path).open("rb") as variant_file:
+                getattr(movie, file_field).save(
+                    Path(variant_path).name,
+                    File(variant_file),
+                    save=False,
+                )
+            seconds = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
+            setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
+            logger.info(
+                "Movie variant rendered movie=%s event=%s label=%s clips=%s",
+                movie.pk,
+                event.pk,
+                label,
+                len(uploads),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Movie variant failed movie=%s event=%s label=%s error=%s",
+                movie.pk,
+                event.pk,
+                label,
+                exc,
+            )
+
+
+def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, width=None, height=None):
+    """Rend une declinaison (integrale ou teaser vertical) avec le meme moteur que le film heros.
+
+    Volontairement sans Runway : ces versions doivent rester rapides et deterministes.
+    Renvoie le chemin du fichier rendu, ou None si aucun media exploitable.
+    """
+    uploads = list(uploads)
+    if not uploads:
+        return None
+
+    variant_dir = temp_path / f"variant_{label}"
+    variant_dir.mkdir(parents=True, exist_ok=True)
+
+    clip_paths = []
+    for index, upload in enumerate(uploads, start=1):
+        clip_path = variant_dir / f"clip_{index:04d}.mp4"
+        try:
+            _build_movie_clip(upload, clip_path, ffmpeg_binary, width=width, height=height)
+        except Exception as exc:
+            # Une variante secondaire ne doit jamais faire echouer le film principal.
+            logger.warning(
+                "Variant clip failed event=%s upload=%s label=%s error=%s",
+                event.pk,
+                upload.pk,
+                label,
+                exc,
+            )
+            continue
+        clip_paths.append(clip_path)
+
+    if not clip_paths:
+        return None
+
+    concat_file = variant_dir / "clips.txt"
+    concat_file.write_text(
+        "".join(f"file '{path.as_posix()}'\n" for path in clip_paths),
+        encoding="utf-8",
+    )
+    concat_output_path = variant_dir / f"memora_{_clean_name(event.title)}_{label}_base.mp4"
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+            "-c",
+            "copy",
+            str(concat_output_path),
+        ]
+    )
+
+    soundtrack = choose_movie_soundtrack(event, uploads)
+    soundtrack_output_path = variant_dir / f"memora_{_clean_name(event.title)}_{label}.mp4"
+    return _apply_soundtrack_if_available(
+        concat_output_path,
+        soundtrack_output_path,
+        soundtrack,
+        ffmpeg_binary,
+    )
 
 
 def _copy_media_to_temporary_file(upload, directory):
