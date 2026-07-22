@@ -7,7 +7,7 @@ ENV PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libpq5 \
+    && apt-get install -y --no-install-recommends ffmpeg libpq5 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

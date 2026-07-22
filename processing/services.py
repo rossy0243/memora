@@ -26,6 +26,7 @@ from .runway import (
     runway_is_ready,
 )
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
+from .title_cards import build_title_card, event_intro_texts
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,21 @@ DEFAULT_ZIP_CATEGORY_FOLDERS = {
     "funny": "08_Moment_drole",
     "emotional": "09_Moment_emouvant",
     "other": "10_Autre",
+}
+
+# Arc narratif : un film se raconte dans l'ordre du vecu, pas par score de qualite.
+# On ouvre calme, on monte vers la ceremonie et la fete, on referme en emotion.
+MOVIE_NARRATIVE_ORDER = {
+    "arrival": 1,
+    "ceremony": 2,
+    "cocktail": 3,
+    "reception": 4,
+    "speech": 5,
+    "cake": 6,
+    "dancefloor": 7,
+    "funny": 8,
+    "emotional": 9,
+    "other": 10,
 }
 
 MOVIE_CATEGORY_SCORE_BOOSTS = {
@@ -218,9 +234,9 @@ def get_movie_candidate_uploads(event, max_duration=None):
     )
 
     if not videos:
-        return _select_until_duration_limit(photos, max_duration)
+        return _order_by_narrative_arc(_select_until_duration_limit(photos, max_duration))
     if not photos:
-        return _select_until_duration_limit(videos, max_duration)
+        return _order_by_narrative_arc(_select_until_duration_limit(videos, max_duration))
 
     selected_videos, reserved_photo_seconds = _select_videos_with_photo_reserve(
         videos, photos, max_duration=max_duration
@@ -234,7 +250,9 @@ def get_movie_candidate_uploads(event, max_duration=None):
     selected_videos = _fill_remaining_duration_with_videos(
         videos, selected_videos, selected_photos, max_duration=max_duration
     )
-    return _weave_photos_between_videos(selected_videos, selected_photos)
+    return _order_by_narrative_arc(
+        _weave_photos_between_videos(selected_videos, selected_photos)
+    )
 
 
 def score_movie_candidate(upload):
@@ -650,6 +668,14 @@ def process_generated_movie(movie):
 def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary):
     beat_interval = _movie_beat_interval(event, uploads)
     clip_paths = []
+    intro_clip = build_intro_card_clip(
+        event,
+        temp_path / "clip_0000_intro.mp4",
+        ffmpeg_binary,
+        beat_interval=beat_interval,
+    )
+    if intro_clip:
+        clip_paths.append(intro_clip)
     runway_enhancements = []
     runway_enhanced_count = 0
     clip_count = max(len(uploads), 1)
@@ -946,6 +972,96 @@ def _frame_filter_complex(ken_burns_duration=None, width=None, height=None):
     return chain + ",fps=30,format=yuv420p[v]"
 
 
+def build_intro_card_clip(event, output_path, ffmpeg_binary, width=None, height=None, beat_interval=None):
+    """Carton d'ouverture anime : un film doit commencer, pas demarrer sec sur une photo.
+
+    Renvoie None si le carton ne peut pas etre produit : le film se passe d'ouverture
+    plutot que d'echouer.
+    """
+    if not settings.MEMORA_MOVIE_INTRO_CARD_ENABLED:
+        return None
+
+    width = width or settings.MEMORA_MOVIE_WIDTH
+    height = height or settings.MEMORA_MOVIE_HEIGHT
+    title, subtitle = event_intro_texts(event)
+    if not title:
+        return None
+
+    seconds = snap_duration_to_beat(settings.MEMORA_MOVIE_INTRO_CARD_SECONDS, beat_interval)
+    fade = min(0.6, seconds / 3)
+
+    try:
+        card_path = output_path.parent / f"{output_path.stem}_card.png"
+        build_title_card(card_path, width, height, title, subtitle)
+
+        _run_ffmpeg(
+            [
+                ffmpeg_binary,
+                "-y",
+                "-loop", "1",
+                "-t", str(seconds),
+                "-i", str(card_path),
+                "-f", "lavfi",
+                "-t", str(seconds),
+                "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+                "-vf",
+                (
+                    f"fade=t=in:st=0:d={fade:.2f},"
+                    f"fade=t=out:st={max(seconds - fade, 0):.2f}:d={fade:.2f},"
+                    "fps=30,format=yuv420p"
+                ),
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-c:v", settings.MEMORA_MOVIE_VIDEO_ENCODER,
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-ar", "48000",
+                "-ac", "2",
+                "-shortest",
+                "-movflags", "+faststart",
+                str(output_path),
+            ]
+        )
+        return output_path
+    except Exception as exc:
+        logger.warning("Intro card failed event=%s error=%s", getattr(event, "pk", "?"), exc)
+        return None
+
+
+def _narrative_rank(upload):
+    """Position d'un moment dans le recit. Les moments personnalises suivent leur ordre d'affichage."""
+    category = getattr(upload, "category", None)
+    code = getattr(category, "code", "") or ""
+    if code in MOVIE_NARRATIVE_ORDER:
+        return MOVIE_NARRATIVE_ORDER[code]
+    return getattr(category, "sort_order", 0) or len(MOVIE_NARRATIVE_ORDER) + 1
+
+
+def _order_by_narrative_arc(uploads):
+    """Reordonne les plans selon l'arc du recit, en conservant l'alternance photo/video.
+
+    Sans cela, le film suit le score de qualite : on saute de la piste de danse
+    a la ceremonie puis au gateau. On raconte une histoire, pas un classement.
+    """
+    uploads = list(uploads)
+    if not settings.MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED or not uploads:
+        return uploads
+
+    groups = {}
+    for upload in uploads:
+        groups.setdefault(_narrative_rank(upload), []).append(upload)
+
+    ordered = []
+    for rank in sorted(groups):
+        group = groups[rank]
+        videos = [u for u in group if u.media_type == GuestUpload.MediaType.VIDEO]
+        photos = [u for u in group if u.media_type == GuestUpload.MediaType.IMAGE]
+        # On garde l'alternance a l'interieur d'un moment pour eviter les blocs de videos.
+        ordered.extend(_weave_photos_between_videos(videos, photos) if videos and photos else group)
+
+    return ordered
+
+
 def _movie_beat_interval(event, uploads):
     """Intervalle entre deux temps de la piste retenue, 0 si la synchro est desactivee."""
     if not settings.MEMORA_MOVIE_BEAT_SYNC_ENABLED:
@@ -1190,6 +1306,18 @@ def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, widt
     variant_dir.mkdir(parents=True, exist_ok=True)
 
     clip_paths = []
+    intro_clip = build_intro_card_clip(
+        event,
+        variant_dir / "clip_0000_intro.mp4",
+        ffmpeg_binary,
+        width=width,
+        height=height,
+        beat_interval=beat_interval,
+    )
+    if intro_clip:
+        clip_paths.append(intro_clip)
+
+    media_clip_count = 0
     for index, upload in enumerate(uploads, start=1):
         clip_path = variant_dir / f"clip_{index:04d}.mp4"
         try:
@@ -1212,8 +1340,10 @@ def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, widt
             )
             continue
         clip_paths.append(clip_path)
+        media_clip_count += 1
 
-    if not clip_paths:
+    # Un carton d'ouverture seul ne fait pas un film.
+    if not media_clip_count:
         return None
 
     concat_file = variant_dir / "clips.txt"

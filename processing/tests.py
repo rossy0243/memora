@@ -21,6 +21,7 @@ from uploads.models import GuestUpload
 
 from . import services
 from . import soundtrack as soundtrack_module
+from . import title_cards
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
@@ -290,7 +291,8 @@ class MovieGenerationServiceTests(TestCase):
 
         candidates = list(get_movie_candidate_uploads(self.event))
 
-        self.assertEqual(candidates, [best_video, second_video, selected_photo])
+        # L'ordre final releve de l'arc narratif (teste a part) : ici on verifie la selection.
+        self.assertCountEqual(candidates, [best_video, second_video, selected_photo])
 
     @override_settings(
         MEMORA_MOVIE_MAX_DURATION_SECONDS=40,
@@ -869,8 +871,13 @@ class MovieGenerationServiceTests(TestCase):
         self.assertIn("gblur", video_filter)
 
 
+@override_settings(MEMORA_MOVIE_INTRO_CARD_ENABLED=False)
 class MovieVariantTests(TestCase):
-    """Declinaisons integrale et teaser : elles ne doivent jamais casser le film heros."""
+    """Declinaisons integrale et teaser : elles ne doivent jamais casser le film heros.
+
+    Le carton d'ouverture est desactive ici : ces tests portent sur la mecanique
+    des declinaisons, il est couvert par TitleCardTests.
+    """
 
     def test_variant_returns_none_without_uploads(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -937,6 +944,132 @@ class MovieVariantTests(TestCase):
             "ffmpeg",
         )
         build_variant.assert_not_called()
+
+
+class TitleCardTests(TestCase):
+    """Carton d'ouverture : un film doit commencer, pas demarrer sec sur une photo."""
+
+    def test_card_is_rendered_at_the_requested_size(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = title_cards.build_title_card(
+                Path(temp_dir) / "card.png", 1920, 1080, "Camille & Noe", "12/07/2026"
+            )
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (1920, 1080))
+
+    def test_card_supports_the_vertical_teaser(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = title_cards.build_title_card(
+                Path(temp_dir) / "card.png", 1080, 1920, "Camille & Noe", "12/07/2026"
+            )
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (1080, 1920))
+
+    def test_intro_texts_prefer_the_couple_name(self):
+        event = SimpleNamespace(
+            couple_name="Camille & Noe", title="Mariage", event_date=date(2026, 7, 12)
+        )
+        title, subtitle = title_cards.event_intro_texts(event)
+        self.assertEqual(title, "Camille & Noe")
+        self.assertEqual(subtitle, "12/07/2026")
+
+    def test_intro_texts_fall_back_to_the_event_title(self):
+        event = SimpleNamespace(couple_name="", title="Gala Memora", event_date=None)
+        title, subtitle = title_cards.event_intro_texts(event)
+        self.assertEqual(title, "Gala Memora")
+        self.assertEqual(subtitle, "")
+
+    def test_a_font_is_always_resolved(self):
+        self.assertIsNotNone(title_cards.resolve_title_font(64))
+
+    @override_settings(MEMORA_MOVIE_INTRO_CARD_ENABLED=False)
+    @patch("processing.services._run_ffmpeg")
+    def test_intro_card_can_be_disabled(self, run_ffmpeg):
+        result = services.build_intro_card_clip(
+            SimpleNamespace(pk=1, couple_name="Camille", title="", event_date=None),
+            Path("intro.mp4"),
+            "ffmpeg",
+        )
+        self.assertIsNone(result)
+        run_ffmpeg.assert_not_called()
+
+    @patch("processing.services._run_ffmpeg")
+    def test_no_card_without_a_name_to_show(self, run_ffmpeg):
+        result = services.build_intro_card_clip(
+            SimpleNamespace(pk=1, couple_name="", title="", event_date=None),
+            Path("intro.mp4"),
+            "ffmpeg",
+        )
+        self.assertIsNone(result)
+        run_ffmpeg.assert_not_called()
+
+    @patch("processing.services._run_ffmpeg", side_effect=RuntimeError("ffmpeg casse"))
+    def test_a_failed_card_never_breaks_the_film(self, _run_ffmpeg):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = services.build_intro_card_clip(
+                SimpleNamespace(pk=1, couple_name="Camille & Noe", title="", event_date=None),
+                Path(temp_dir) / "intro.mp4",
+                "ffmpeg",
+            )
+        self.assertIsNone(result)
+
+
+class NarrativeOrderTests(TestCase):
+    """Le film doit suivre le recit, pas le classement par score."""
+
+    def _upload(self, code, media_type=GuestUpload.MediaType.VIDEO, sort_order=0):
+        return SimpleNamespace(
+            pk=id(code) % 10000 + sort_order,
+            media_type=media_type,
+            category=SimpleNamespace(code=code, sort_order=sort_order),
+        )
+
+    def test_moments_follow_the_story_arc(self):
+        # Ordre volontairement chaotique, comme un tri par score.
+        uploads = [
+            self._upload("dancefloor"),
+            self._upload("ceremony"),
+            self._upload("cake"),
+            self._upload("arrival"),
+            self._upload("speech"),
+        ]
+        ordered = services._order_by_narrative_arc(uploads)
+        codes = [upload.category.code for upload in ordered]
+        self.assertEqual(codes, ["arrival", "ceremony", "speech", "cake", "dancefloor"])
+
+    def test_custom_moments_follow_their_display_order(self):
+        uploads = [
+            self._upload("photo-booth", sort_order=42),
+            self._upload("ceremony"),
+        ]
+        codes = [u.category.code for u in services._order_by_narrative_arc(uploads)]
+        self.assertEqual(codes, ["ceremony", "photo-booth"])
+
+    def test_photos_and_videos_stay_interleaved_inside_a_moment(self):
+        uploads = [
+            self._upload("ceremony", GuestUpload.MediaType.VIDEO),
+            self._upload("ceremony", GuestUpload.MediaType.VIDEO),
+            self._upload("ceremony", GuestUpload.MediaType.IMAGE),
+        ]
+        ordered = services._order_by_narrative_arc(uploads)
+        self.assertEqual(len(ordered), 3)
+        # Le tissage evite d'enchainer toutes les videos puis toutes les photos.
+        self.assertIn(GuestUpload.MediaType.IMAGE, [u.media_type for u in ordered])
+
+    @override_settings(MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED=False)
+    def test_ordering_can_be_disabled(self):
+        uploads = [self._upload("dancefloor"), self._upload("arrival")]
+        codes = [u.category.code for u in services._order_by_narrative_arc(uploads)]
+        self.assertEqual(codes, ["dancefloor", "arrival"])
+
+    def test_no_media_is_lost_in_reordering(self):
+        uploads = [
+            self._upload("dancefloor"),
+            self._upload("ceremony", GuestUpload.MediaType.IMAGE),
+            self._upload("other"),
+            self._upload("speech"),
+        ]
+        self.assertEqual(len(services._order_by_narrative_arc(uploads)), len(uploads))
 
 
 class BeatSyncTests(TestCase):

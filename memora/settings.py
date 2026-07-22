@@ -323,6 +323,12 @@ MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
 MEMORA_MOVIE_VARIANTS_ENABLED = env_bool("MEMORA_MOVIE_VARIANTS_ENABLED", True)
 # Coupes calees sur le tempo : le levier principal du "monte comme un pro".
 MEMORA_MOVIE_BEAT_SYNC_ENABLED = env_bool("MEMORA_MOVIE_BEAT_SYNC_ENABLED", True)
+# Ordre du recit (arrivee -> ceremonie -> fete) plutot que l'ordre du score.
+MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED = env_bool("MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED", True)
+# Carton d'ouverture (prenoms + date). Deposer un .ttf dans assets/fonts/ pour une belle typo.
+MEMORA_MOVIE_INTRO_CARD_ENABLED = env_bool("MEMORA_MOVIE_INTRO_CARD_ENABLED", True)
+MEMORA_MOVIE_INTRO_CARD_SECONDS = env_int("MEMORA_MOVIE_INTRO_CARD_SECONDS", 3)
+MEMORA_MOVIE_TITLE_FONT_PATH = os.getenv("MEMORA_MOVIE_TITLE_FONT_PATH", "")
 MEMORA_MOVIE_AUTOGENERATE_HOUR = env_int("MEMORA_MOVIE_AUTOGENERATE_HOUR", 12)
 MEMORA_MOVIE_VIDEO_ENCODER = os.getenv("MEMORA_MOVIE_VIDEO_ENCODER", "libx264")
 MEMORA_MOVIE_WIDTH = env_int("MEMORA_MOVIE_WIDTH", 1920)
