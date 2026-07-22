@@ -9,16 +9,43 @@ from .analysis import get_analysis_score
 
 SUPPORTED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
 
+# Tempo mesure hors ligne (enveloppe d'energie + autocorrelation) : (BPM, 1er temps en s).
+# Certaines valeurs sont a l'octave superieure du tempo ressenti ; sans importance,
+# un multiple exact de l'intervalle reste cale sur la grille musicale.
+TRACK_TEMPOS = {
+    "cinematic_emotional_emotional_piano_loop.mp3": (154.2, 0.01),
+    "elegant_warm_a_new_town.mp3": (176.9, 0.04),
+    "joyful_party_party_sector.mp3": (120.3, 0.03),
+    "romantic_cinematic_synthwave_421k.mp3": (85.9, 1.25),
+    "warm_lounge_one_step_at_a_time.mp3": (80.2, 0.41),
+}
+
+DEFAULT_BPM = 100.0
+
 
 @dataclass(frozen=True)
 class SoundtrackChoice:
     mood: str
     track_path: Path | None
     reason: str
+    bpm: float = 0.0
+    first_beat_offset: float = 0.0
 
     @property
     def track_name(self):
         return self.track_path.name if self.track_path else ""
+
+    @property
+    def beat_interval(self):
+        """Duree d'un temps, en secondes. 0 si le tempo est inconnu."""
+        return 60.0 / self.bpm if self.bpm else 0.0
+
+
+def get_track_tempo(track_path):
+    """(BPM, decalage du 1er temps) pour une piste connue, sinon (0, 0)."""
+    if not track_path:
+        return 0.0, 0.0
+    return TRACK_TEMPOS.get(Path(track_path).name, (0.0, 0.0))
 
 
 def choose_movie_soundtrack(event, uploads):
@@ -27,7 +54,14 @@ def choose_movie_soundtrack(event, uploads):
     reason = "Bibliotheque musicale non configuree"
     if track_path:
         reason = f"Piste choisie pour le mood {mood}"
-    return SoundtrackChoice(mood=mood, track_path=track_path, reason=reason)
+    bpm, first_beat_offset = get_track_tempo(track_path)
+    return SoundtrackChoice(
+        mood=mood,
+        track_path=track_path,
+        reason=reason,
+        bpm=bpm,
+        first_beat_offset=first_beat_offset,
+    )
 
 
 def choose_music_mood(event, uploads):

@@ -648,6 +648,7 @@ def process_generated_movie(movie):
 
 
 def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary):
+    beat_interval = _movie_beat_interval(event, uploads)
     clip_paths = []
     runway_enhancements = []
     runway_enhanced_count = 0
@@ -660,7 +661,7 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
             f"Preparation du clip {index}/{clip_count}.",
         )
         clip_path = temp_path / f"clip_{index:04d}.mp4"
-        _build_movie_clip(upload, clip_path, ffmpeg_binary)
+        _build_movie_clip(upload, clip_path, ffmpeg_binary, beat_interval=beat_interval)
         if _should_enhance_clip_with_runway(upload, runway_enhanced_count):
             _update_movie_progress(
                 movie,
@@ -945,7 +946,31 @@ def _frame_filter_complex(ken_burns_duration=None, width=None, height=None):
     return chain + ",fps=30,format=yuv420p[v]"
 
 
-def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=None):
+def _movie_beat_interval(event, uploads):
+    """Intervalle entre deux temps de la piste retenue, 0 si la synchro est desactivee."""
+    if not settings.MEMORA_MOVIE_BEAT_SYNC_ENABLED:
+        return 0.0
+    try:
+        return choose_movie_soundtrack(event, uploads).beat_interval
+    except Exception:
+        return 0.0
+
+
+def snap_duration_to_beat(duration_seconds, beat_interval, minimum_beats=2):
+    """Cale une duree sur un multiple entier de temps musicaux.
+
+    Toutes les durees etant des multiples de l'intervalle, les coupes tombent
+    sur la grille musicale : c'est ce qui donne l'impression de montage monte.
+    """
+    if not beat_interval or beat_interval <= 0:
+        return duration_seconds
+
+    beats = round(duration_seconds / beat_interval)
+    beats = max(beats, minimum_beats)
+    return round(beats * beat_interval, 3)
+
+
+def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=None, beat_interval=None):
     if not upload.media_file:
         raise ValueError(f"Media sans fichier: {upload.pk}")
 
@@ -954,9 +979,13 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
         video_filter = _frame_filter_complex(width=width, height=height)
 
         if upload.media_type == GuestUpload.MediaType.IMAGE:
-            clip_duration = str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
+            image_seconds = snap_duration_to_beat(
+                settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS,
+                beat_interval,
+            )
+            clip_duration = str(image_seconds)
             image_filter = _frame_filter_complex(
-                ken_burns_duration=settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS,
+                ken_burns_duration=image_seconds,
                 width=width,
                 height=height,
             )
@@ -997,7 +1026,15 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
                 str(output_path),
             ]
         else:
-            clip_duration = str(settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS)
+            video_seconds = settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
+            upload_duration = getattr(upload, "duration", None)
+            if upload_duration:
+                video_seconds = min(upload_duration.total_seconds(), video_seconds)
+            # On ne rallonge jamais un plan au-dela de sa duree reelle.
+            snapped = snap_duration_to_beat(video_seconds, beat_interval)
+            if snapped > video_seconds and beat_interval:
+                snapped = max(snapped - beat_interval, beat_interval)
+            clip_duration = str(round(snapped, 3))
             if _media_file_has_audio(input_path):
                 command = [
                     ffmpeg_binary,
@@ -1148,6 +1185,7 @@ def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, widt
     if not uploads:
         return None
 
+    beat_interval = _movie_beat_interval(event, uploads)
     variant_dir = temp_path / f"variant_{label}"
     variant_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1155,7 +1193,14 @@ def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, widt
     for index, upload in enumerate(uploads, start=1):
         clip_path = variant_dir / f"clip_{index:04d}.mp4"
         try:
-            _build_movie_clip(upload, clip_path, ffmpeg_binary, width=width, height=height)
+            _build_movie_clip(
+                upload,
+                clip_path,
+                ffmpeg_binary,
+                width=width,
+                height=height,
+                beat_interval=beat_interval,
+            )
         except Exception as exc:
             # Une variante secondaire ne doit jamais faire echouer le film principal.
             logger.warning(
@@ -1229,6 +1274,12 @@ def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_b
     if not _media_file_has_audio(input_path):
         return input_path
 
+    # On demarre la musique sur son premier temps fort : les coupes, toutes calees
+    # sur des multiples de temps, tombent alors exactement sur la grille musicale.
+    music_seek = []
+    if settings.MEMORA_MOVIE_BEAT_SYNC_ENABLED and soundtrack.first_beat_offset:
+        music_seek = ["-ss", str(round(soundtrack.first_beat_offset, 3))]
+
     _run_ffmpeg(
         [
             ffmpeg_binary,
@@ -1237,6 +1288,7 @@ def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_b
             str(input_path),
             "-stream_loop",
             "-1",
+            *music_seek,
             "-i",
             str(soundtrack.track_path),
             "-filter_complex",

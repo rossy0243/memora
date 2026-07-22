@@ -20,6 +20,7 @@ from events.models import Event, EventType
 from uploads.models import GuestUpload
 
 from . import services
+from . import soundtrack as soundtrack_module
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
 from .models import GeneratedMovie, MediaAnalysis
 from .services import (
@@ -889,7 +890,9 @@ class MovieVariantTests(TestCase):
     def test_variant_renders_at_requested_size(
         self, build_clip, run_ffmpeg, choose_soundtrack, apply_soundtrack
     ):
-        build_clip.side_effect = lambda upload, path, binary, width=None, height=None: path.write_bytes(b"clip")
+        build_clip.side_effect = (
+            lambda upload, path, binary, width=None, height=None, beat_interval=None: path.write_bytes(b"clip")
+        )
         apply_soundtrack.side_effect = lambda source, target, soundtrack, binary: source
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -934,6 +937,67 @@ class MovieVariantTests(TestCase):
             "ffmpeg",
         )
         build_variant.assert_not_called()
+
+
+class BeatSyncTests(TestCase):
+    """Coupes calees sur le tempo : c'est ce qui fait passer du diaporama au montage."""
+
+    def test_durations_snap_to_whole_beats(self):
+        beat = 60.0 / 120.0  # 0.5 s
+        self.assertAlmostEqual(services.snap_duration_to_beat(3.0, beat), 3.0, places=3)
+        self.assertAlmostEqual(services.snap_duration_to_beat(2.8, beat), 3.0, places=3)
+        self.assertAlmostEqual(services.snap_duration_to_beat(3.3, beat), 3.5, places=3)
+
+    def test_snapping_is_a_no_op_without_tempo(self):
+        self.assertEqual(services.snap_duration_to_beat(3.7, 0), 3.7)
+        self.assertEqual(services.snap_duration_to_beat(3.7, None), 3.7)
+
+    def test_minimum_length_is_respected(self):
+        beat = 60.0 / 176.9
+        self.assertGreaterEqual(services.snap_duration_to_beat(0.05, beat), 2 * beat - 0.001)
+
+    def test_cumulated_cuts_stay_on_the_musical_grid(self):
+        beat = 60.0 / 85.9
+        total = sum(services.snap_duration_to_beat(value, beat) for value in (3, 3, 7, 3, 9, 3))
+        # Le cumul doit rester un multiple entier du temps : sinon les coupes derivent.
+        self.assertAlmostEqual(total / beat, round(total / beat), places=1)
+
+    def test_known_tracks_expose_their_tempo(self):
+        for name, (bpm, offset) in soundtrack_module.TRACK_TEMPOS.items():
+            self.assertGreater(bpm, 0, name)
+            self.assertGreaterEqual(offset, 0, name)
+
+    @patch("processing.services._media_file_has_audio", return_value=True)
+    @patch("processing.services._run_ffmpeg")
+    def test_music_starts_on_its_first_beat(self, run_ffmpeg, _has_audio):
+        choice = soundtrack_module.SoundtrackChoice(
+            mood="romantic_cinematic",
+            track_path=Path("track.mp3"),
+            reason="test",
+            bpm=85.9,
+            first_beat_offset=1.25,
+        )
+        services._apply_soundtrack_if_available(
+            Path("in.mp4"), Path("out.mp4"), choice, "ffmpeg"
+        )
+        command = run_ffmpeg.call_args.args[0]
+        self.assertIn("-ss", command)
+        self.assertEqual(command[command.index("-ss") + 1], "1.25")
+
+    @patch("processing.services._media_file_has_audio", return_value=True)
+    @patch("processing.services._run_ffmpeg")
+    def test_no_seek_when_track_starts_on_the_beat(self, run_ffmpeg, _has_audio):
+        choice = soundtrack_module.SoundtrackChoice(
+            mood="joyful_party",
+            track_path=Path("track.mp3"),
+            reason="test",
+            bpm=120.3,
+            first_beat_offset=0.0,
+        )
+        services._apply_soundtrack_if_available(
+            Path("in.mp4"), Path("out.mp4"), choice, "ffmpeg"
+        )
+        self.assertNotIn("-ss", run_ffmpeg.call_args.args[0])
 
 
 class GeneratedMovieAdminActionTests(TestCase):
