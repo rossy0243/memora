@@ -31,6 +31,14 @@
       <a class="button button--primary" href="{{ movie_page_url }}">Ouvrir le film</a>
       <a class="button button--secondary button--compact" href="{{ latest_movie.final_file.url }}" download>Télécharger</a>
     </div>
+    {% if latest_movie.full_file or latest_movie.teaser_file %}
+      <p class="muted-copy movie-versions__hint">
+        Également disponible :
+        {% if latest_movie.full_file %}<a href="{{ latest_movie.full_file.url }}" download>version intégrale</a>{% endif %}
+        {% if latest_movie.full_file and latest_movie.teaser_file %} · {% endif %}
+        {% if latest_movie.teaser_file %}<a href="{{ latest_movie.teaser_file.url }}" download>teaser vertical</a>{% endif %}
+      </p>
+    {% endif %}
   {% elif latest_movie %}
     <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
       <div class="movie-progress__meta">

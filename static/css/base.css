@@ -2914,9 +2914,78 @@ body.camera-open {
   display: block;
   width: 100%;
   max-height: min(66svh, 620px);
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
+  /* Jamais de recadrage : l'invite doit revoir exactement ce qu'il a capture. */
+  object-fit: contain;
   background: var(--color-ink);
+}
+
+/* Le fond floute ne sert qu'en revue plein ecran. */
+.capture-preview__backdrop {
+  display: none;
+}
+
+/* --- Revue plein ecran, comme un appareil photo natif --- */
+body.capture-review-open {
+  overflow: hidden;
+}
+
+.capture-review-open .capture-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  border-radius: 0;
+  background: #0f0c0d;
+  box-shadow: none;
+}
+
+.capture-review-open .capture-preview__media {
+  position: relative;
+  overflow: hidden;
+}
+
+.capture-review-open .capture-preview__backdrop {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+  filter: blur(26px) brightness(0.5);
+  transform: scale(1.12);
+}
+
+.capture-review-open .capture-preview__media img#capture-preview-image,
+.capture-review-open .capture-preview__media video {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  background: transparent;
+}
+
+.capture-review-open .capture-preview__body {
+  position: static;
+  border: 0;
+  border-radius: 0;
+  padding: 14px max(14px, env(safe-area-inset-left)) max(18px, env(safe-area-inset-bottom));
+  background: rgba(15, 12, 13, 0.92);
+}
+
+/* En revue, le selecteur de fichier n'a pas sa place : on vient de capturer. */
+.capture-review-open .capture-preview__replace {
+  display: none;
+}
+
+.capture-preview__confirm {
+  display: none;
+}
+
+.capture-review-open .capture-preview__confirm {
+  display: inline-flex;
 }
 
 .capture-preview__body {

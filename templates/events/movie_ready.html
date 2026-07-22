@@ -38,6 +38,33 @@
           {% endif %}
           <button class="button button--secondary" type="button" data-share-url="{{ public_movie_url }}" data-share-title="{{ share_title }}">Partager</button>
         </div>
+
+        {% if ready_movie.full_file or ready_movie.teaser_file %}
+          <section class="movie-versions" aria-label="Autres versions du film">
+            <h3>Vos autres versions</h3>
+            <p class="muted-copy">Le même événement, monté pour d'autres usages.</p>
+            <div class="movie-versions__list">
+              {% if ready_movie.full_file %}
+                <article class="movie-version">
+                  <div>
+                    <strong>Version intégrale</strong>
+                    <span>Tous les souvenirs retenus{% if ready_movie.full_duration %}, {{ ready_movie.full_duration }}{% endif %}.</span>
+                  </div>
+                  <a class="button button--secondary button--compact" href="{{ ready_movie.full_file.url }}" download>Télécharger</a>
+                </article>
+              {% endif %}
+              {% if ready_movie.teaser_file %}
+                <article class="movie-version">
+                  <div>
+                    <strong>Teaser vertical</strong>
+                    <span>Format mobile, pensé pour le partage{% if ready_movie.teaser_duration %}, {{ ready_movie.teaser_duration }}{% endif %}.</span>
+                  </div>
+                  <a class="button button--secondary button--compact" href="{{ ready_movie.teaser_file.url }}" download>Télécharger</a>
+                </article>
+              {% endif %}
+            </div>
+          </section>
+        {% endif %}
       </article>
 
       <aside class="movie-ready-side">

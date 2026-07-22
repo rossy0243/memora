@@ -26,7 +26,7 @@ from .runway import (
     runway_is_ready,
 )
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
-from .title_cards import build_title_card, event_intro_texts
+from .title_cards import build_title_card, event_intro_texts, event_outro_texts
 
 
 logger = logging.getLogger(__name__)
@@ -746,6 +746,15 @@ def _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data,
                     raise
         clip_paths.append(clip_path)
 
+    outro_clip = build_outro_card_clip(
+        event,
+        temp_path / "clip_9999_outro.mp4",
+        ffmpeg_binary,
+        beat_interval=beat_interval,
+    )
+    if outro_clip:
+        clip_paths.append(outro_clip)
+
     _update_movie_progress(movie, 68, "Assemblage des clips sélectionnés.")
     movie.edit_decision_data["runway"]["enhancements"] = runway_enhancements
     if runway_enhanced_count:
@@ -972,22 +981,16 @@ def _frame_filter_complex(ken_burns_duration=None, width=None, height=None):
     return chain + ",fps=30,format=yuv420p[v]"
 
 
-def build_intro_card_clip(event, output_path, ffmpeg_binary, width=None, height=None, beat_interval=None):
-    """Carton d'ouverture anime : un film doit commencer, pas demarrer sec sur une photo.
+def _build_card_clip(
+    event, output_path, ffmpeg_binary, title, subtitle, seconds, width, height, label
+):
+    """Rend un carton fixe en clip video, fondu a l'entree et a la sortie.
 
-    Renvoie None si le carton ne peut pas etre produit : le film se passe d'ouverture
-    plutot que d'echouer.
+    Renvoie None en cas d'echec : un film sans carton vaut mieux qu'un film absent.
     """
-    if not settings.MEMORA_MOVIE_INTRO_CARD_ENABLED:
-        return None
-
-    width = width or settings.MEMORA_MOVIE_WIDTH
-    height = height or settings.MEMORA_MOVIE_HEIGHT
-    title, subtitle = event_intro_texts(event)
     if not title:
         return None
 
-    seconds = snap_duration_to_beat(settings.MEMORA_MOVIE_INTRO_CARD_SECONDS, beat_interval)
     fade = min(0.6, seconds / 3)
 
     try:
@@ -1024,8 +1027,48 @@ def build_intro_card_clip(event, output_path, ffmpeg_binary, width=None, height=
         )
         return output_path
     except Exception as exc:
-        logger.warning("Intro card failed event=%s error=%s", getattr(event, "pk", "?"), exc)
+        logger.warning(
+            "%s card failed event=%s error=%s", label, getattr(event, "pk", "?"), exc
+        )
         return None
+
+
+def build_intro_card_clip(event, output_path, ffmpeg_binary, width=None, height=None, beat_interval=None):
+    """Carton d'ouverture : un film doit commencer, pas demarrer sec sur une photo."""
+    if not settings.MEMORA_MOVIE_INTRO_CARD_ENABLED:
+        return None
+
+    title, subtitle = event_intro_texts(event)
+    return _build_card_clip(
+        event,
+        output_path,
+        ffmpeg_binary,
+        title,
+        subtitle,
+        snap_duration_to_beat(settings.MEMORA_MOVIE_INTRO_CARD_SECONDS, beat_interval),
+        width or settings.MEMORA_MOVIE_WIDTH,
+        height or settings.MEMORA_MOVIE_HEIGHT,
+        "Intro",
+    )
+
+
+def build_outro_card_clip(event, output_path, ffmpeg_binary, width=None, height=None, beat_interval=None):
+    """Carton de fin : sans lui le film s'arrete net et parait inacheve."""
+    if not settings.MEMORA_MOVIE_OUTRO_CARD_ENABLED:
+        return None
+
+    title, subtitle = event_outro_texts(event)
+    return _build_card_clip(
+        event,
+        output_path,
+        ffmpeg_binary,
+        title,
+        subtitle,
+        snap_duration_to_beat(settings.MEMORA_MOVIE_OUTRO_CARD_SECONDS, beat_interval),
+        width or settings.MEMORA_MOVIE_WIDTH,
+        height or settings.MEMORA_MOVIE_HEIGHT,
+        "Outro",
+    )
 
 
 def _narrative_rank(upload):
@@ -1345,6 +1388,17 @@ def build_movie_variant(event, uploads, temp_path, ffmpeg_binary, *, label, widt
     # Un carton d'ouverture seul ne fait pas un film.
     if not media_clip_count:
         return None
+
+    outro_clip = build_outro_card_clip(
+        event,
+        variant_dir / "clip_9999_outro.mp4",
+        ffmpeg_binary,
+        width=width,
+        height=height,
+        beat_interval=beat_interval,
+    )
+    if outro_clip:
+        clip_paths.append(outro_clip)
 
     concat_file = variant_dir / "clips.txt"
     concat_file.write_text(

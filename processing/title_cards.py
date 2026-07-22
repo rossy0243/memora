@@ -106,3 +106,15 @@ def event_intro_texts(event):
     event_date = getattr(event, "event_date", None)
     subtitle = event_date.strftime("%d/%m/%Y") if event_date else ""
     return title, subtitle
+
+
+def event_outro_texts(event):
+    """Titre et sous-titre du carton de fin.
+
+    Un film qui s'arrete net sur le dernier plan donne une impression d'inacheve :
+    le carton de fin referme le recit et remercie ceux qui l'ont nourri.
+    """
+    name = (getattr(event, "couple_name", "") or getattr(event, "title", "") or "").strip()
+    title = settings.MEMORA_MOVIE_OUTRO_TITLE or "Merci"
+    subtitle = name or "Memora"
+    return title, subtitle

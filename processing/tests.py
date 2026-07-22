@@ -901,6 +901,15 @@ class MovieVariantTests(TestCase):
             lambda upload, path, binary, width=None, height=None, beat_interval=None: path.write_bytes(b"clip")
         )
         apply_soundtrack.side_effect = lambda source, target, soundtrack, binary: source
+        # Un tempo reel : sans ca le mock ferait remonter un MagicMock dans les
+        # calculs de duree des cartons.
+        choose_soundtrack.return_value = SimpleNamespace(
+            mood="joyful_party",
+            track_path=None,
+            track_name="",
+            beat_interval=0.5,
+            first_beat_offset=0.0,
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             result = services.build_movie_variant(

@@ -13,6 +13,8 @@
   const previewDetails = document.getElementById("capture-preview-details");
   const replaceMediaButton = document.getElementById("replace-media-button");
   const retakeCameraButton = document.getElementById("retake-camera-button");
+  const useCaptureButton = document.getElementById("use-capture-button");
+  const previewBackdrop = document.getElementById("capture-preview-backdrop");
   const cameraStudio = document.getElementById("camera-studio");
   const startCameraButton = document.getElementById("start-camera-button");
   const cameraPanel = document.getElementById("camera-panel");
@@ -65,8 +67,12 @@
 
   function clearPreview() {
     resetPreviewUrl();
+    closeCaptureReview();
     if (capturePreview) {
       capturePreview.hidden = true;
+    }
+    if (previewBackdrop) {
+      previewBackdrop.removeAttribute("src");
     }
     if (previewImage) {
       previewImage.removeAttribute("src");
@@ -351,14 +357,22 @@
     setCameraStatus("Souvenir prêt à envoyer");
   }
 
+  function openCaptureReview() {
+    document.body.classList.add("capture-review-open");
+  }
+
+  function closeCaptureReview() {
+    document.body.classList.remove("capture-review-open");
+  }
+
   function showPreviewAfterCapture(message) {
     showCameraFeedback(message, "success");
-    window.setTimeout(function () {
-      stopCamera();
-      if (capturePreview) {
-        capturePreview.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 450);
+    // On reste en plein ecran : l'image capturee remplace le flux au meme endroit,
+    // comme un appareil photo natif. Pas d'attente, pas de sortie, pas de defilement.
+    // stopCamera libere la camera et masque le panneau dans le meme tick que
+    // l'ouverture de la revue : le navigateur ne peint jamais la page intermediaire.
+    stopCamera();
+    openCaptureReview();
   }
 
   function capturePhoto() {
@@ -553,6 +567,12 @@
         previewDetails.textContent = sizeLabel ? "Aperçu prêt - " + sizeLabel + "." : "Aperçu prêt.";
       }
 
+      if (previewBackdrop) {
+        // Le fond floute evite les bandes noires autour d'une photo verticale,
+        // comme dans le film final : l'invite revoit son cadrage, pas un recadrage.
+        previewBackdrop.src = file.type.indexOf("image/") === 0 ? previewUrl : "";
+      }
+
       if (file.type.indexOf("image/") === 0 && previewImage) {
         previewImage.src = previewUrl;
         previewImage.hidden = false;
@@ -593,7 +613,21 @@
   }
 
   if (retakeCameraButton) {
-    retakeCameraButton.addEventListener("click", startCamera);
+    retakeCameraButton.addEventListener("click", function () {
+      closeCaptureReview();
+      startCamera();
+    });
+  }
+
+  if (useCaptureButton) {
+    useCaptureButton.addEventListener("click", function () {
+      closeCaptureReview();
+      // On amene l'invite au choix du moment : l'etape qui lui reste a faire.
+      const momentField = document.querySelector(".moment-field");
+      if (momentField && momentField.scrollIntoView) {
+        momentField.scrollIntoView({ block: "center" });
+      }
+    });
   }
 
   form.addEventListener("submit", function (event) {

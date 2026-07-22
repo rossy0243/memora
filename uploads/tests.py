@@ -362,7 +362,10 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Vidéo")
         self.assertContains(response, "Ouvrir l'appareil natif")
         self.assertContains(response, "Souvenir prêt à envoyer")
-        self.assertContains(response, "Reprendre avec la caméra")
+        self.assertContains(response, "Reprendre")
+        # La revue plein ecran propose de valider la capture sans quitter l'ecran.
+        self.assertContains(response, "Utiliser ce souvenir")
+        self.assertContains(response, "capture-preview-backdrop")
         self.assertContains(response, "Moment obligatoire")
         self.assertNotContains(response, "Choisir le moment")
         self.assertContains(response, "obligatoire")

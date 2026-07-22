@@ -99,6 +99,7 @@
 
     <div class="capture-preview" id="capture-preview" hidden>
       <div class="capture-preview__media">
+        <img class="capture-preview__backdrop" id="capture-preview-backdrop" alt="" aria-hidden="true">
         <img id="capture-preview-image" alt="">
         <video id="capture-preview-video" muted playsinline controls></video>
       </div>
@@ -108,8 +109,9 @@
           <p id="capture-preview-details">Vérifiez l'aperçu, choisissez le moment, puis envoyez.</p>
         </div>
         <div class="capture-preview__actions">
-          <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre avec la caméra</button>
-          <button class="button button--secondary button--compact" type="button" id="replace-media-button">Choisir un autre fichier</button>
+          <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre</button>
+          <button class="button button--primary button--compact capture-preview__confirm" type="button" id="use-capture-button">Utiliser ce souvenir</button>
+          <button class="button button--secondary button--compact capture-preview__replace" type="button" id="replace-media-button">Choisir un autre fichier</button>
         </div>
       </div>
     </div>
