@@ -20,6 +20,14 @@ def make_paid_event(organizer, event_type, title="Evenement"):
     )
 
 
+def make_ambassador(user):
+    """Le statut est accorde par Memora : les tests de commissions doivent l'accorder."""
+    profile = OrganizerProfile.for_user(user)
+    profile.grant_ambassador()
+    profile.save(update_fields=["is_ambassador", "became_ambassador_at", "updated_at"])
+    return profile
+
+
 def configure(**fields):
     """Met à jour le SiteConfiguration singleton (seedé par migration) sans en créer un second."""
     config = SiteConfiguration.objects.first() or SiteConfiguration.objects.create()
@@ -108,6 +116,7 @@ class OwnEventCommissionTests(TestCase):
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
         self.organizer = get_user_model().objects.create_user(username="orga", password="secret")
+        make_ambassador(self.organizer)
         self.config = configure(
             commission_starter_amount=500,
             commission_medium_amount=1000,
@@ -193,6 +202,7 @@ class ReferralCommissionTests(TestCase):
             commission_referral_amount=500,
         )
         self.referrer = get_user_model().objects.create_user(username="parrain", password="secret")
+        make_ambassador(self.referrer)
         self.referred = get_user_model().objects.create_user(username="filleul", password="secret")
         profile = self.referred.organizer_profile
         profile.referred_by = self.referrer
@@ -236,6 +246,7 @@ class DashboardEarningsPanelTests(TestCase):
             commission_referral_amount=500,
         )
         self.organizer = get_user_model().objects.create_user(username="orga", password="secret")
+        make_ambassador(self.organizer)
 
     def test_dashboard_shows_tier_and_rate(self):
         self.client.force_login(self.organizer)
@@ -250,3 +261,64 @@ class DashboardEarningsPanelTests(TestCase):
         self.client.force_login(self.organizer)
         response = self.client.get(reverse("dashboard:home"))
         self.assertContains(response, "par événement payé")
+
+
+class AmbassadorGatingTests(TestCase):
+    """Le programme est reserve aux ambassadeurs designes par Memora."""
+
+    def setUp(self):
+        self.event_type, _ = EventType.objects.get_or_create(
+            code="wedding", defaults={"label": "Mariage", "sort_order": 1}
+        )
+        configure(commission_starter_amount=500, commission_referral_amount=500)
+        self.organizer = get_user_model().objects.create_user(username="simple", password="secret")
+
+    def test_new_organizers_are_not_ambassadors(self):
+        self.assertFalse(self.organizer.organizer_profile.is_ambassador)
+
+    def test_simple_organizer_earns_nothing(self):
+        make_paid_event(self.organizer, self.event_type)
+        self.assertFalse(CommissionLedger.objects.filter(beneficiary=self.organizer).exists())
+
+    def test_simple_organizer_sees_no_earnings_panel(self):
+        self.client.force_login(self.organizer)
+        response = self.client.get(reverse("dashboard:home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Mes gains")
+        self.assertNotContains(response, "lien de parrainage")
+
+    def test_referral_pays_nothing_when_referrer_is_not_ambassador(self):
+        referred = get_user_model().objects.create_user(username="filleul", password="secret")
+        profile = referred.organizer_profile
+        profile.referred_by = self.organizer
+        profile.save(update_fields=["referred_by"])
+
+        make_paid_event(referred, self.event_type)
+
+        self.assertFalse(
+            CommissionLedger.objects.filter(kind=CommissionLedger.Kind.REFERRAL_EVENT).exists()
+        )
+
+    def test_granting_status_starts_the_commissions(self):
+        make_paid_event(self.organizer, self.event_type, title="Avant")
+        self.assertFalse(CommissionLedger.objects.filter(beneficiary=self.organizer).exists())
+
+        make_ambassador(self.organizer)
+        make_paid_event(self.organizer, self.event_type, title="Apres")
+
+        entries = CommissionLedger.objects.filter(beneficiary=self.organizer)
+        # Seul l'evenement paye apres l'octroi est commissionne : pas de rattrapage.
+        self.assertEqual(entries.count(), 1)
+        self.assertEqual(entries.first().event.title, "Apres")
+
+    def test_revoking_keeps_commissions_already_earned(self):
+        make_ambassador(self.organizer)
+        make_paid_event(self.organizer, self.event_type)
+        self.assertEqual(CommissionLedger.objects.filter(beneficiary=self.organizer).count(), 1)
+
+        profile = self.organizer.organizer_profile
+        profile.revoke_ambassador()
+        profile.save(update_fields=["is_ambassador", "updated_at"])
+
+        # On ne reecrit pas le passe : ce qui est du reste du.
+        self.assertEqual(CommissionLedger.objects.filter(beneficiary=self.organizer).count(), 1)

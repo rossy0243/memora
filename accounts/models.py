@@ -25,11 +25,19 @@ class OrganizerProfile(models.Model):
         on_delete=models.CASCADE,
         related_name="organizer_profile",
     )
+    is_ambassador = models.BooleanField(
+        default=False,
+        help_text=(
+            "Statut accordé manuellement par Memora. Seuls les ambassadeurs "
+            "perçoivent des commissions ; les autres sont des organisateurs simples."
+        ),
+    )
+    became_ambassador_at = models.DateTimeField(null=True, blank=True)
     tier = models.CharField(
         max_length=20,
         choices=Tier.choices,
         default=Tier.STARTER,
-        help_text="Palier calculé automatiquement d'après le nombre d'événements payés.",
+        help_text="Palier calculé automatiquement d'après le nombre d'événements payés (ambassadeurs).",
     )
     referral_code = models.CharField(max_length=12, unique=True)
     referred_by = models.ForeignKey(
@@ -49,7 +57,17 @@ class OrganizerProfile(models.Model):
         verbose_name_plural = "profils organisateurs"
 
     def __str__(self):
-        return f"{self.user.username} ({self.get_tier_display()})"
+        if not self.is_ambassador:
+            return f"{self.user.username} (organisateur)"
+        return f"{self.user.username} (ambassadeur {self.get_tier_display()})"
+
+    def grant_ambassador(self):
+        if not self.is_ambassador:
+            self.is_ambassador = True
+            self.became_ambassador_at = timezone.now()
+
+    def revoke_ambassador(self):
+        self.is_ambassador = False
 
     def paid_events_count(self):
         from events.models import Event

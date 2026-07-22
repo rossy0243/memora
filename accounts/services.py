@@ -17,10 +17,10 @@ def record_event_commissions(event):
         organizer_profile = OrganizerProfile.for_user(event.organizer)
         paid_count = organizer_profile.paid_events_count()
 
-        # Commission sur l'événement propre : montant selon le palier atteint, figé.
+        # Commission sur l'événement propre : réservée aux ambassadeurs désignés par Memora.
         tier = configuration.tier_for_paid_count(paid_count)
         own_amount = configuration.commission_amount_for_paid_count(paid_count)
-        if own_amount:
+        if organizer_profile.is_ambassador and own_amount:
             entry, was_created = CommissionLedger.objects.get_or_create(
                 event=event,
                 kind=CommissionLedger.Kind.OWN_EVENT,
@@ -37,9 +37,12 @@ def record_event_commissions(event):
         # Le palier de l'organisateur suit son nombre d'événements payés.
         organizer_profile.refresh_tier(paid_count=paid_count)
 
-        # Commission de parrainage : versée au parrain pour chaque événement payé du filleul.
+        # Commission de parrainage : le parrain doit lui aussi être ambassadeur.
         referrer = organizer_profile.referred_by
-        if referrer and configuration.commission_referral_amount:
+        referrer_is_ambassador = bool(
+            referrer and OrganizerProfile.for_user(referrer).is_ambassador
+        )
+        if referrer_is_ambassador and configuration.commission_referral_amount:
             entry, was_created = CommissionLedger.objects.get_or_create(
                 event=event,
                 kind=CommissionLedger.Kind.REFERRAL_EVENT,

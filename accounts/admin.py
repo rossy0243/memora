@@ -5,15 +5,53 @@ from .models import CommissionLedger, OrganizerProfile
 
 @admin.register(OrganizerProfile)
 class OrganizerProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "tier", "paid_events_count", "referral_code", "referred_by", "tier_updated_at")
-    list_filter = ("tier",)
+    list_display = (
+        "user",
+        "is_ambassador",
+        "tier",
+        "paid_events_count",
+        "referral_code",
+        "referred_by",
+        "became_ambassador_at",
+    )
+    list_filter = ("is_ambassador", "tier")
+    list_editable = ("is_ambassador",)
     search_fields = ("user__username", "user__email", "referral_code")
-    readonly_fields = ("referral_code", "tier_updated_at", "created_at", "updated_at")
-    actions = ("recompute_tier",)
+    readonly_fields = (
+        "referral_code",
+        "became_ambassador_at",
+        "tier",
+        "tier_updated_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ("grant_ambassador", "revoke_ambassador", "recompute_tier")
 
     @admin.display(description="Événements payés")
     def paid_events_count(self, obj):
         return obj.paid_events_count()
+
+    @admin.action(description="Accorder le statut ambassadeur")
+    def grant_ambassador(self, request, queryset):
+        granted = 0
+        for profile in queryset.filter(is_ambassador=False):
+            profile.grant_ambassador()
+            profile.save(update_fields=["is_ambassador", "became_ambassador_at", "updated_at"])
+            granted += 1
+        self.message_user(request, f"{granted} ambassadeur(s) accordé(s).")
+
+    @admin.action(description="Retirer le statut ambassadeur")
+    def revoke_ambassador(self, request, queryset):
+        revoked = 0
+        for profile in queryset.filter(is_ambassador=True):
+            profile.revoke_ambassador()
+            profile.save(update_fields=["is_ambassador", "updated_at"])
+            revoked += 1
+        # Les commissions deja acquises restent dues : on ne reecrit pas le passe.
+        self.message_user(
+            request,
+            f"{revoked} statut(s) retire(s). Les commissions deja acquises restent inchangees.",
+        )
 
     @admin.action(description="Recalculer le palier")
     def recompute_tier(self, request, queryset):

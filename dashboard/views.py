@@ -18,9 +18,23 @@ def dashboard_home(request):
         event.post_event_status = _event_post_status(event, today)
 
     profile = OrganizerProfile.for_user(request.user)
+    # Le programme est reserve aux ambassadeurs designes par Memora : un organisateur
+    # simple ne doit voir aucune promesse de gains.
+    earnings_panel = None
+    if profile.is_ambassador:
+        earnings_panel = _build_earnings_panel(request, profile)
+
+    return render(
+        request,
+        "dashboard/home.html",
+        {"events": events, "today": today, "earnings_panel": earnings_panel},
+    )
+
+
+def _build_earnings_panel(request, profile):
     summary = commission_summary_for_user(request.user)
     progress = tier_progress_for_profile(profile)
-    earnings_panel = {
+    return {
         "tier": progress["tier"],
         "tier_label": progress["tier_label"],
         "current_rate": progress["current_rate"],
@@ -37,12 +51,6 @@ def dashboard_home(request):
         "entries": summary["entries"][:5],
         "referred_count": OrganizerProfile.objects.filter(referred_by=request.user).count(),
     }
-
-    return render(
-        request,
-        "dashboard/home.html",
-        {"events": events, "today": today, "earnings_panel": earnings_panel},
-    )
 
 
 def _event_post_status(event, today):

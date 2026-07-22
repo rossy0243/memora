@@ -41,11 +41,11 @@
             <span class="site-nav__name">{{ user.get_short_name|default:user.username }}</span>
           </summary>
           <div class="site-account__menu">
-            {% with tier=user.organizer_profile.tier %}
-              {% if tier %}
-                <span class="site-account__tag tier-badge--{{ tier }}">{{ user.organizer_profile.get_tier_display }}</span>
-              {% endif %}
-            {% endwith %}
+            {% if user.organizer_profile.is_ambassador %}
+              <span class="site-account__tag tier-badge--{{ user.organizer_profile.tier }}">
+                Ambassadeur {{ user.organizer_profile.get_tier_display }}
+              </span>
+            {% endif %}
             <a href="{% url 'dashboard:home' %}">Mes événements</a>
             <form method="post" action="{% url 'accounts:logout' %}">
               {% csrf_token %}

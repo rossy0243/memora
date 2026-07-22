@@ -3600,6 +3600,12 @@ body.camera-open {
   gap: 12px;
 }
 
+.program-hero__note {
+  margin: 18px 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
 .program-tiers {
   padding: 34px 20px 44px;
   background: var(--color-surface);
