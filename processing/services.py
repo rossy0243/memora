@@ -160,7 +160,45 @@ def iter_event_zip_chunks(event):
     yield from buffer.drain()
 
 
-def get_movie_candidate_uploads(event):
+def is_unusable_for_movie(upload):
+    """Media inexploitable : trop flou, trop sombre ou crame. Sans analyse, on garde."""
+    try:
+        analysis = upload.analysis
+    except MediaAnalysis.DoesNotExist:
+        return False
+
+    if not analysis or analysis.status != MediaAnalysis.Status.COMPLETED:
+        return False
+    if analysis.sharpness is None or analysis.brightness is None:
+        return False
+
+    return (
+        analysis.sharpness < settings.MEMORA_MOVIE_MIN_SHARPNESS
+        or analysis.brightness < settings.MEMORA_MOVIE_MIN_BRIGHTNESS
+        or analysis.brightness > settings.MEMORA_MOVIE_MAX_BRIGHTNESS
+    )
+
+
+def _reject_unusable_uploads(uploads):
+    """Ecarte les medias inexploitables, sauf s'il n'en resterait pas assez."""
+    if not settings.MEMORA_MOVIE_REJECT_UNUSABLE_ENABLED:
+        return list(uploads), []
+
+    uploads = list(uploads)
+    kept = [upload for upload in uploads if not is_unusable_for_movie(upload)]
+    rejected = [upload for upload in uploads if is_unusable_for_movie(upload)]
+
+    # Filet de securite : mieux vaut un film imparfait qu'un film vide.
+    if len(kept) < settings.MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT:
+        return uploads, []
+
+    return kept, rejected
+
+
+def get_movie_candidate_uploads(event, max_duration=None):
+    """Selection des medias. Par defaut la duree du film heros (court = dense = emouvant)."""
+    max_duration = max_duration or settings.MEMORA_MOVIE_HERO_DURATION_SECONDS
+
     uploads = list(
         event.guest_uploads.filter(
             is_deleted=False,
@@ -170,6 +208,8 @@ def get_movie_candidate_uploads(event):
         .order_by("uploaded_at", "pk")
     )
 
+    uploads, _rejected = _reject_unusable_uploads(uploads)
+
     videos = _sort_movie_candidates(
         upload for upload in uploads if upload.media_type == GuestUpload.MediaType.VIDEO
     )
@@ -178,17 +218,22 @@ def get_movie_candidate_uploads(event):
     )
 
     if not videos:
-        return _select_until_duration_limit(photos, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS)
+        return _select_until_duration_limit(photos, max_duration)
     if not photos:
-        return _select_until_duration_limit(videos, settings.MEMORA_MOVIE_MAX_DURATION_SECONDS)
+        return _select_until_duration_limit(videos, max_duration)
 
-    selected_videos, reserved_photo_seconds = _select_videos_with_photo_reserve(videos, photos)
+    selected_videos, reserved_photo_seconds = _select_videos_with_photo_reserve(
+        videos, photos, max_duration=max_duration
+    )
     selected_photos = _select_photos_for_mixed_movie(
         photos,
         selected_videos,
         reserved_photo_seconds,
+        max_duration=max_duration,
     )
-    selected_videos = _fill_remaining_duration_with_videos(videos, selected_videos, selected_photos)
+    selected_videos = _fill_remaining_duration_with_videos(
+        videos, selected_videos, selected_photos, max_duration=max_duration
+    )
     return _weave_photos_between_videos(selected_videos, selected_photos)
 
 
@@ -256,8 +301,8 @@ def _select_until_duration_limit(candidates, max_duration, max_count=None):
     return selected_uploads
 
 
-def _select_videos_with_photo_reserve(videos, photos):
-    max_duration = settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
+def _select_videos_with_photo_reserve(videos, photos, max_duration=None):
+    max_duration = max_duration or settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
     target_photo_seconds = int(max_duration * settings.MEMORA_MOVIE_PHOTO_TARGET_RATIO)
     min_photo_seconds = min(
         len(photos),
@@ -274,9 +319,10 @@ def _select_videos_with_photo_reserve(videos, photos):
     return selected_videos, reserved_photo_seconds
 
 
-def _select_photos_for_mixed_movie(photos, selected_videos, reserved_photo_seconds):
+def _select_photos_for_mixed_movie(photos, selected_videos, reserved_photo_seconds, max_duration=None):
+    max_duration = max_duration or settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
     used_video_seconds = sum(_estimated_movie_clip_duration(upload) for upload in selected_videos)
-    remaining_duration = max(settings.MEMORA_MOVIE_MAX_DURATION_SECONDS - used_video_seconds, 0)
+    remaining_duration = max(max_duration - used_video_seconds, 0)
     photo_budget = min(reserved_photo_seconds, remaining_duration)
     max_photo_count = max(
         len(selected_videos),
@@ -285,13 +331,14 @@ def _select_photos_for_mixed_movie(photos, selected_videos, reserved_photo_secon
     return _select_until_duration_limit(photos, photo_budget, max_count=max_photo_count)
 
 
-def _fill_remaining_duration_with_videos(videos, selected_videos, selected_photos):
+def _fill_remaining_duration_with_videos(videos, selected_videos, selected_photos, max_duration=None):
+    max_duration = max_duration or settings.MEMORA_MOVIE_MAX_DURATION_SECONDS
     selected_ids = {upload.pk for upload in selected_videos}
     used_duration = sum(
         _estimated_movie_clip_duration(upload)
         for upload in [*selected_videos, *selected_photos]
     )
-    remaining_duration = max(settings.MEMORA_MOVIE_MAX_DURATION_SECONDS - used_duration, 0)
+    remaining_duration = max(max_duration - used_duration, 0)
 
     additional_videos = _select_until_duration_limit(
         [upload for upload in videos if upload.pk not in selected_ids],
@@ -836,17 +883,60 @@ def _estimated_movie_clip_duration(upload):
 
 
 def _ken_burns_filter(duration_seconds):
+    """Zoom lent centre, applique apres la composition du cadre."""
     frame_count = max(int(duration_seconds * 30), 1)
     zoom_ratio = max(settings.MEMORA_MOVIE_KEN_BURNS_ZOOM_RATIO, 1.0)
     zoom_step = (zoom_ratio - 1) / frame_count if zoom_ratio > 1 else 0
     width = settings.MEMORA_MOVIE_WIDTH
     height = settings.MEMORA_MOVIE_HEIGHT
     return (
-        f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
-        f"crop={width * 2}:{height * 2},"
         f"zoompan=z='min(zoom+{zoom_step:.6f},{zoom_ratio})':d={frame_count}:"
-        f"s={width}x{height}:fps=30,format=yuv420p"
+        "x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+        f"s={width}x{height}:fps=30"
     )
+
+
+def _blurred_background_chain():
+    """Remplit le cadre avec une version floutee du media, au lieu de barres noires."""
+    width = settings.MEMORA_MOVIE_WIDTH
+    height = settings.MEMORA_MOVIE_HEIGHT
+    # On floute sur une miniature puis on reagrandit : meme rendu, bien moins de CPU.
+    blur_width = max(width // 8, 16)
+    blur_height = max(height // 8, 16)
+    dim = settings.MEMORA_MOVIE_BACKGROUND_DIM
+    return (
+        f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},"
+        f"scale={blur_width}:{blur_height},"
+        f"gblur=sigma={settings.MEMORA_MOVIE_BACKGROUND_BLUR_SIGMA:g},"
+        f"scale={width}:{height},"
+        f"colorchannelmixer=rr={dim:g}:gg={dim:g}:bb={dim:g},"
+        "huesaturation=saturation=-0.25"
+    )
+
+
+def _frame_filter_complex(ken_burns_duration=None):
+    """Compose chaque plan en plein cadre (fond floute + media net centre)."""
+    width = settings.MEMORA_MOVIE_WIDTH
+    height = settings.MEMORA_MOVIE_HEIGHT
+
+    if settings.MEMORA_MOVIE_BACKGROUND_BLUR_ENABLED:
+        chain = (
+            "[0:v]split=2[bg][fg];"
+            f"[bg]{_blurred_background_chain()}[bgb];"
+            f"[fg]scale={width}:{height}:force_original_aspect_ratio=decrease[fgs];"
+            "[bgb][fgs]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2"
+        )
+    else:
+        chain = (
+            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+        )
+
+    if ken_burns_duration is not None and settings.MEMORA_MOVIE_KEN_BURNS_ENABLED:
+        chain += "," + _ken_burns_filter(ken_burns_duration)
+
+    return chain + ",fps=30,format=yuv420p[v]"
 
 
 def _build_movie_clip(upload, output_path, ffmpeg_binary):
@@ -855,19 +945,12 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
 
     input_path = _copy_media_to_temporary_file(upload, output_path.parent)
     try:
-        video_filter = (
-            f"scale={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:"
-            "force_original_aspect_ratio=decrease,"
-            f"pad={settings.MEMORA_MOVIE_WIDTH}:{settings.MEMORA_MOVIE_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-            "fps=30,format=yuv420p"
-        )
+        video_filter = _frame_filter_complex()
 
         if upload.media_type == GuestUpload.MediaType.IMAGE:
             clip_duration = str(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
-            image_filter = (
-                _ken_burns_filter(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS)
-                if settings.MEMORA_MOVIE_KEN_BURNS_ENABLED
-                else video_filter
+            image_filter = _frame_filter_complex(
+                ken_burns_duration=settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
             )
             command = [
                 ffmpeg_binary,
@@ -884,10 +967,10 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                 clip_duration,
                 "-i",
                 "anullsrc=channel_layout=stereo:sample_rate=48000",
-                "-vf",
+                "-filter_complex",
                 image_filter,
                 "-map",
-                "0:v:0",
+                "[v]",
                 "-map",
                 "1:a:0",
                 "-c:v",
@@ -915,10 +998,10 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                     str(input_path),
                     "-t",
                     clip_duration,
-                    "-vf",
+                    "-filter_complex",
                     video_filter,
                     "-map",
-                    "0:v:0",
+                    "[v]",
                     "-map",
                     "0:a:0",
                     "-c:v",
@@ -949,10 +1032,10 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary):
                     "anullsrc=channel_layout=stereo:sample_rate=48000",
                     "-t",
                     clip_duration,
-                    "-vf",
+                    "-filter_complex",
                     video_filter,
                     "-map",
-                    "0:v:0",
+                    "[v]",
                     "-map",
                     "1:a:0",
                     "-c:v",

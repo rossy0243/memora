@@ -23,11 +23,26 @@ class GeneratedMovie(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    # Film heros : court et dense, c'est le livrable principal montre a l'organisateur.
     final_file = models.FileField(
         upload_to=generated_movie_upload_path,
         blank=True,
         null=True,
     )
+    # Version integrale : tous les souvenirs retenus, pour ceux qui veulent tout revoir.
+    full_file = models.FileField(
+        upload_to=generated_movie_upload_path,
+        blank=True,
+        null=True,
+    )
+    # Teaser vertical 9:16, pense pour le partage sur mobile et les reseaux.
+    teaser_file = models.FileField(
+        upload_to=generated_movie_upload_path,
+        blank=True,
+        null=True,
+    )
+    full_duration = models.DurationField(blank=True, null=True)
+    teaser_duration = models.DurationField(blank=True, null=True)
     render_provider = models.CharField(max_length=40, default="ffmpeg")
     music_mood = models.CharField(max_length=80, blank=True)
     music_track = models.CharField(max_length=255, blank=True)

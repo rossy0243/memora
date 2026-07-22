@@ -202,7 +202,10 @@ def _analyze_image(path):
         brightness = _clamp(stat.mean[0] / 255 * 100)
         contrast = _clamp(stat.stddev[0] / 90 * 100)
         edges = grayscale.filter(ImageFilter.FIND_EDGES)
-        sharpness = _clamp(ImageStat.Stat(edges).mean[0] / 36 * 100)
+        # La moyenne des contours d'une photo nette tourne autour de 5 : le diviseur
+        # ramene cette echelle sur 0-100, sinon la nettete ne pese quasiment rien.
+        divisor = settings.MEMORA_ANALYSIS_SHARPNESS_DIVISOR or 6.5
+        sharpness = _clamp(ImageStat.Stat(edges).mean[0] / divisor * 100)
 
     return {
         "brightness": brightness,

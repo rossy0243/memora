@@ -263,7 +263,11 @@ class MovieGenerationServiceTests(TestCase):
             ),
         )
 
-    @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
+    @override_settings(
+        MEMORA_MOVIE_MAX_DURATION_SECONDS=20,
+        MEMORA_MOVIE_HERO_DURATION_SECONDS=20,
+        MEMORA_MOVIE_VIDEO_MAX_SECONDS=10,
+    )
     def test_movie_candidates_mix_best_videos_and_photos_automatically(self):
         selected_photo = self.create_upload("selected-photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
         best_video = self.create_upload(
@@ -288,6 +292,7 @@ class MovieGenerationServiceTests(TestCase):
 
     @override_settings(
         MEMORA_MOVIE_MAX_DURATION_SECONDS=40,
+        MEMORA_MOVIE_HERO_DURATION_SECONDS=40,
         MEMORA_MOVIE_VIDEO_MAX_SECONDS=10,
         MEMORA_MOVIE_IMAGE_DURATION_SECONDS=3,
         MEMORA_MOVIE_PHOTO_TARGET_RATIO=0.20,
@@ -314,7 +319,11 @@ class MovieGenerationServiceTests(TestCase):
             3,
         )
 
-    @override_settings(MEMORA_MOVIE_MAX_DURATION_SECONDS=20, MEMORA_MOVIE_VIDEO_MAX_SECONDS=10)
+    @override_settings(
+        MEMORA_MOVIE_MAX_DURATION_SECONDS=20,
+        MEMORA_MOVIE_HERO_DURATION_SECONDS=20,
+        MEMORA_MOVIE_VIDEO_MAX_SECONDS=10,
+    )
     def test_movie_candidates_never_exceed_movie_duration_cap(self):
         for index in range(4):
             self.create_upload(
@@ -821,8 +830,11 @@ class MovieGenerationServiceTests(TestCase):
             _build_movie_clip(upload, output_path, "ffmpeg")
 
         command = run_ffmpeg.call_args.args[0]
-        video_filter = command[command.index("-vf") + 1]
+        video_filter = command[command.index("-filter_complex") + 1]
         self.assertIn("zoompan", video_filter)
+        # Fond floute plein cadre plutot que des barres noires.
+        self.assertIn("gblur", video_filter)
+        self.assertNotIn("pad=", video_filter)
 
     @patch("processing.services._run_ffmpeg")
     @override_settings(MEMORA_MOVIE_KEN_BURNS_ENABLED=False)
@@ -844,9 +856,9 @@ class MovieGenerationServiceTests(TestCase):
             _build_movie_clip(upload, output_path, "ffmpeg")
 
         command = run_ffmpeg.call_args.args[0]
-        video_filter = command[command.index("-vf") + 1]
+        video_filter = command[command.index("-filter_complex") + 1]
         self.assertNotIn("zoompan", video_filter)
-        self.assertIn("pad=", video_filter)
+        self.assertIn("gblur", video_filter)
 
 
 class GeneratedMovieAdminActionTests(TestCase):
