@@ -4,6 +4,7 @@ import os
 import tempfile
 from datetime import date
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -17,6 +18,7 @@ from processing.models import GeneratedMovie
 
 from .checks import storage_configuration_check
 from .models import SiteConfiguration
+from .security import get_client_ip
 
 
 class HomePageTests(TestCase):
@@ -358,3 +360,27 @@ class GoogleCredentialsSettingsTests(SimpleTestCase):
             os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS_B64", None)
             if previous_credentials_path:
                 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = previous_credentials_path
+
+
+class ClientIpTests(SimpleTestCase):
+    @override_settings(MEMORA_TRUST_X_FORWARDED_FOR=False)
+    def test_ignores_forwarded_for_by_default(self):
+        request = SimpleNamespace(
+            META={
+                "HTTP_X_FORWARDED_FOR": "203.0.113.20",
+                "REMOTE_ADDR": "10.0.0.8",
+            }
+        )
+
+        self.assertEqual(get_client_ip(request), "10.0.0.8")
+
+    @override_settings(MEMORA_TRUST_X_FORWARDED_FOR=True)
+    def test_uses_first_valid_forwarded_for_when_trusted(self):
+        request = SimpleNamespace(
+            META={
+                "HTTP_X_FORWARDED_FOR": "bad-value, 203.0.113.20, 10.0.0.8",
+                "REMOTE_ADDR": "10.0.0.8",
+            }
+        )
+
+        self.assertEqual(get_client_ip(request), "203.0.113.20")

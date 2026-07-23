@@ -7,6 +7,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -493,6 +494,30 @@ class EventViewTests(TestCase):
         unlocked_response = self.client.get(event.get_public_url())
         self.assertContains(unlocked_response, "Ajouter un souvenir")
 
+    @override_settings(MEMORA_GUEST_ACCESS_ATTEMPT_LIMIT=2, MEMORA_GUEST_ACCESS_LOCKOUT_SECONDS=60)
+    def test_public_event_guest_access_code_is_throttled(self):
+        cache.clear()
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception code throttle",
+            couple_name="Lea & Sam",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            guest_access_code="AMOUR2026",
+        )
+        self.mark_paid(event)
+
+        first_response = self.client.post(event.get_public_url(), {"guest_access_code": "NON"})
+        self.assertContains(first_response, "Code incorrect.")
+
+        second_response = self.client.post(event.get_public_url(), {"guest_access_code": "FAUX"})
+        self.assertContains(second_response, "Trop de tentatives.")
+
+        locked_response = self.client.post(event.get_public_url(), {"guest_access_code": "amour2026"})
+        self.assertEqual(locked_response.status_code, 200)
+        self.assertContains(locked_response, "Trop de tentatives.")
+        self.assertNotContains(locked_response, "Ajouter un souvenir")
+
     def test_public_event_requires_access_key(self):
         event = Event.objects.create(
             organizer=self.user,
@@ -952,7 +977,7 @@ class EventViewTests(TestCase):
             list(
                 event.guest_uploads.filter(is_deleted=False)
                 .exclude(moderation_status=GuestUpload.ModerationStatus.REJECTED)
-                .order_by("-uploaded_at")
+                .order_by("-uploaded_at", "-pk")
             ),
         )
         self.assertContains(filtered_response, "video.mp4")

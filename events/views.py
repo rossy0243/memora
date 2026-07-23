@@ -19,7 +19,13 @@ from processing.services import (
 from uploads.models import GuestUpload, UploadCategory
 
 from .forms import EventForm
-from .access import grant_guest_access, has_guest_access
+from .access import (
+    get_guest_access_lockout_error,
+    grant_guest_access,
+    has_guest_access,
+    record_guest_access_failure,
+    reset_guest_access_failures,
+)
 from .models import Event
 from .services import build_event_qr_code_png
 
@@ -191,10 +197,14 @@ def public_event_preview(request, slug, access_key):
     if event.requires_guest_access_code and not has_guest_access(request, event):
         access_error = ""
         if request.method == "POST":
-            if event.check_guest_access_code(request.POST.get("guest_access_code")):
+            access_error = get_guest_access_lockout_error(request, event)
+            if not access_error and event.check_guest_access_code(request.POST.get("guest_access_code")):
+                reset_guest_access_failures(request, event)
                 grant_guest_access(request, event)
                 return redirect(event.get_public_url())
-            access_error = "Code incorrect."
+            if not access_error:
+                record_guest_access_failure(request, event)
+                access_error = get_guest_access_lockout_error(request, event) or "Code incorrect."
         return render(
             request,
             "events/public_event_access.html",

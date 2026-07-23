@@ -1,4 +1,5 @@
 from datetime import date
+from io import BytesIO
 import shutil
 import tempfile
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from events.models import Event, EventType
@@ -17,6 +19,16 @@ from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryT
 from .services import normalize_moment_label, sync_event_upload_categories
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+def make_test_image_bytes(image_format="JPEG"):
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), color=(240, 80, 120)).save(buffer, format=image_format)
+    return buffer.getvalue()
+
+
+def make_test_image_file(filename="photo.jpg", content_type="image/jpeg", image_format="JPEG"):
+    return SimpleUploadedFile(filename, make_test_image_bytes(image_format), content_type=content_type)
 
 
 class UploadCategoryTests(TestCase):
@@ -280,7 +292,7 @@ class GuestUploadViewTests(TestCase):
         )
 
     def test_guest_can_upload_memory_without_account(self):
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
 
         response = self.client.post(
             self.upload_url(),
@@ -299,7 +311,7 @@ class GuestUploadViewTests(TestCase):
 
     @patch("uploads.models.GuestUpload.save", side_effect=OSError("storage down"))
     def test_guest_upload_storage_error_returns_form_error(self, _upload_save):
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
 
         response = self.client.post(
             self.upload_url(),
@@ -324,7 +336,7 @@ class GuestUploadViewTests(TestCase):
         self.event.payment_status = Event.PaymentStatus.PENDING
         self.event.paid_at = None
         self.event.save(update_fields=["payment_status", "paid_at"])
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
 
         response = self.client.post(
             self.upload_url(),
@@ -398,7 +410,7 @@ class GuestUploadViewTests(TestCase):
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
     def test_guest_upload_page_shows_remaining_upload_count(self):
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
         self.client.post(
             self.upload_url(),
             {
@@ -424,7 +436,7 @@ class GuestUploadViewTests(TestCase):
     def test_guest_upload_requires_guest_access_code_when_enabled(self):
         self.event.guest_access_code = "AMOUR2026"
         self.event.save()
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
 
         response = self.client.post(
             self.upload_url(),
@@ -438,7 +450,7 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(GuestUpload.objects.count(), 0)
 
         self.client.post(self.event.get_public_url(), {"guest_access_code": "amour2026"})
-        unlocked_media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        unlocked_media = make_test_image_file("photo.jpg")
         unlocked_response = self.client.post(
             self.upload_url(),
             {
@@ -462,7 +474,7 @@ class GuestUploadViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ce format n&#x27;est pas accepté.")
+        self.assertContains(response, "Ce format n&#x27;est pas")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
     def test_rejects_invalid_content_type(self):
@@ -480,6 +492,21 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Ce format n&#x27;est pas accepté.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
+    def test_rejects_invalid_image_payload_even_with_image_content_type(self):
+        media = SimpleUploadedFile("photo.jpg", b"not-an-image", content_type="image/jpeg")
+
+        response = self.client.post(
+            self.upload_url(),
+            {
+                "media_file": media,
+                "category": self.category.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ce format n&#x27;est pas")
+        self.assertEqual(GuestUpload.objects.count(), 0)
+
     def test_rejects_category_from_another_event(self):
         other_event = Event.objects.create(
             organizer=self.event.organizer,
@@ -488,7 +515,7 @@ class GuestUploadViewTests(TestCase):
             event_date=date(2026, 7, 9),
         )
         other_category = other_event.upload_categories.get(code="ceremony")
-        media = SimpleUploadedFile("photo.jpg", b"fake-image", content_type="image/jpeg")
+        media = make_test_image_file("photo.jpg")
 
         response = self.client.post(
             self.upload_url(),
@@ -594,8 +621,8 @@ class GuestUploadViewTests(TestCase):
 
     @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
     def test_limits_uploads_by_session(self):
-        first_media = SimpleUploadedFile("first.jpg", b"first", content_type="image/jpeg")
-        second_media = SimpleUploadedFile("second.jpg", b"second", content_type="image/jpeg")
+        first_media = make_test_image_file("first.jpg")
+        second_media = make_test_image_file("second.jpg")
 
         self.client.post(
             self.upload_url(),
@@ -619,7 +646,7 @@ class GuestUploadViewTests(TestCase):
     @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=5, MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
     def test_limits_guest_to_five_uploads_by_session(self):
         for index in range(5):
-            media = SimpleUploadedFile(f"photo-{index}.jpg", b"fake-image", content_type="image/jpeg")
+            media = make_test_image_file(f"photo-{index}.jpg")
             response = self.client.post(
                 self.upload_url(),
                 {
@@ -629,7 +656,7 @@ class GuestUploadViewTests(TestCase):
             )
             self.assertRedirects(response, self.thanks_url())
 
-        extra_media = SimpleUploadedFile("extra.jpg", b"fake-image", content_type="image/jpeg")
+        extra_media = make_test_image_file("extra.jpg")
         response = self.client.post(
             self.upload_url(),
             {
@@ -644,8 +671,8 @@ class GuestUploadViewTests(TestCase):
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=60)
     def test_limits_rapid_uploads_by_session_or_ip(self):
-        first_media = SimpleUploadedFile("first.jpg", b"first", content_type="image/jpeg")
-        second_media = SimpleUploadedFile("second.jpg", b"second", content_type="image/jpeg")
+        first_media = make_test_image_file("first.jpg")
+        second_media = make_test_image_file("second.jpg")
 
         self.client.post(
             self.upload_url(),

@@ -1,14 +1,32 @@
 from datetime import timedelta
+from io import BytesIO
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import warnings
 
 from django import forms
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image, UnidentifiedImageError
 
 from .models import GuestUpload, UploadCategory
+
+
+IMAGE_FORMAT_BY_EXTENSION = {
+    "jpg": "JPEG",
+    "jpeg": "JPEG",
+    "png": "PNG",
+    "webp": "WEBP",
+}
+
+IMAGE_CONTENT_TYPE_BY_FORMAT = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+}
 
 
 def _probe_video_duration(media_file):
@@ -97,6 +115,63 @@ def _duration_from_ffprobe_payload(payload):
     return None
 
 
+def _normalize_image_mode(image, image_format):
+    if image_format == "JPEG":
+        return image.convert("RGB")
+    if image.mode in {"RGB", "RGBA"}:
+        return image
+    if "A" in image.getbands() or image.mode == "P":
+        return image.convert("RGBA")
+    return image.convert("RGB")
+
+
+def _sanitize_guest_image(media_file, extension):
+    expected_format = IMAGE_FORMAT_BY_EXTENSION[extension]
+    original_position = media_file.tell() if hasattr(media_file, "tell") else None
+
+    try:
+        if hasattr(media_file, "seek"):
+            media_file.seek(0)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            image = Image.open(media_file)
+            image.load()
+
+        if image.format != expected_format:
+            raise forms.ValidationError("Ce format n'est pas accepté.")
+
+        image = _normalize_image_mode(image, expected_format)
+        output = BytesIO()
+        save_kwargs = {"format": expected_format}
+        if expected_format == "JPEG":
+            save_kwargs.update({"quality": 90, "optimize": True})
+        elif expected_format == "PNG":
+            save_kwargs["optimize"] = True
+        elif expected_format == "WEBP":
+            save_kwargs.update({"quality": 90, "method": 4})
+        image.save(output, **save_kwargs)
+    except (
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        OSError,
+        UnidentifiedImageError,
+        ValueError,
+    ):
+        raise forms.ValidationError("Ce format n'est pas accepté.")
+    finally:
+        if hasattr(media_file, "seek"):
+            media_file.seek(original_position or 0)
+
+    output.seek(0)
+    filename = f"{Path(media_file.name).stem[:80] or 'image'}.{extension}"
+    return SimpleUploadedFile(
+        filename,
+        output.read(),
+        content_type=IMAGE_CONTENT_TYPE_BY_FORMAT[expected_format],
+    )
+
+
 class GuestUploadForm(forms.ModelForm):
     client_duration_seconds = forms.FloatField(
         required=False,
@@ -154,7 +229,11 @@ class GuestUploadForm(forms.ModelForm):
         if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
             raise forms.ValidationError("Cette vidéo est trop lourde.")
 
-        if extension in settings.MEMORA_VIDEO_EXTENSIONS:
+        if extension in settings.MEMORA_IMAGE_EXTENSIONS:
+            media_file = _sanitize_guest_image(media_file, extension)
+            if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
+                raise forms.ValidationError("Cette vidÃ©o est trop lourde.")
+        elif extension in settings.MEMORA_VIDEO_EXTENSIONS:
             duration_seconds = self._client_duration_seconds()
             try:
                 duration_seconds = _probe_video_duration(media_file)

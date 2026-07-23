@@ -108,6 +108,15 @@ services:
       - &env_upload_cooldown
         key: MEMORA_UPLOAD_COOLDOWN_SECONDS
         value: "8"
+      - &env_trust_x_forwarded_for
+        key: MEMORA_TRUST_X_FORWARDED_FOR
+        value: "True"
+      - &env_guest_access_attempt_limit
+        key: MEMORA_GUEST_ACCESS_ATTEMPT_LIMIT
+        value: "5"
+      - &env_guest_access_lockout
+        key: MEMORA_GUEST_ACCESS_LOCKOUT_SECONDS
+        value: "60"
       - &env_ffmpeg
         key: MEMORA_FFMPEG_BINARY
         value: ffmpeg
@@ -274,6 +283,9 @@ services:
       - *env_ip_upload_limit
       - *env_event_upload_limit
       - *env_upload_cooldown
+      - *env_trust_x_forwarded_for
+      - *env_guest_access_attempt_limit
+      - *env_guest_access_lockout
       - *env_ffmpeg
       - *env_ffprobe
       - *env_max_video_upload_duration

@@ -3,6 +3,8 @@ from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 
+from core.security import get_client_ip
+
 from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryTemplate
 
 
@@ -209,13 +211,6 @@ def create_default_categories_for_event(event):
                 "is_active": True,
             },
         )
-
-
-def get_client_ip(request):
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if forwarded_for:
-        return forwarded_for.split(",")[-1].strip()
-    return request.META.get("REMOTE_ADDR")
 
 
 def ensure_session_key(request):
