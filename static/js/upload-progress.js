@@ -5,13 +5,11 @@
   }
 
   const fileInput = form.querySelector("input[type='file']");
-  const selectedFileName = document.getElementById("selected-file-name");
   const clientDurationInput = document.getElementById("client-duration-seconds");
   const capturePreview = document.getElementById("capture-preview");
   const previewImage = document.getElementById("capture-preview-image");
   const previewVideo = document.getElementById("capture-preview-video");
   const previewDetails = document.getElementById("capture-preview-details");
-  const replaceMediaButton = document.getElementById("replace-media-button");
   const retakeCameraButton = document.getElementById("retake-camera-button");
   const useCaptureButton = document.getElementById("use-capture-button");
   const previewBackdrop = document.getElementById("capture-preview-backdrop");
@@ -219,13 +217,13 @@
 
   function cameraErrorMessage(error) {
     if (!error) {
-      return "La caméra n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+      return "La caméra n'a pas pu s'ouvrir. Réessayez dans quelques instants.";
     }
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
       return "Autorisez la caméra et le micro pour capturer avec Memora.";
     }
     if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      return "Aucune caméra disponible. Utilisez l'appareil natif.";
+      return "Aucune caméra disponible sur cet appareil.";
     }
     if (error.name === "NotReadableError" || error.name === "TrackStartError") {
       return "La caméra est déjà utilisée par une autre application.";
@@ -233,7 +231,7 @@
     if (error.name === "OverconstrainedError" || error.name === "ConstraintNotSatisfiedError") {
       return "Cet objectif n'est pas disponible sur ce téléphone.";
     }
-    return "La caméra n'a pas pu s'ouvrir. Essayez l'appareil natif.";
+    return "La caméra n'a pas pu s'ouvrir. Réessayez dans quelques instants.";
   }
 
   async function refreshCameraPermissionHint() {
@@ -312,7 +310,7 @@
       if (cameraStudio) {
         cameraStudio.classList.add("camera-studio--unsupported");
       }
-      setCameraStatus("Caméra intégrée indisponible. Utilisez l'appareil natif.");
+      setCameraStatus("Caméra intégrée indisponible sur ce navigateur.");
       return;
     }
 
@@ -346,7 +344,7 @@
 
   function setCapturedFile(blob, filename, durationSeconds) {
     if (!fileInput || !window.DataTransfer || !window.File) {
-      setCameraStatus("Capture prête. Votre navigateur demande l'appareil natif.");
+      setCameraStatus("Capture prête, mais le navigateur ne peut pas l'attacher au formulaire.");
       return;
     }
 
@@ -370,7 +368,7 @@
   function showPreviewAfterCapture(message) {
     showCameraFeedback(message, "success");
     // On reste en plein ecran : l'image capturee remplace le flux au meme endroit,
-    // comme un appareil photo natif. Pas d'attente, pas de sortie, pas de defilement.
+    // comme une vraie camera. Pas d'attente, pas de sortie, pas de defilement.
     // stopCamera libere la camera et masque le panneau dans le meme tick que
     // l'ouverture de la revue : le navigateur ne peint jamais la page intermediaire.
     stopCamera();
@@ -414,7 +412,7 @@
 
   function startVideoRecording() {
     if (!cameraStream || !window.MediaRecorder) {
-      setCameraStatus("Vidéo intégrée indisponible. Utilisez l'appareil natif.");
+      setCameraStatus("Vidéo intégrée indisponible sur ce navigateur.");
       return;
     }
 
@@ -480,7 +478,7 @@
 
   if (cameraStudio && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
     cameraStudio.classList.add("camera-studio--unsupported");
-    setPermissionNote("Caméra intégrée indisponible. Utilisez l'appareil natif.", "warning");
+    setPermissionNote("Caméra intégrée indisponible sur ce navigateur.", "warning");
   }
   refreshCameraPermissionHint();
   updateCameraUi();
@@ -549,10 +547,9 @@
     });
   });
 
-  if (fileInput && selectedFileName) {
+  if (fileInput) {
     fileInput.addEventListener("change", function () {
       const file = fileInput.files && fileInput.files[0];
-      selectedFileName.textContent = file ? "Souvenir prêt : " + file.name : "JPG, PNG, WEBP, MP4, MOV ou WEBM.";
 
       clearPreview();
       const capturedDuration = pendingCapturedDuration;
@@ -635,12 +632,6 @@
         }, { once: true });
         previewVideo.load();
       }
-    });
-  }
-
-  if (replaceMediaButton && fileInput) {
-    replaceMediaButton.addEventListener("click", function () {
-      fileInput.click();
     });
   }
 

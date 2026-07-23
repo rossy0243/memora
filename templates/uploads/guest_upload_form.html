@@ -90,12 +90,9 @@
       </div>
     </section>
 
-    <label class="file-drop" for="{{ form.media_file.id_for_label }}">
-      <span class="file-drop__title">Caméra du téléphone</span>
-      <span class="file-drop__action">Ouvrir l'appareil natif</span>
+    <div class="memora-camera-input" aria-hidden="true">
       {{ form.media_file }}
-      <small id="selected-file-name">JPG, PNG, WEBP, MP4, MOV ou WEBM. Vidéo 10 s max.</small>
-    </label>
+    </div>
 
     <div class="capture-preview" id="capture-preview" hidden>
       <div class="capture-preview__media">
@@ -111,7 +108,6 @@
         <div class="capture-preview__actions">
           <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre</button>
           <button class="button button--primary button--compact capture-preview__confirm" type="button" id="use-capture-button">Utiliser ce souvenir</button>
-          <button class="button button--secondary button--compact capture-preview__replace" type="button" id="replace-media-button">Choisir un autre fichier</button>
         </div>
       </div>
     </div>

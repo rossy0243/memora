@@ -2442,6 +2442,22 @@ h2 {
   list-style: none;
 }
 
+.memora-camera-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.memora-camera-input input {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
 /* Information discrete, pas un avertissement : le quota ne doit pas ouvrir la page. */
 .upload-quota {
   display: flex;
@@ -2495,7 +2511,7 @@ h2 {
 }
 
 .camera-studio--unsupported .camera-studio__intro strong::after {
-  content: " Utilisez le bouton natif juste en dessous si besoin.";
+  content: " Réessayez depuis un navigateur compatible.";
 }
 
 .camera-studio__intro {
@@ -2847,56 +2863,6 @@ body.camera-open {
   }
 }
 
-.file-drop {
-  display: grid;
-  gap: 12px;
-  min-height: 168px;
-  align-content: center;
-  border: 1px dashed rgba(159, 79, 95, 0.58);
-  border-radius: var(--radius-lg);
-  padding: 22px;
-  background: var(--color-surface-soft);
-  color: var(--color-ink);
-  text-align: center;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.file-drop:hover,
-.file-drop:focus-within {
-  border-color: var(--color-primary);
-  background: #fff4ef;
-}
-
-.file-drop__title {
-  font-size: 1.12rem;
-}
-
-.file-drop__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: center;
-  min-height: 52px;
-  border-radius: var(--radius-md);
-  padding: 0 18px;
-  color: #fff;
-  background: var(--color-primary);
-}
-
-.file-drop input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.file-drop small {
-  color: var(--color-muted);
-  font-weight: 500;
-}
-
 .capture-preview {
   position: relative;
   overflow: hidden;
@@ -2927,7 +2893,7 @@ body.camera-open {
   display: none;
 }
 
-/* --- Revue plein ecran, comme un appareil photo natif --- */
+/* --- Revue plein ecran, comme la camera Memora --- */
 body.capture-review-open {
   overflow: hidden;
 }

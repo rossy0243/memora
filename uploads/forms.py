@@ -111,7 +111,7 @@ class GuestUploadForm(forms.ModelForm):
             "media_file": forms.FileInput(
                 attrs={
                     "accept": ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,image/*,video/*",
-                    "capture": "environment",
+                    "class": "memora-camera-file-input",
                 }
             ),
             "category": forms.Select,
