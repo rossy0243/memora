@@ -599,9 +599,14 @@
         previewVideo.hidden = false;
         // Sans lecture, une video fraiche affiche une frame noire sur mobile.
         // On la joue en boucle, en silence : l'invite voit tout de suite son plan.
+        // Autoplay muet, en boucle : l'invite voit son plan bouger tout de suite,
+        // comme la photo. L'attribut autoplay du HTML est le mecanisme principal
+        // (iOS l'honore) ; ces proprietes le renforcent apres coup.
         previewVideo.muted = true;
         previewVideo.loop = true;
+        previewVideo.autoplay = true;
         previewVideo.playsInline = true;
+        previewVideo.setAttribute("muted", "");
         if (previewDetails) {
           const sizeLabel = formatFileSize(file.size);
           previewDetails.textContent = sizeLabel ? "Vidéo prête - " + sizeLabel + "." : "Vidéo prête.";

@@ -101,7 +101,7 @@
       <div class="capture-preview__media">
         <img class="capture-preview__backdrop" id="capture-preview-backdrop" alt="" aria-hidden="true">
         <img id="capture-preview-image" alt="">
-        <video id="capture-preview-video" muted playsinline controls></video>
+        <video id="capture-preview-video" muted loop autoplay playsinline></video>
       </div>
       <div class="capture-preview__body">
         <div>
@@ -117,6 +117,9 @@
     </div>
 
     <div class="moment-field">
+      <label for="{{ form.category.id_for_label }}">
+        Moment <span>Requis</span>
+      </label>
       {{ form.category }}
     </div>
 

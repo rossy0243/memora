@@ -369,7 +369,9 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Moment obligatoire")
         self.assertNotContains(response, "Choisir le moment")
         self.assertContains(response, "obligatoire")
-        self.assertContains(response, ">Moment</option>")
+        # Placeholder explicite + marque visible que le champ est requis.
+        self.assertContains(response, "Sélectionner le moment")
+        self.assertContains(response, "Requis")
         self.assertNotContains(response, f"{self.category.label} - {self.event.title}")
         self.assertContains(response, "moment-select")
         self.assertContains(response, "5 souvenirs maximum par appareil")

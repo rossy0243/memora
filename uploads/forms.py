@@ -129,7 +129,7 @@ class GuestUploadForm(forms.ModelForm):
             queryset = queryset.filter(event=event)
         self.fields["category"].queryset = queryset
         self.fields["category"].label_from_instance = lambda category: category.label
-        self.fields["category"].empty_label = "Moment"
+        self.fields["category"].empty_label = "Sélectionner le moment"
         self.fields["category"].required = True
         self.fields["category"].widget.attrs.update(
             {
