@@ -88,3 +88,9 @@ Modes disponibles :
 Les cles API doivent rester dans Render et dans `.env` local uniquement. Elles ne doivent jamais etre commitees.
 
 Si une cle a ete collee dans une conversation ou un ticket, il faut la regenerer avant un lancement public.
+
+Le Blueprint active `MEMORA_TRUST_X_FORWARDED_FOR=True` pour Render afin que les quotas IP et le throttling du code invite utilisent l'IP publique transmise par le proxy Render. En local, cette option doit rester desactivee sauf si l'application tourne derriere un proxy de confiance.
+
+Le code invite optionnel est limite par `MEMORA_GUEST_ACCESS_ATTEMPT_LIMIT` et `MEMORA_GUEST_ACCESS_LOCKOUT_SECONDS`. Les echecs sont comptes par evenement, session et IP, avec un delai progressif apres depassement du seuil.
+
+Les images invitees sont validees cote serveur avec Pillow puis reencodees avant stockage. Un fichier annonce comme image mais non decodable, ou dont le format reel ne correspond pas a l'extension autorisee, est refuse.

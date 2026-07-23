@@ -272,7 +272,10 @@ Points de securite couverts par le MVP :
 - les pages organisateur restent protegees par compte ;
 - la page publique du film n'est visible que lorsque le film est termine ;
 - les invites sont limites a 5 souvenirs par appareil, avec limites IP/evenement en plus ;
-- les extensions, types MIME, taille et duree video sont controles cote serveur ;
+- les extensions, types MIME, taille, magic bytes et duree video sont controles cote serveur ;
+- les images invitees sont ouvertes avec Pillow, validees, puis reencodees en JPEG/PNG/WebP propre avant stockage ;
+- le code invite optionnel est protege par un throttling IP/session/evenement avec delai progressif ;
+- l'IP client utilisee pour les quotas ignore `X-Forwarded-For` par defaut et ne le lit que si `MEMORA_TRUST_X_FORWARDED_FOR=True` ;
 - les videos invitees sont limitees a 10 secondes.
 
 Commandes utiles en exploitation :
