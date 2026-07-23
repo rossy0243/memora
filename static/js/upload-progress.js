@@ -70,6 +70,7 @@
     closeCaptureReview();
     if (capturePreview) {
       capturePreview.hidden = true;
+      capturePreview.classList.remove("capture-preview--photo");
     }
     if (previewBackdrop) {
       previewBackdrop.removeAttribute("src");
@@ -79,6 +80,7 @@
       previewImage.hidden = true;
     }
     if (previewVideo) {
+      previewVideo.pause();
       previewVideo.removeAttribute("src");
       previewVideo.hidden = true;
       previewVideo.load();
@@ -567,13 +569,22 @@
         previewDetails.textContent = sizeLabel ? "Aperçu prêt - " + sizeLabel + "." : "Aperçu prêt.";
       }
 
+      const isImage = file.type.indexOf("image/") === 0;
+      const isVideo = file.type.indexOf("video/") === 0;
+
+      // Le fond floute (et sa classe CSS) ne concernent que les photos.
+      if (capturePreview) {
+        capturePreview.classList.toggle("capture-preview--photo", isImage);
+      }
       if (previewBackdrop) {
-        // Le fond floute evite les bandes noires autour d'une photo verticale,
-        // comme dans le film final : l'invite revoit son cadrage, pas un recadrage.
-        previewBackdrop.src = file.type.indexOf("image/") === 0 ? previewUrl : "";
+        if (isImage) {
+          previewBackdrop.src = previewUrl;
+        } else {
+          previewBackdrop.removeAttribute("src");
+        }
       }
 
-      if (file.type.indexOf("image/") === 0 && previewImage) {
+      if (isImage && previewImage) {
         previewImage.src = previewUrl;
         previewImage.hidden = false;
         if (previewDetails) {
@@ -583,9 +594,14 @@
         return;
       }
 
-      if (file.type.indexOf("video/") === 0 && previewVideo) {
+      if (isVideo && previewVideo) {
         previewVideo.src = previewUrl;
         previewVideo.hidden = false;
+        // Sans lecture, une video fraiche affiche une frame noire sur mobile.
+        // On la joue en boucle, en silence : l'invite voit tout de suite son plan.
+        previewVideo.muted = true;
+        previewVideo.loop = true;
+        previewVideo.playsInline = true;
         if (previewDetails) {
           const sizeLabel = formatFileSize(file.size);
           previewDetails.textContent = sizeLabel ? "Vidéo prête - " + sizeLabel + "." : "Vidéo prête.";
@@ -599,6 +615,17 @@
               const parts = ["Vidéo prête", formatDuration(duration), sizeLabel].filter(Boolean);
               previewDetails.textContent = parts.join(" - ") + ".";
             }
+          }
+          const playback = previewVideo.play();
+          if (playback && playback.catch) {
+            // Si l'autoplay est refuse, on force au moins l'affichage de la 1re frame.
+            playback.catch(function () {
+              try {
+                previewVideo.currentTime = 0.05;
+              } catch (error) {
+                /* certains navigateurs refusent le seek avant lecture : sans gravite */
+              }
+            });
           }
         }, { once: true });
         previewVideo.load();

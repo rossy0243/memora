@@ -72,18 +72,40 @@ def _draw_centered(draw, text, font, color, center_x, baseline_y):
     return baseline_y + (bottom - top)
 
 
+def _fit_font(draw, text, base_size, max_text_width):
+    """Reduit la police jusqu'a ce que le texte tienne dans la largeur donnee.
+
+    Sans ca, un titre dimensionne sur la hauteur deborde d'un cadre vertical
+    (le teaser 9:16) et se retrouve coupe aux deux bords, donc illisible.
+    """
+    size = max(int(base_size), 12)
+    while size > 12:
+        font = resolve_title_font(size)
+        left, _, right, _ = draw.textbbox((0, 0), text, font=font)
+        if right - left <= max_text_width:
+            return font
+        size -= 2
+    return resolve_title_font(size)
+
+
 def build_title_card(output_path, width, height, title, subtitle=""):
     """Dessine un carton sobre : titre centre, sous-titre en capitales espacees."""
     image = Image.new("RGB", (width, height), BACKGROUND_COLOR)
     draw = ImageDraw.Draw(image)
 
-    title_font = resolve_title_font(max(int(height * 0.085), 12))
-    subtitle_font = resolve_title_font(max(int(height * 0.028), 10))
+    # On dimensionne sur la plus petite dimension : un cadre vertical ne doit pas
+    # gonfler le titre au point de le faire deborder en largeur.
+    reference = min(width, height)
+    max_text_width = width * 0.86
+
+    title_font = _fit_font(draw, title, reference * 0.11, max_text_width)
+    subtitle_font = resolve_title_font(max(int(reference * 0.036), 10))
 
     center_x = width / 2
     _draw_centered(draw, title, title_font, TITLE_COLOR, center_x, height * 0.46)
     if subtitle:
         spaced = " ".join(subtitle.upper())
+        subtitle_font = _fit_font(draw, spaced, reference * 0.036, max_text_width)
         _draw_centered(draw, spaced, subtitle_font, SUBTITLE_COLOR, center_x, height * 0.58)
 
     # Filet fin sous le titre : detail discret qui structure le carton.
