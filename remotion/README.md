@@ -206,10 +206,22 @@ relative de Chrome n'est pas bloquante — un pic de festivités est absorbé pa
 - Cartons redessinés : titre Playfair, sous-titre Cormorant capitales espacées
   or, double filet dégradé, fond vignette radial, léger zoom de respiration.
 
+### ✅ Lower-thirds de chapitre + rythme par format (fait)
+
+- **Lower-third du moment** : sur le premier plan de chaque chapitre, le nom du
+  moment (« Cérémonie », « Cocktail », « Soirée »…) apparaît en incrustation
+  (Cormorant capitales espacées, filet doré, léger scrim de lisibilité), en
+  fondu + glissement, puis disparaît — jamais répété dans le même chapitre. Le
+  libellé accentué vient de Django (`UploadCategory.label`), ajouté au contrat
+  `FilmClip.label`.
+- **Rythme par format** (`pace` : punchy | balanced | gentle) : pilote
+  l'amplitude du Ken Burns. Teaser = punchy, héros = équilibré, intégrale =
+  respire. Django mappe `deliverable -> pace`.
+
 ### Reste à faire
 
-- Calibrer les durées, transitions et grade **par format** (le teaser est punchy et
-  court ; l'intégrale respire).
+- Affiner encore durées/transitions **par format** si besoin après un vrai
+  film de mariage (les durées restent pilotées côté Django).
 - Décider du **son des invités** : lit musical seul (teaser) vs. musique + voix des
   invités avec ducking (héros/intégrale) — le ducking se fait au montage audio FFmpeg
   final ou dans Remotion.
