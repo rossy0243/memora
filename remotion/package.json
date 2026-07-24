@@ -1,0 +1,24 @@
+{
+  "name": "memora-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rendu premium des films souvenir Memora (heros, integrale, teaser vertical).",
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.498",
+    "@remotion/cli": "4.0.498",
+    "@remotion/renderer": "4.0.498",
+    "@remotion/transitions": "4.0.498",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.498"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.0",
+    "typescript": "5.6.3"
+  }
+}

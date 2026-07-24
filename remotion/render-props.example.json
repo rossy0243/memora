@@ -1,0 +1,16 @@
+{
+  "clips": [
+    { "kind": "image", "src": "sample/1.jpg", "durationInFrames": 75, "category": "ceremony" },
+    { "kind": "image", "src": "sample/2.jpg", "durationInFrames": 75, "category": "reception" },
+    { "kind": "image", "src": "sample/3.jpg", "durationInFrames": 75, "category": "dancefloor" }
+  ],
+  "audioSrc": "sample/music.mp3",
+  "audioFirstBeatOffset": 1.25,
+  "title": "Camille & Noé",
+  "subtitle": "12/07/2026",
+  "outroTitle": "Merci",
+  "introDurationInFrames": 90,
+  "outroDurationInFrames": 120,
+  "transitionDurationInFrames": 15,
+  "grade": "romantic"
+}
