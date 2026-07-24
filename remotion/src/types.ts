@@ -8,8 +8,11 @@ export interface FilmClip {
   // Chemin local (staticFile) ou URL. Django fournit des chemins locaux au rendu.
   src: string;
   durationInFrames: number;
-  // Categorie du moment (ceremony, dancefloor...) : sert d'accent narratif eventuel.
+  // Code du moment (ceremony, dancefloor...) : sert a regrouper les plans.
   category?: string;
+  // Libelle humain accentue du moment (« Cérémonie », « Cocktail »…), fourni par
+  // Django. Affiche en lower-third sur le premier plan de chaque moment.
+  label?: string;
 }
 
 export interface FilmProps {
@@ -28,6 +31,9 @@ export interface FilmProps {
   transitionDurationInFrames: number;
   // Look colorimetrique (accord chaud pour les mariages).
   grade: "romantic" | "warm" | "neutral";
+  // Rythme par format : le teaser est punchy (Ken Burns marque), l'integrale
+  // respire (mouvement plus calme). Le heros est equilibre.
+  pace: "punchy" | "balanced" | "gentle";
 }
 
 export const defaultFilmProps: FilmProps = {
@@ -41,4 +47,5 @@ export const defaultFilmProps: FilmProps = {
   outroDurationInFrames: 120,
   transitionDurationInFrames: 15,
   grade: "romantic",
+  pace: "balanced",
 };

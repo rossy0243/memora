@@ -1152,7 +1152,7 @@ class RemotionEdlTests(TestCase):
             original_filename=filename,
             media_file=SimpleNamespace(name=filename),
             duration=timedelta(seconds=seconds) if seconds else None,
-            category=SimpleNamespace(code="ceremony"),
+            category=SimpleNamespace(code="ceremony", label="Cérémonie"),
         )
 
     def _event(self):
@@ -1181,7 +1181,7 @@ class RemotionEdlTests(TestCase):
         for key in (
             "clips", "audioSrc", "audioFirstBeatOffset", "title", "subtitle",
             "outroTitle", "introDurationInFrames", "outroDurationInFrames",
-            "transitionDurationInFrames", "grade",
+            "transitionDurationInFrames", "grade", "pace",
         ):
             self.assertIn(key, props)
 
@@ -1190,11 +1190,23 @@ class RemotionEdlTests(TestCase):
         self.assertEqual(props["clips"][1]["kind"], "video")
         self.assertEqual(props["clips"][0]["src"], "clip_0001.jpg")
         self.assertEqual(props["clips"][1]["src"], "clip_0002.mp4")
+        self.assertEqual(props["clips"][0]["label"], "Cérémonie")
         self.assertTrue(all(c["durationInFrames"] >= 1 for c in props["clips"]))
         self.assertEqual(props["title"], "Camille & Noé")
         self.assertEqual(props["audioSrc"], "music.mp3")
         self.assertEqual(props["audioFirstBeatOffset"], 1.25)
         self.assertEqual(props["grade"], "romantic")
+        self.assertEqual(props["pace"], "balanced")
+
+    def test_pace_defaults_and_validates(self):
+        from processing.remotion import build_film_props
+
+        uploads = [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")]
+        punchy = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, pace="punchy")
+        self.assertEqual(punchy["pace"], "punchy")
+        # Valeur inconnue -> repli sur "balanced".
+        bogus = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, pace="turbo")
+        self.assertEqual(bogus["pace"], "balanced")
 
     def test_json_serialisable(self):
         import json

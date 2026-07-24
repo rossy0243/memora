@@ -39,6 +39,14 @@ _GRADE_BY_MOOD = {
     "joyful_party": "neutral",
 }
 
+# Rythme par livrable : le teaser est punchy (Ken Burns marque), l'integrale
+# respire, le heros est equilibre.
+_PACE_BY_DELIVERABLE = {
+    "teaser": "punchy",
+    "hero": "balanced",
+    "full": "gentle",
+}
+
 
 def _seconds_to_frames(seconds, fps):
     return max(int(round(seconds * fps)), 1)
@@ -62,7 +70,7 @@ def _clip_seconds(upload, beat_interval):
     return snapped
 
 
-def build_film_props(event, uploads, soundtrack, *, fps=None):
+def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced"):
     """Construit le dict FilmProps (aligne avec remotion/src/types.ts).
 
     Les `src` sont des noms de fichiers relatifs au dossier d'assets materialise ;
@@ -75,12 +83,14 @@ def build_film_props(event, uploads, soundtrack, *, fps=None):
     for index, upload in enumerate(uploads, start=1):
         suffix = Path(upload.original_filename or upload.media_file.name).suffix.lower() or ".media"
         seconds = _clip_seconds(upload, beat_interval)
+        category = getattr(upload, "category", None)
         clips.append(
             {
                 "kind": "video" if upload.media_type == GuestUpload.MediaType.VIDEO else "image",
                 "src": f"clip_{index:04d}{suffix}",
                 "durationInFrames": _seconds_to_frames(seconds, fps),
-                "category": getattr(getattr(upload, "category", None), "code", "") or "",
+                "category": getattr(category, "code", "") or "",
+                "label": getattr(category, "label", "") or "",
             }
         )
 
@@ -106,6 +116,7 @@ def build_film_props(event, uploads, soundtrack, *, fps=None):
         "outroDurationInFrames": _seconds_to_frames(settings.MEMORA_MOVIE_OUTRO_CARD_SECONDS, fps),
         "transitionDurationInFrames": max(int(round(fps / 2)), 1),
         "grade": _GRADE_BY_MOOD.get(getattr(soundtrack, "mood", ""), "romantic"),
+        "pace": pace if pace in ("punchy", "balanced", "gentle") else "balanced",
     }
 
 
@@ -139,7 +150,8 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
         raise RuntimeError(f"Script de rendu absent : {render_script}")
 
     uploads = list(uploads)
-    props = build_film_props(event, uploads, soundtrack)
+    pace = _PACE_BY_DELIVERABLE.get(deliverable, "balanced")
+    props = build_film_props(event, uploads, soundtrack, pace=pace)
 
     with tempfile.TemporaryDirectory(prefix="memora_remotion_") as work_dir:
         assets_dir = Path(work_dir) / "assets"

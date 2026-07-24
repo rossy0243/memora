@@ -25,6 +25,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     outroDurationInFrames,
     transitionDurationInFrames,
     grade,
+    pace,
   } = props;
 
   const transition = () => (
@@ -33,6 +34,17 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
       timing={linearTiming({ durationInFrames: transitionDurationInFrames })}
     />
   );
+
+  // Le lower-third (nom du moment) ne s'affiche que sur le PREMIER plan de chaque
+  // moment : il marque l'entree dans un nouveau chapitre (Cérémonie, Soirée…)
+  // sans repeter le libelle sur chaque photo.
+  const seenLabels = new Set<string>();
+  const clipLabels = clips.map((clip) => {
+    const label = clip.label?.trim();
+    if (!label || seenLabels.has(label)) return undefined;
+    seenLabels.add(label);
+    return label;
+  });
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0f0c0d" }}>
@@ -51,7 +63,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
             key={`clip-${index}`}
             durationInFrames={clip.durationInFrames}
           >
-            <Clip clip={clip} grade={grade} />
+            <Clip clip={clip} grade={grade} pace={pace} chapterLabel={clipLabels[index]} />
           </TransitionSeries.Sequence>,
         ])}
 

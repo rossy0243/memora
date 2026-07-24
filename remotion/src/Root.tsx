@@ -8,9 +8,9 @@ const FPS = 30;
 
 // Un exemple par defaut pour le Studio (aperçu sans Django).
 const sampleClips: FilmProps["clips"] = [
-  { kind: "image", src: "sample/1.jpg", durationInFrames: 90 },
-  { kind: "image", src: "sample/2.jpg", durationInFrames: 90 },
-  { kind: "image", src: "sample/3.jpg", durationInFrames: 90 },
+  { kind: "image", src: "sample/1.jpg", durationInFrames: 90, category: "ceremony", label: "Cérémonie" },
+  { kind: "image", src: "sample/2.jpg", durationInFrames: 90, category: "cocktail", label: "Cocktail" },
+  { kind: "image", src: "sample/3.jpg", durationInFrames: 90, category: "party", label: "Soirée" },
 ];
 
 export const RemotionRoot: React.FC = () => {
