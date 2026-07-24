@@ -28,6 +28,33 @@ lecture temps réel), ce qui garde le coût raisonnable.
 
 ---
 
+## FFmpeg n'est PAS supprimé — il garde un rôle central
+
+« Remotion vs FFmpeg » est un faux dilemme. Remotion décrit la *composition* (React) ;
+tout le travail vidéo lourd reste fait par FFmpeg. Adopter Remotion **n'élimine pas
+FFmpeg**. Il intervient à quatre endroits :
+
+1. **À l'intérieur de Remotion.** `<OffthreadVideo>` extrait les frames des clips via
+   FFmpeg, et l'encodage final (frames + audio → MP4) se fait via FFmpeg. Remotion
+   embarque son propre binaire (`@remotion/renderer`). Les MP4 rendus en phase 1 ont
+   donc été **encodés par FFmpeg, piloté par Remotion**.
+2. **Filet de sécurité / fallback.** Le pipeline FFmpeg Python historique
+   (`processing/services.py`) reste **actif en production** tant que le feature flag
+   `MEMORA_MOVIE_RENDER_PROVIDER` n'est pas basculé sur `remotion`, et sert de repli si
+   Remotion échoue. Il n'est pas supprimé.
+3. **Usages indépendants du rendu.** Mesure de tempo (`processing/tempo.py`), analyse
+   média, `ffprobe`, archive ZIP — toujours FFmpeg/ffprobe, inchangés.
+4. **Rôle hybride probable (phase 2/3).** Le **ducking audio** (baisser la musique sous
+   les voix des invités, via `sidechaincompress`) se fait mal dans Remotion. Le scénario
+   propre sera sans doute **Remotion pour le visuel + une passe FFmpeg finale pour le
+   mixage audio**, surtout sur le héros et l'intégrale où l'on garde la voix des invités.
+
+En résumé : FFmpeg devient (a) le moteur d'encodage **sous** Remotion, (b) le pipeline
+de secours, (c) l'outil de mesure/analyse, (d) probablement le mixeur audio final.
+C'est une couche de design **par-dessus** FFmpeg, pas un remplacement.
+
+---
+
 ## Ce qui a été fait — Phase 1 (terminée)
 
 Scaffold Remotion complet + preuve de rendu de bout en bout.
