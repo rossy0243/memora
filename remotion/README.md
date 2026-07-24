@@ -185,14 +185,31 @@ relative de Chrome n'est pas bloquante — un pic de festivités est absorbé pa
 
 ---
 
-## Phase 3 : polish ultra premium des 3 formats (à venir)
+## Phase 3 : polish ultra premium des 3 formats (en cours)
 
-Une fois l'intégration branchée et un vrai film de mariage rendu :
+### ✅ Typographie premium + correction des accents FR (fait)
+
+- Polices **auto-hébergées** (OFL, usage commercial OK) embarquées dans
+  `public/fonts/` : **Playfair Display** (titres) + **Cormorant Garamond**
+  (sous-titres). Chargées via `src/fonts.ts` (`@font-face` + `delayRender`
+  pour bloquer le rendu tant que les glyphes ne sont pas prêts). Aucune
+  dépendance réseau au runtime → la prod (Docker worker) fonctionne hors-ligne.
+- `render.mjs` copie `public/fonts` dans le `--public-dir` au rendu, pour que
+  les mêmes chemins `staticFile()` résolvent en test CLI **et** via Django
+  (dont le public-dir est le dossier d'assets temporaire).
+- **Bug des accents résolu.** Symptômes rencontrés et causes distinctes :
+  1. `□` (tofu) = glyphe absent → le Chrome headless de rendu n'a pas les
+     polices système (Georgia). Corrigé en embarquant les polices ci-dessus.
+  2. `�` (U+FFFD) = **encodage** du `props.json`, pas la police. Le vrai
+     builder Django écrit en UTF-8 via `json.dumps` (accents échappés en
+     `é`) → correct. À NE PAS écrire le JSON en cp1252 (piège Windows).
+- Cartons redessinés : titre Playfair, sous-titre Cormorant capitales espacées
+  or, double filet dégradé, fond vignette radial, léger zoom de respiration.
+
+### Reste à faire
 
 - Calibrer les durées, transitions et grade **par format** (le teaser est punchy et
   court ; l'intégrale respire).
-- Enrichir la typographie (polices premium chargées dans Remotion via `@remotion/google-fonts`
-  ou des `.ttf` locaux, au lieu de Georgia système).
 - Décider du **son des invités** : lit musical seul (teaser) vs. musique + voix des
   invités avec ducking (héros/intégrale) — le ducking se fait au montage audio FFmpeg
   final ou dans Remotion.
