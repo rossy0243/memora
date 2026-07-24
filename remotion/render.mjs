@@ -16,7 +16,7 @@
  */
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { readFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,6 +44,15 @@ async function main() {
 
   const inputProps = JSON.parse(readFileSync(propsPath, "utf8"));
   const entryPoint = path.join(__dirname, "src", "index.ts");
+
+  // Les polices premium (accents FR compris) vivent dans remotion/public/fonts.
+  // staticFile() les resout depuis --public-dir ; on les y copie donc pour que la
+  // chaine Django (public-dir = dossier d'assets materialises) les trouve aussi.
+  const fontsSrc = path.join(__dirname, "public", "fonts");
+  const fontsDest = path.join(publicDir, "fonts");
+  if (existsSync(fontsSrc) && path.resolve(fontsSrc) !== path.resolve(fontsDest)) {
+    cpSync(fontsSrc, fontsDest, { recursive: true });
+  }
 
   const serveUrl = await bundle({ entryPoint, publicDir });
 
