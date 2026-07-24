@@ -1142,6 +1142,108 @@ class BeatSyncTests(TestCase):
         self.assertNotIn("-ss", run_ffmpeg.call_args.args[0])
 
 
+class RemotionEdlTests(TestCase):
+    """Le builder EDL doit produire un FilmProps aligne avec remotion/src/types.ts."""
+
+    def _upload(self, kind, filename, seconds=None):
+        return SimpleNamespace(
+            pk=id(filename) % 100000,
+            media_type=kind,
+            original_filename=filename,
+            media_file=SimpleNamespace(name=filename),
+            duration=timedelta(seconds=seconds) if seconds else None,
+            category=SimpleNamespace(code="ceremony"),
+        )
+
+    def _event(self):
+        return SimpleNamespace(pk=7, title="Mariage", couple_name="Camille & Noé", event_date=date(2026, 7, 12))
+
+    def _soundtrack(self, mood="romantic_cinematic", bpm=120.0, offset=1.25, has_track=True):
+        return SimpleNamespace(
+            mood=mood,
+            bpm=bpm,
+            first_beat_offset=offset,
+            has_track=has_track,
+            track_path=None,
+            beat_interval=(60.0 / bpm if bpm else 0.0),
+        )
+
+    def test_props_shape_matches_contract(self):
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "photo.jpg"),
+            self._upload(GuestUpload.MediaType.VIDEO, "clip.mp4", seconds=8),
+        ]
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+
+        # Cle presentes et typees comme attendu cote TSX.
+        for key in (
+            "clips", "audioSrc", "audioFirstBeatOffset", "title", "subtitle",
+            "outroTitle", "introDurationInFrames", "outroDurationInFrames",
+            "transitionDurationInFrames", "grade",
+        ):
+            self.assertIn(key, props)
+
+        self.assertEqual(len(props["clips"]), 2)
+        self.assertEqual(props["clips"][0]["kind"], "image")
+        self.assertEqual(props["clips"][1]["kind"], "video")
+        self.assertEqual(props["clips"][0]["src"], "clip_0001.jpg")
+        self.assertEqual(props["clips"][1]["src"], "clip_0002.mp4")
+        self.assertTrue(all(c["durationInFrames"] >= 1 for c in props["clips"]))
+        self.assertEqual(props["title"], "Camille & Noé")
+        self.assertEqual(props["audioSrc"], "music.mp3")
+        self.assertEqual(props["audioFirstBeatOffset"], 1.25)
+        self.assertEqual(props["grade"], "romantic")
+
+    def test_json_serialisable(self):
+        import json
+        from processing.remotion import build_film_props
+
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(),
+            fps=30,
+        )
+        # Doit passer tel quel dans props.json.
+        self.assertIsInstance(json.dumps(props), str)
+
+    def test_no_music_yields_null_audio(self):
+        from processing.remotion import build_film_props
+
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(has_track=False),
+            fps=30,
+        )
+        self.assertIsNone(props["audioSrc"])
+
+    def test_video_clip_never_exceeds_real_duration(self):
+        from processing.remotion import build_film_props
+
+        # Video de 4 s : la duree en frames ne doit pas depasser 4 s * fps.
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.VIDEO, "v.mp4", seconds=4)],
+            self._soundtrack(bpm=120.0),
+            fps=30,
+        )
+        self.assertLessEqual(props["clips"][0]["durationInFrames"], 4 * 30)
+
+    def test_mood_maps_to_grade(self):
+        from processing.remotion import build_film_props
+
+        joyful = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(mood="joyful_party"),
+            fps=30,
+        )
+        self.assertEqual(joyful["grade"], "neutral")
+
+
 class MusicLibraryTests(TestCase):
     """Bibliotheque musicale geree en admin, avec repli sur le dossier assets."""
 
