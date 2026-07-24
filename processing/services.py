@@ -25,7 +25,7 @@ from .runway import (
     runway_final_is_ready,
     runway_is_ready,
 )
-from .soundtrack import build_edit_decision_data, choose_movie_soundtrack
+from .soundtrack import build_edit_decision_data, choose_movie_soundtrack, materialize_soundtrack
 from .title_cards import build_title_card, event_intro_texts, event_outro_texts
 
 
@@ -1453,9 +1453,15 @@ def _run_ffmpeg(command):
 
 
 def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_binary):
-    if not soundtrack.track_path:
+    if not soundtrack.has_track:
         return input_path
     if not _media_file_has_audio(input_path):
+        return input_path
+
+    # La piste peut venir de la bibliotheque admin (stockage R2) : on la copie en
+    # local car ffmpeg lit un fichier, pas une URL signee ephemere.
+    track_path, cleanup = materialize_soundtrack(soundtrack, output_path.parent)
+    if not track_path:
         return input_path
 
     # On demarre la musique sur son premier temps fort : les coupes, toutes calees
@@ -1464,38 +1470,42 @@ def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_b
     if settings.MEMORA_MOVIE_BEAT_SYNC_ENABLED and soundtrack.first_beat_offset:
         music_seek = ["-ss", str(round(soundtrack.first_beat_offset, 3))]
 
-    _run_ffmpeg(
-        [
-            ffmpeg_binary,
-            "-y",
-            "-i",
-            str(input_path),
-            "-stream_loop",
-            "-1",
-            *music_seek,
-            "-i",
-            str(soundtrack.track_path),
-            "-filter_complex",
-            (
-                f"[0:a]aresample=48000,volume={settings.MEMORA_MOVIE_VOICE_VOLUME}[voice];"
-                f"[1:a]aresample=48000,volume={settings.MEMORA_MOVIE_MUSIC_VOLUME}[music];"
-                "[music][voice]sidechaincompress=threshold=0.035:ratio=10:attack=80:release=900[ducked];"
-                "[voice][ducked]amix=inputs=2:duration=first:dropout_transition=2[a]"
-            ),
-            "-map",
-            "0:v:0",
-            "-map",
-            "[a]",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-shortest",
-            str(output_path),
-        ]
-    )
+    try:
+        _run_ffmpeg(
+            [
+                ffmpeg_binary,
+                "-y",
+                "-i",
+                str(input_path),
+                "-stream_loop",
+                "-1",
+                *music_seek,
+                "-i",
+                str(track_path),
+                "-filter_complex",
+                (
+                    f"[0:a]aresample=48000,volume={settings.MEMORA_MOVIE_VOICE_VOLUME}[voice];"
+                    f"[1:a]aresample=48000,volume={settings.MEMORA_MOVIE_MUSIC_VOLUME}[music];"
+                    "[music][voice]sidechaincompress=threshold=0.035:ratio=10:attack=80:release=900[ducked];"
+                    "[voice][ducked]amix=inputs=2:duration=first:dropout_transition=2[a]"
+                ),
+                "-map",
+                "0:v:0",
+                "-map",
+                "[a]",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "160k",
+                "-shortest",
+                str(output_path),
+            ]
+        )
+    finally:
+        if cleanup:
+            Path(track_path).unlink(missing_ok=True)
     return output_path
 
 

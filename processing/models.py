@@ -1,9 +1,116 @@
+import logging
+
 from django.db import models
+
+logger = logging.getLogger(__name__)
 
 
 def generated_movie_upload_path(instance, filename):
     event_slug = instance.event.slug if instance.event_id else "pending"
     return f"events/{event_slug}/movies/{filename}"
+
+
+def music_track_upload_path(instance, filename):
+    return f"music/{filename}"
+
+
+class MusicTrack(models.Model):
+    """Piste de la bibliotheque musicale, gerable depuis l'admin.
+
+    La licence releve de l'administrateur qui televerse la piste : les champs
+    d'attribution / source servent a garder une trace du droit d'usage.
+    """
+
+    class Mood(models.TextChoices):
+        ROMANTIC = "romantic_cinematic", "Romantique / cinematique"
+        EMOTIONAL = "cinematic_emotional", "Emotion / recueillement"
+        JOYFUL = "joyful_party", "Joyeux / fete"
+        WARM = "warm_lounge", "Chaleureux / lounge"
+        ELEGANT = "elegant_warm", "Elegant / neutre"
+
+    title = models.CharField(max_length=160)
+    audio_file = models.FileField(upload_to=music_track_upload_path)
+    mood = models.CharField(max_length=32, choices=Mood.choices, default=Mood.ELEGANT)
+    bpm = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Tempo mesure automatiquement a l'upload. Sert au calage des coupes.",
+    )
+    first_beat_offset = models.FloatField(
+        default=0.0,
+        help_text="Decalage du premier temps fort, en secondes.",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Seules les pistes actives sont utilisees dans les films.",
+    )
+    attribution = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Credit a afficher si la licence l'exige (ex. CC-BY).",
+    )
+    source = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Provenance et licence, pour vos archives (ex. Pixabay, YouTube Audio Library).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["mood", "title"]
+        verbose_name = "piste musicale"
+        verbose_name_plural = "bibliotheque musicale"
+
+    def __str__(self):
+        return f"{self.title} ({self.get_mood_display()})"
+
+    @property
+    def beat_interval(self):
+        return 60.0 / self.bpm if self.bpm else 0.0
+
+    def measure_and_store_tempo(self, save=True):
+        """Mesure le tempo depuis le fichier (best-effort). Renvoie True si mesure."""
+        from .tempo import measure_tempo
+
+        if not self.audio_file:
+            return False
+        try:
+            local_path = self._materialize_to_temp()
+        except Exception as exc:  # fichier illisible / storage indisponible
+            logger.warning("Music track materialisation failed pk=%s error=%s", self.pk, exc)
+            return False
+        try:
+            bpm, offset = measure_tempo(local_path)
+        except Exception as exc:  # ffmpeg absent ou decodage impossible
+            logger.warning("Tempo measurement failed pk=%s error=%s", self.pk, exc)
+            return False
+        finally:
+            local_path.unlink(missing_ok=True)
+
+        self.bpm = bpm
+        self.first_beat_offset = offset
+        if save:
+            super().save(update_fields=["bpm", "first_beat_offset", "updated_at"])
+        return True
+
+    def _materialize_to_temp(self):
+        """Copie le fichier (local ou R2) vers un fichier temporaire lisible par ffmpeg."""
+        import tempfile
+        from pathlib import Path
+
+        suffix = Path(self.audio_file.name).suffix or ".audio"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            self.audio_file.open("rb")
+            try:
+                for chunk in self.audio_file.chunks():
+                    temporary.write(chunk)
+            finally:
+                self.audio_file.close()
+        return temporary_path
 
 
 class GeneratedMovie(models.Model):

@@ -23,7 +23,7 @@ from . import services
 from . import soundtrack as soundtrack_module
 from . import title_cards
 from .analysis import _score_upload, analyze_pending_media, create_media_analysis_job, create_missing_media_analysis_jobs
-from .models import GeneratedMovie, MediaAnalysis
+from .models import GeneratedMovie, MediaAnalysis, MusicTrack
 from .services import (
     MOOD_COLOR_GRADE_FILTERS,
     _apply_color_grade,
@@ -1140,6 +1140,81 @@ class BeatSyncTests(TestCase):
             Path("in.mp4"), Path("out.mp4"), choice, "ffmpeg"
         )
         self.assertNotIn("-ss", run_ffmpeg.call_args.args[0])
+
+
+class MusicLibraryTests(TestCase):
+    """Bibliotheque musicale geree en admin, avec repli sur le dossier assets."""
+
+    def _make_event(self, pk_hint=None):
+        event_type = EventType.objects.get(code="wedding")
+        organizer = get_user_model().objects.create_user(
+            username=f"orga-music-{pk_hint or 'x'}", password="secret"
+        )
+        return Event.objects.create(
+            organizer=organizer,
+            title="Mariage Musique",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    def _track(self, mood, title, bpm=120.0, offset=0.0, active=True):
+        return MusicTrack.objects.create(
+            title=title,
+            audio_file=SimpleUploadedFile(f"{title}.mp3", b"fake-audio"),
+            mood=mood,
+            bpm=bpm,
+            first_beat_offset=offset,
+            is_active=active,
+        )
+
+    def test_db_track_is_preferred_over_folder(self):
+        from processing.soundtrack import choose_movie_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "romance-admin", bpm=90.0, offset=1.1)
+        event = self._make_event()
+        # Un mariage sans media -> mood romantic_cinematic.
+        choice = choose_movie_soundtrack(event, [])
+        self.assertEqual(choice.track_id, MusicTrack.objects.get(title="romance-admin").pk)
+        self.assertEqual(choice.track_name, "romance-admin")
+        self.assertEqual(choice.bpm, 90.0)
+        self.assertEqual(choice.first_beat_offset, 1.1)
+
+    def test_inactive_tracks_are_ignored(self):
+        from processing.soundtrack import choose_movie_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "desactivee", active=False)
+        event = self._make_event()
+        choice = choose_movie_soundtrack(event, [])
+        # Pas de piste admin active -> repli sur le dossier (ou rien) : pas de track_id.
+        self.assertIsNone(choice.track_id)
+
+    def test_selection_is_deterministic_within_an_event(self):
+        from processing.soundtrack import choose_movie_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "a")
+        self._track(MusicTrack.Mood.ROMANTIC, "b")
+        self._track(MusicTrack.Mood.ROMANTIC, "c")
+        event = self._make_event()
+        picks = {choose_movie_soundtrack(event, []).track_id for _ in range(5)}
+        # Un seul et meme choix pour tous les appels d'un rendu.
+        self.assertEqual(len(picks), 1)
+
+    def test_materialize_copies_db_track_to_local_file(self):
+        from processing.soundtrack import choose_movie_soundtrack, materialize_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "copie", bpm=100.0)
+        event = self._make_event()
+        choice = choose_movie_soundtrack(event, [])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path, cleanup = materialize_soundtrack(choice, Path(temp_dir))
+            self.assertIsNotNone(path)
+            self.assertTrue(cleanup)
+            self.assertTrue(path.exists())
+            self.assertEqual(path.read_bytes(), b"fake-audio")
+
+    def test_beat_interval_from_db_track(self):
+        track = self._track(MusicTrack.Mood.JOYFUL, "rythme", bpm=120.0)
+        self.assertAlmostEqual(track.beat_interval, 0.5, places=3)
 
 
 class GeneratedMovieAdminActionTests(TestCase):

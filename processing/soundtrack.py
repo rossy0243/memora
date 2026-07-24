@@ -30,10 +30,19 @@ class SoundtrackChoice:
     reason: str
     bpm: float = 0.0
     first_beat_offset: float = 0.0
+    # Piste issue de la bibliotheque admin (MusicTrack). Prioritaire sur track_path.
+    track_id: int | None = None
+    track_display_name: str = ""
 
     @property
     def track_name(self):
+        if self.track_display_name:
+            return self.track_display_name
         return self.track_path.name if self.track_path else ""
+
+    @property
+    def has_track(self):
+        return bool(self.track_id or self.track_path)
 
     @property
     def beat_interval(self):
@@ -48,12 +57,44 @@ def get_track_tempo(track_path):
     return TRACK_TEMPOS.get(Path(track_path).name, (0.0, 0.0))
 
 
+def find_db_track_for_mood(mood, event):
+    """Piste active de la bibliotheque admin pour ce mood.
+
+    Choix deterministe par evenement : varie d'un evenement a l'autre, mais reste
+    identique pour tous les appels d'un meme rendu (le tempo qui decoupe les plans
+    doit correspondre a la musique reellement jouee).
+    """
+    from .models import MusicTrack
+
+    tracks = list(MusicTrack.objects.filter(is_active=True, mood=mood).order_by("pk"))
+    if not tracks:
+        tracks = list(MusicTrack.objects.filter(is_active=True).order_by("pk"))
+    if not tracks:
+        return None
+    seed = getattr(event, "pk", 0) or 0
+    return tracks[seed % len(tracks)]
+
+
 def choose_movie_soundtrack(event, uploads):
     mood = choose_music_mood(event, uploads)
+
+    db_track = find_db_track_for_mood(mood, event)
+    if db_track is not None:
+        return SoundtrackChoice(
+            mood=mood,
+            track_path=None,
+            reason=f"Piste de la bibliotheque pour le mood {mood}",
+            bpm=db_track.bpm or 0.0,
+            first_beat_offset=db_track.first_beat_offset or 0.0,
+            track_id=db_track.pk,
+            track_display_name=db_track.title,
+        )
+
+    # Repli : pistes livrees en dur dans assets/music/.
     track_path = find_track_for_mood(mood)
     reason = "Bibliotheque musicale non configuree"
     if track_path:
-        reason = f"Piste choisie pour le mood {mood}"
+        reason = f"Piste (dossier) pour le mood {mood}"
     bpm, first_beat_offset = get_track_tempo(track_path)
     return SoundtrackChoice(
         mood=mood,
@@ -62,6 +103,38 @@ def choose_movie_soundtrack(event, uploads):
         bpm=bpm,
         first_beat_offset=first_beat_offset,
     )
+
+
+def materialize_soundtrack(soundtrack, directory):
+    """Renvoie (chemin_local, a_supprimer) pour la piste, prete pour ffmpeg.
+
+    - Piste admin (R2/local) : copiee dans un fichier temporaire -> a supprimer.
+    - Piste du dossier assets : chemin direct -> ne pas supprimer.
+    - Aucune piste : (None, False).
+    """
+    import tempfile
+
+    if soundtrack.track_id:
+        from .models import MusicTrack
+
+        track = MusicTrack.objects.filter(pk=soundtrack.track_id).first()
+        if not track or not track.audio_file:
+            return None, False
+        suffix = Path(track.audio_file.name).suffix or ".audio"
+        with tempfile.NamedTemporaryFile(suffix=suffix, dir=directory, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            track.audio_file.open("rb")
+            try:
+                for chunk in track.audio_file.chunks():
+                    temporary.write(chunk)
+            finally:
+                track.audio_file.close()
+        return temporary_path, True
+
+    if soundtrack.track_path:
+        return Path(soundtrack.track_path), False
+
+    return None, False
 
 
 def choose_music_mood(event, uploads):

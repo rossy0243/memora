@@ -1,6 +1,50 @@
 from django.contrib import admin, messages
 
-from .models import GeneratedMovie, MediaAnalysis
+from .models import GeneratedMovie, MediaAnalysis, MusicTrack
+
+
+@admin.register(MusicTrack)
+class MusicTrackAdmin(admin.ModelAdmin):
+    actions = ("measure_tempo",)
+    list_display = ("title", "mood", "bpm", "first_beat_offset", "is_active", "attribution")
+    list_filter = ("mood", "is_active")
+    list_editable = ("is_active",)
+    search_fields = ("title", "attribution", "source")
+    readonly_fields = ("bpm", "first_beat_offset", "created_at", "updated_at")
+    fields = (
+        "title",
+        "audio_file",
+        "mood",
+        "is_active",
+        "attribution",
+        "source",
+        "bpm",
+        "first_beat_offset",
+        "created_at",
+        "updated_at",
+    )
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # Mesure automatique du tempo a l'upload (ou si le fichier a change).
+        if "audio_file" in form.changed_data or obj.bpm is None:
+            if obj.measure_and_store_tempo():
+                self.message_user(request, f"Tempo mesure : {obj.bpm} BPM.")
+            else:
+                self.message_user(
+                    request,
+                    "Tempo non mesure (ffmpeg indisponible ?). Le calage rythmique "
+                    "sera ignore pour cette piste ; utilisez l'action « Mesurer le tempo ».",
+                    level=messages.WARNING,
+                )
+
+    @admin.action(description="Mesurer le tempo")
+    def measure_tempo(self, request, queryset):
+        measured = 0
+        for track in queryset:
+            if track.measure_and_store_tempo():
+                measured += 1
+        self.message_user(request, f"{measured} piste(s) mesuree(s).")
 
 
 @admin.register(GeneratedMovie)
