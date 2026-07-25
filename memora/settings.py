@@ -377,6 +377,16 @@ MEMORA_GOOGLE_VIDEO_INTELLIGENCE_USE_LATEST_MODEL = env_bool(
     True,
 )
 MEMORA_MOVIE_RENDER_PROVIDER = os.getenv("MEMORA_MOVIE_RENDER_PROVIDER", "ffmpeg")
+# Rendu premium Remotion (Node + Chrome headless). Le pipeline ffmpeg reste le fallback.
+MEMORA_REMOTION_DIR = os.getenv("MEMORA_REMOTION_DIR", str(BASE_DIR / "remotion"))
+MEMORA_NODE_BINARY = os.getenv("MEMORA_NODE_BINARY", "node")
+MEMORA_REMOTION_FPS = env_int("MEMORA_REMOTION_FPS", 30)
+MEMORA_REMOTION_TIMEOUT_SECONDS = env_int("MEMORA_REMOTION_TIMEOUT_SECONDS", 1800)
+# Volumes musique du rendu Remotion. Distincts des reglages FFmpeg : ici la
+# musique est le lit principal (fort), et elle est duckee uniquement pendant
+# les passages qui gardent la voix des invites (heros/integrale).
+MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.85"))
+MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.18"))
 MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))
 MEMORA_RUNWAY_WORKFLOW_ID = os.getenv("MEMORA_RUNWAY_WORKFLOW_ID", "")

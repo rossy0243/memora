@@ -15,3 +15,7 @@ media
 staticfiles
 .server.*.log
 db.sqlite3
+remotion/node_modules
+remotion/out
+remotion/public/sample
+remotion/public/render

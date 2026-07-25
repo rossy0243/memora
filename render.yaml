@@ -173,7 +173,7 @@ services:
         value: "True"
       - &env_render_provider
         key: MEMORA_MOVIE_RENDER_PROVIDER
-        value: runway_final
+        value: remotion
       - &env_runway_enabled
         key: MEMORA_RUNWAY_ENABLED
         value: "True"
@@ -221,7 +221,8 @@ services:
     runtime: docker
     region: frankfurt
     plan: standard
-    dockerfilePath: ./Dockerfile
+    # Image dediee : Node + Chrome headless Remotion en plus de Python/FFmpeg.
+    dockerfilePath: ./Dockerfile.worker
     dockerContext: .
     dockerCommand: python manage.py process_pending_movies --loop --sleep 30
     autoDeployTrigger: commit
@@ -322,13 +323,17 @@ services:
       - *env_music_volume
       - *env_voice_volume
       - *env_ducked_music_volume
+      # Rendu Remotion : 1 seul rendu Chrome a la fois (plan standard, 1 CPU).
+      - key: REMOTION_CONCURRENCY
+        value: "1"
 
   - type: cron
     name: memora-schedule-movies
     runtime: docker
     region: frankfurt
     plan: standard
-    dockerfilePath: ./Dockerfile
+    # Ce cron rend aussi des films (--process-now) : meme image que le worker.
+    dockerfilePath: ./Dockerfile.worker
     dockerContext: .
     schedule: "0 * * * *"
     dockerCommand: python manage.py generate_scheduled_movies --process-now

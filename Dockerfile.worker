@@ -1,0 +1,57 @@
+# Image du worker film (et du cron de génération) : Python + FFmpeg comme l'image
+# web, PLUS Node.js et le Chrome Headless Shell de Remotion pour le rendu premium.
+# L'image web reste sur ./Dockerfile (léger) : seuls les services qui rendent des
+# films paient le poids de Node + Chrome.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libpq5 fonts-dejavu-core curl ca-certificates gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 (pont render.mjs) + bibliothèques partagées requises par le Chrome
+# headless de Remotion sur Debian slim.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends \
+        nodejs \
+        libnss3 \
+        libdbus-1-3 \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libasound2 \
+        libxrandr2 \
+        libxkbcommon0 \
+        libxfixes3 \
+        libxcomposite1 \
+        libxdamage1 \
+        libpango-1.0-0 \
+        libcairo2 \
+        libcups2 \
+        libgbm1 \
+        libxshmfence1 \
+        libx11-6 \
+        libxext6 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r requirements.txt
+
+# Dépendances Remotion d'abord (couche cachée tant que le lockfile ne bouge pas).
+COPY remotion/package.json remotion/package-lock.json ./remotion/
+RUN cd remotion && npm ci --no-audit --no-fund
+
+COPY . .
+
+# Télécharge le Chrome Headless Shell au build — jamais pendant un rendu.
+RUN cd remotion && npx remotion browser ensure
+
+RUN python manage.py collectstatic --noinput
+
+# Render écrase cette commande via dockerCommand (worker en boucle / cron).
+CMD ["python", "manage.py", "process_pending_movies", "--loop", "--sleep", "30"]
