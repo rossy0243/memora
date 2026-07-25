@@ -21,6 +21,25 @@ est limité : pas de vraies transitions animées, pas de typographie cinétique.
 - Le propriétaire a **choisi Remotion** en connaissance du coût de licence commerciale.
   Cette branche applique ce choix.
 
+### 📜 Licence Remotion — quand et comment payer
+
+État vérifié en **juillet 2026** (revérifier sur remotion.pro le moment venu) :
+
+- **Aujourd'hui : gratuit et en règle, sans compte.** La licence gratuite couvre
+  les particuliers et les entreprises **jusqu'à 3 personnes**, usage commercial
+  et rendu automatisé serveur inclus. Aucune clé, aucune télémétrie, aucun
+  blocage technique : l'obligation est contractuelle, pas technique.
+- **Déclencheur du passage payant : la taille de l'entreprise, pas le volume de
+  rendus.** Dès que Memora compte **4 personnes ou plus** (employés ;
+  vérifier remotion.pro/faq pour les prestataires), il faut acheter la licence
+  Company. ⚠️ Personne ne préviendra : à vérifier soi-même à chaque embauche.
+- **Formule adaptée à Memora** (SaaS qui rend automatiquement) : « Automators »
+  — 0,01 $ par rendu, **minimum 100 $/mois**. À 3 rendus par événement
+  (héros + intégrale + teaser), le coût par film est négligeable ; le vrai
+  coût est le plancher mensuel.
+- **Où payer** : remotion.pro → Buy now → remotion.pro/dashboard (abonnement
+  par carte, compte créé à ce moment-là seulement).
+
 **Architecture retenue** : Remotion **possède tout le rendu** (clips + transitions +
 titres + couleur + musique), et non un simple habillage par-dessus FFmpeg. Les clips
 invités sont intégrés via `<OffthreadVideo>` (extraction de frames par FFmpeg, pas de
