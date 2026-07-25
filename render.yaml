@@ -174,9 +174,11 @@ services:
       - &env_render_provider
         key: MEMORA_MOVIE_RENDER_PROVIDER
         value: remotion
+      # Runway desactive (2026-07) : Remotion est le moteur premium, le repli
+      # reste FFmpeg pur — pas de cout API variable par evenement.
       - &env_runway_enabled
         key: MEMORA_RUNWAY_ENABLED
-        value: "True"
+        value: "False"
       - key: RUNWAYML_API_SECRET
         sync: false
       - &env_runway_workflow_id
