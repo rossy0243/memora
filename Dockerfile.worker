@@ -42,14 +42,13 @@ COPY requirements.txt .
 RUN python -m pip install --upgrade pip \
     && python -m pip install -r requirements.txt
 
-# Dépendances Remotion d'abord (couche cachée tant que le lockfile ne bouge pas).
-COPY remotion/package.json remotion/package-lock.json ./remotion/
-RUN cd remotion && npm ci --no-audit --no-fund
+# Dépendances Remotion + Chrome Headless Shell dans des couches cachées : un
+# changement du code Django ne re-télécharge ni npm ni Chrome (~113 Mo).
+COPY remotion/ ./remotion/
+RUN cd remotion && npm ci --no-audit --no-fund \
+    && npx remotion browser ensure
 
 COPY . .
-
-# Télécharge le Chrome Headless Shell au build — jamais pendant un rendu.
-RUN cd remotion && npx remotion browser ensure
 
 RUN python manage.py collectstatic --noinput
 

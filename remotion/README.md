@@ -40,6 +40,25 @@ est limité : pas de vraies transitions animées, pas de typographie cinétique.
 - **Où payer** : remotion.pro → Buy now → remotion.pro/dashboard (abonnement
   par carte, compte créé à ce moment-là seulement).
 
+**Brancher la licence à la prod le jour J (déjà préparé, zéro code à changer) :**
+
+1. S'abonner sur remotion.pro/dashboard, puis copier la clé sur la page
+   « License keys ».
+2. Poser la variable d'environnement `REMOTION_LICENSE_KEY=<la clé>` sur le
+   **worker** (`memora-movie-worker`) et le **cron films**
+   (`memora-schedule-movies`) dans Render, puis redéployer ces deux services.
+3. C'est tout : `render.mjs` passe automatiquement `licenseKey` à
+   `renderMedia()` quand la variable existe. Sans elle, comportement identique
+   à aujourd'hui (licence gratuite). La télémétrie de licence **ne bloque et ne
+   fait jamais échouer un rendu** (doc officielle) — impossible de casser la
+   prod avec cette étape.
+4. Vérifier sur le dashboard remotion.pro que les rendus remontent bien
+   (facturation 0,01 $/rendu).
+
+Note : en Remotion **5.x**, la clé deviendra obligatoire pour le modèle par
+rendu — à poser avant toute montée de version majeure si l'équipe a dépassé
+3 personnes.
+
 **Architecture retenue** : Remotion **possède tout le rendu** (clips + transitions +
 titres + couleur + musique), et non un simple habillage par-dessus FFmpeg. Les clips
 invités sont intégrés via `<OffthreadVideo>` (extraction de frames par FFmpeg, pas de

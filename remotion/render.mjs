@@ -54,6 +54,22 @@ async function main() {
     ? Number(process.env.REMOTION_CONCURRENCY)
     : null;
 
+  // Licence Remotion : le jour ou Memora depasse 3 personnes, poser la cle du
+  // dashboard remotion.pro (page « License keys ») dans REMOTION_LICENSE_KEY.
+  // Absente = licence gratuite, comportement inchange. La telemetrie de licence
+  // ne bloque et ne fait JAMAIS echouer un rendu (doc officielle).
+  const licenseKey = process.env.REMOTION_LICENSE_KEY;
+
+  // Cache des frames OffthreadVideo : sans plafond, Remotion peut viser une
+  // grosse part de la RAM libre — fatal sur le worker 2 Go ou Node, Chrome et
+  // ffmpeg cohabitent. 256 Mo par defaut sous Linux, ajustable via
+  // REMOTION_OFFTHREAD_CACHE_MB.
+  const offthreadCacheMb = process.env.REMOTION_OFFTHREAD_CACHE_MB
+    ? Number(process.env.REMOTION_OFFTHREAD_CACHE_MB)
+    : process.platform === "linux"
+      ? 256
+      : null;
+
   // Les polices premium (accents FR compris) vivent dans remotion/public/fonts.
   // staticFile() les resout depuis --public-dir ; on les y copie donc pour que la
   // chaine Django (public-dir = dossier d'assets materialises) les trouve aussi.
@@ -81,6 +97,10 @@ async function main() {
     inputProps,
     chromiumOptions,
     concurrency,
+    ...(offthreadCacheMb ? { offthreadVideoCacheSizeInBytes: offthreadCacheMb * 1024 * 1024 } : {}),
+    // L'option n'est passee que si la cle existe : aucun impact tant que la
+    // licence gratuite s'applique.
+    ...(licenseKey ? { licenseKey } : {}),
     // Deterministe, verbeux minimal : le worker Python journalise deja.
     logLevel: "error",
   });
