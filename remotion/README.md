@@ -183,6 +183,27 @@ Le worker de rendu est **Python** aujourd'hui. Faire tourner Remotion demande :
 Le rendu reste **asynchrone** (films générés à J+1 midi via la file), donc la lenteur
 relative de Chrome n'est pas bloquante — un pic de festivités est absorbé par la file.
 
+### ✅ Mise en production (fait)
+
+- **Worker branché** : `process_generated_movie` tente Remotion quand
+  `MEMORA_MOVIE_RENDER_PROVIDER=remotion` (`_render_movie_with_remotion_pipeline`
+  dans `processing/services.py`). Le héros décide : s'il échoue (Node absent,
+  rendu KO…), tout le pipeline Runway/FFmpeg reprend la main — **le flag ne
+  peut jamais empêcher un film de sortir**. Chaque déclinaison (intégrale,
+  teaser) retombe individuellement sur FFmpeg en cas d'échec. Le badge premium
+  est appliqué au héros Remotion comme avant (FFmpeg). Observabilité :
+  `edit_decision_data["remotion"]` trace chaque livrable (ok / erreur / repli).
+- **Image dédiée `Dockerfile.worker`** (worker + cron `memora-schedule-movies`
+  qui rend aussi des films) : Python + FFmpeg comme l'image web, plus Node 22,
+  les bibliothèques partagées du Chrome headless, `npm ci` du dossier
+  `remotion/`, et le **Chrome Headless Shell téléchargé au build**
+  (`npx remotion browser ensure`) — jamais pendant un rendu. L'image web reste
+  légère sur `./Dockerfile`.
+- **`render.mjs` durci pour Docker** : OpenGL logiciel `swangle` par défaut
+  sous Linux (pas de GPU sur Render), `REMOTION_CONCURRENCY=1` sur le worker
+  (plan standard, 1 CPU).
+- `render.yaml` : `MEMORA_MOVIE_RENDER_PROVIDER=remotion` (web + worker + crons).
+
 ---
 
 ## Phase 3 : polish ultra premium des 3 formats (en cours)

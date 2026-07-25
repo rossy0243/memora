@@ -526,6 +526,63 @@ class MovieGenerationServiceTests(TestCase):
         self.assertFalse(self.event.is_active)
         self.assertFalse(self.event.can_accept_guest_uploads)
 
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_generate_event_movie_uses_remotion_when_flagged(self, render_remotion, run_ffmpeg, _which):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        run_ffmpeg.side_effect = create_output  # badge premium applique via ffmpeg
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertEqual(movie.render_provider, "remotion")
+        # Les trois livrables sont rendus par Remotion, dans l'ordre.
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["hero", "full", "teaser"])
+        self.assertTrue(movie.final_file.name.endswith(".mp4"))
+        self.assertTrue(movie.full_file.name)
+        self.assertTrue(movie.teaser_file.name)
+        self.assertTrue(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["ok"])
+        self.assertTrue(movie.edit_decision_data["badge"]["applied"])
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch(
+        "processing.services.render_movie_with_remotion",
+        side_effect=RuntimeError("Node introuvable : rendu Remotion impossible."),
+    )
+    def test_generate_event_movie_falls_back_to_ffmpeg_when_remotion_fails(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        run_ffmpeg.side_effect = create_output
+
+        movie = generate_event_movie(self.event)
+
+        # Le flag remotion ne doit jamais empecher un film de sortir.
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertEqual(movie.render_provider, "ffmpeg")
+        self.assertTrue(movie.final_file.name.endswith(".mp4"))
+        self.assertEqual(movie.edit_decision_data["remotion"]["fallback"], "ffmpeg")
+        self.assertFalse(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["ok"])
+
     @override_settings(
         MEMORA_PUBLIC_BASE_URL="https://memora.example",
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",

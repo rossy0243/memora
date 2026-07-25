@@ -45,6 +45,15 @@ async function main() {
   const inputProps = JSON.parse(readFileSync(propsPath, "utf8"));
   const entryPoint = path.join(__dirname, "src", "index.ts");
 
+  // En prod (Docker Linux sans GPU) : rendu OpenGL logiciel SwiftShader, sinon
+  // Chrome refuse de peindre. En local on laisse Remotion choisir.
+  const gl = process.env.REMOTION_GL || (process.platform === "linux" ? "swangle" : null);
+  const chromiumOptions = gl ? { gl } : {};
+  // Le worker Render a peu de CPU : REMOTION_CONCURRENCY=1 evite de saturer.
+  const concurrency = process.env.REMOTION_CONCURRENCY
+    ? Number(process.env.REMOTION_CONCURRENCY)
+    : null;
+
   // Les polices premium (accents FR compris) vivent dans remotion/public/fonts.
   // staticFile() les resout depuis --public-dir ; on les y copie donc pour que la
   // chaine Django (public-dir = dossier d'assets materialises) les trouve aussi.
@@ -60,6 +69,7 @@ async function main() {
     serveUrl,
     id: composition,
     inputProps,
+    chromiumOptions,
   });
 
   await renderMedia({
@@ -69,6 +79,8 @@ async function main() {
     crf: 18,
     outputLocation: output,
     inputProps,
+    chromiumOptions,
+    concurrency,
     // Deterministe, verbeux minimal : le worker Python journalise deja.
     logLevel: "error",
   });

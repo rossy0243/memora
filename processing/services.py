@@ -25,6 +25,7 @@ from .runway import (
     runway_final_is_ready,
     runway_is_ready,
 )
+from .remotion import render_movie_with_remotion
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack, materialize_soundtrack
 from .title_cards import build_title_card, event_intro_texts, event_outro_texts
 
@@ -561,7 +562,15 @@ def process_generated_movie(movie):
             runway_final_rendered = False
             total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
-            if runway_final_is_ready():
+            # Rendu premium Remotion derriere le feature flag. En cas d'echec du
+            # heros, on retombe integralement sur le pipeline Runway/ffmpeg.
+            remotion_rendered = False
+            if settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion":
+                remotion_rendered = _render_movie_with_remotion_pipeline(
+                    movie, event, uploads, soundtrack, temp_path, ffmpeg_binary
+                )
+
+            if not remotion_rendered and runway_final_is_ready():
                 _update_movie_progress(movie, 28, "Montage final cinématique avec Runway.")
                 runway_final_path = temp_path / f"memora_{_clean_name(event.title)}_runway_final.mp4"
                 try:
@@ -614,14 +623,16 @@ def process_generated_movie(movie):
                         "fallback": "ffmpeg",
                     }
 
-            if runway_final_rendered:
+            if remotion_rendered or runway_final_rendered:
                 movie.edit_decision_data.setdefault("runway", {})["enhancements"] = []
             else:
                 movie.edit_decision_data.setdefault("runway_final", {"ready": runway_final_is_ready()})
                 _build_movie_with_ffmpeg_fallback(movie, event, uploads, edit_decision_data, temp_path, ffmpeg_binary)
                 total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
-            _render_movie_variants(movie, event, temp_path, ffmpeg_binary)
+            if not remotion_rendered:
+                # Remotion rend deja ses propres declinaisons (integrale + teaser).
+                _render_movie_variants(movie, event, temp_path, ffmpeg_binary)
 
         movie.status = GeneratedMovie.Status.COMPLETED
         movie.progress_percent = 100
@@ -1261,6 +1272,116 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
         _run_ffmpeg(command)
     finally:
         input_path.unlink(missing_ok=True)
+
+
+def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp_path, ffmpeg_binary):
+    """Rend les trois livrables (heros, integrale, teaser) via Remotion.
+
+    Retourne True si le film heros est rendu — le flux Runway/ffmpeg est alors
+    court-circuite. Si le heros echoue (Node absent, rendu KO...), retourne False
+    et laisse le pipeline historique reprendre entierement la main : le flag
+    « remotion » ne doit jamais empecher un film de sortir.
+
+    Les declinaisons restent un bonus : chacune retombe individuellement sur le
+    moteur ffmpeg en cas d'echec, sans compromettre le film principal.
+    """
+    remotion_data = {"deliverables": {}}
+    movie.edit_decision_data["remotion"] = remotion_data
+
+    _update_movie_progress(movie, 30, "Montage cinématique premium en cours.")
+    hero_path = temp_path / f"memora_{_clean_name(event.title)}_remotion.mp4"
+    try:
+        render_movie_with_remotion(event, uploads, soundtrack, hero_path, deliverable="hero")
+    except Exception as exc:
+        remotion_data["deliverables"]["hero"] = {"ok": False, "error": str(exc)}
+        remotion_data["fallback"] = "ffmpeg"
+        logger.warning(
+            "Remotion hero render failed movie=%s event=%s error=%s", movie.pk, event.pk, exc
+        )
+        return False
+    remotion_data["deliverables"]["hero"] = {"ok": True, "clips": len(uploads)}
+    movie.render_provider = "remotion"
+
+    output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
+    badge_data = _build_badge_data(event)
+    _update_movie_progress(movie, 74, "Ajout du badge premium de l'événement.")
+    try:
+        final_output_path = _apply_event_badge(hero_path, output_path, event, ffmpeg_binary, temp_path)
+        badge_data["applied"] = final_output_path == output_path
+    except Exception as exc:
+        final_output_path = hero_path
+        badge_data["error"] = str(exc)
+    movie.edit_decision_data["badge"] = badge_data
+
+    _update_movie_progress(movie, 80, "Enregistrement de la vidéo finale.")
+    with final_output_path.open("rb") as output_file:
+        movie.final_file.save(final_output_path.name, File(output_file), save=False)
+
+    if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
+        return True
+
+    variants = (
+        ("full", "integrale", settings.MEMORA_MOVIE_FULL_DURATION_SECONDS, None, None, "full_file", "full_duration", 86),
+        (
+            "teaser",
+            "teaser",
+            settings.MEMORA_MOVIE_TEASER_DURATION_SECONDS,
+            settings.MEMORA_MOVIE_TEASER_WIDTH,
+            settings.MEMORA_MOVIE_TEASER_HEIGHT,
+            "teaser_file",
+            "teaser_duration",
+            92,
+        ),
+    )
+    for deliverable, label, max_duration, width, height, file_field, duration_field, progress in variants:
+        try:
+            variant_uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
+            if not variant_uploads:
+                continue
+            _update_movie_progress(movie, progress, "Déclinaisons premium (intégrale et teaser).")
+            variant_path = temp_path / f"memora_{_clean_name(event.title)}_{deliverable}_remotion.mp4"
+            try:
+                render_movie_with_remotion(
+                    event, variant_uploads, soundtrack, variant_path, deliverable=deliverable
+                )
+                remotion_data["deliverables"][deliverable] = {"ok": True, "clips": len(variant_uploads)}
+            except Exception as exc:
+                remotion_data["deliverables"][deliverable] = {
+                    "ok": False,
+                    "error": str(exc),
+                    "fallback": "ffmpeg",
+                }
+                logger.warning(
+                    "Remotion variant failed movie=%s event=%s label=%s error=%s",
+                    movie.pk,
+                    event.pk,
+                    deliverable,
+                    exc,
+                )
+                variant_path = build_movie_variant(
+                    event,
+                    variant_uploads,
+                    temp_path,
+                    ffmpeg_binary,
+                    label=label,
+                    width=width,
+                    height=height,
+                )
+                if not variant_path:
+                    continue
+            with Path(variant_path).open("rb") as variant_file:
+                getattr(movie, file_field).save(Path(variant_path).name, File(variant_file), save=False)
+            seconds = sum(_estimated_movie_clip_duration(upload) for upload in variant_uploads)
+            setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
+        except Exception as exc:
+            logger.warning(
+                "Movie variant failed movie=%s event=%s label=%s error=%s",
+                movie.pk,
+                event.pk,
+                deliverable,
+                exc,
+            )
+    return True
 
 
 def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
