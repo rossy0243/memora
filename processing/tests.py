@@ -1145,7 +1145,7 @@ class BeatSyncTests(TestCase):
 class RemotionEdlTests(TestCase):
     """Le builder EDL doit produire un FilmProps aligne avec remotion/src/types.ts."""
 
-    def _upload(self, kind, filename, seconds=None):
+    def _upload(self, kind, filename, seconds=None, voice=False):
         return SimpleNamespace(
             pk=id(filename) % 100000,
             media_type=kind,
@@ -1153,6 +1153,7 @@ class RemotionEdlTests(TestCase):
             media_file=SimpleNamespace(name=filename),
             duration=timedelta(seconds=seconds) if seconds else None,
             category=SimpleNamespace(code="ceremony", label="Cérémonie"),
+            analysis=SimpleNamespace(tags=["voix"] if voice else []),
         )
 
     def _event(self):
@@ -1207,6 +1208,25 @@ class RemotionEdlTests(TestCase):
         # Valeur inconnue -> repli sur "balanced".
         bogus = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, pace="turbo")
         self.assertEqual(bogus["pace"], "balanced")
+
+    def test_guest_audio_only_on_voiced_videos_when_allowed(self):
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "p.jpg", voice=True),
+            self._upload(GuestUpload.MediaType.VIDEO, "muet.mp4", seconds=6, voice=False),
+            self._upload(GuestUpload.MediaType.VIDEO, "voix.mp4", seconds=6, voice=True),
+        ]
+        # Heros/integrale : seule la video avec voix garde son audio.
+        allowed = build_film_props(
+            self._event(), uploads, self._soundtrack(), fps=30, allow_guest_audio=True
+        )
+        self.assertEqual([c["keepAudio"] for c in allowed["clips"]], [False, False, True])
+        # Teaser (defaut) : jamais d'audio invite.
+        teaser = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+        self.assertFalse(any(c["keepAudio"] for c in teaser["clips"]))
+        # Volumes musique presents pour le ducking cote Remotion.
+        self.assertGreater(allowed["musicVolume"], allowed["duckedMusicVolume"])
 
     def test_json_serialisable(self):
         import json

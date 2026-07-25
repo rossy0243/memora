@@ -1,5 +1,11 @@
 import React from "react";
-import { AbsoluteFill, Audio, staticFile } from "remotion";
+import {
+  AbsoluteFill,
+  Audio,
+  interpolate,
+  staticFile,
+  useVideoConfig,
+} from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
 import { FilmProps } from "./types";
@@ -26,7 +32,10 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     transitionDurationInFrames,
     grade,
     pace,
+    musicVolume,
+    duckedMusicVolume,
   } = props;
+  const { fps } = useVideoConfig();
 
   const transition = () => (
     <TransitionSeries.Transition
@@ -45,6 +54,35 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     seenLabels.add(label);
     return label;
   });
+
+  // Segments [debut, fin] (en frames) des plans qui gardent la voix des invites.
+  // Dans une TransitionSeries, chaque transition CHEVAUCHE les deux sequences :
+  // le plan i commence donc a (somme des durees precedentes) - (i+1) transitions.
+  const voiceSegments: Array<[number, number]> = [];
+  let clipStart = introDurationInFrames - transitionDurationInFrames;
+  for (const clip of clips) {
+    if (clip.keepAudio) {
+      voiceSegments.push([clipStart, clipStart + clip.durationInFrames]);
+    }
+    clipStart += clip.durationInFrames - transitionDurationInFrames;
+  }
+
+  // Ducking : la musique descend a duckedMusicVolume pendant les passages avec
+  // voix, avec une rampe douce d'un tiers de seconde de part et d'autre.
+  const ramp = Math.max(Math.round(fps / 3), 1);
+  const musicVolumeAt = (frame: number): number => {
+    let volume = musicVolume;
+    for (const [start, end] of voiceSegments) {
+      const dip = interpolate(
+        frame,
+        [start - ramp, start, end, end + ramp],
+        [musicVolume, duckedMusicVolume, duckedMusicVolume, musicVolume],
+        { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+      );
+      volume = Math.min(volume, dip);
+    }
+    return volume;
+  };
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0f0c0d" }}>
@@ -80,8 +118,8 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
       {audioSrc ? (
         <Audio
           src={resolveSrc(audioSrc)}
-          startFrom={Math.round(audioFirstBeatOffset * 30)}
-          volume={0.85}
+          startFrom={Math.round(audioFirstBeatOffset * fps)}
+          volume={musicVolumeAt}
         />
       ) : null}
     </AbsoluteFill>

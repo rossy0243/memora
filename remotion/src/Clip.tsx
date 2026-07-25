@@ -114,9 +114,12 @@ export const Clip: React.FC<{
     extrapolateRight: "clamp",
   });
 
+  // La video de premier plan garde sa piste audio quand Django l'a marquee
+  // keepAudio (voix des invites, heros/integrale). Le fond floute, lui, reste
+  // toujours muet — sinon l'audio serait double.
   const media =
     clip.kind === "video" ? (
-      <OffthreadVideo src={resolveSrc(clip.src)} muted />
+      <OffthreadVideo src={resolveSrc(clip.src)} muted={!clip.keepAudio} />
     ) : (
       <Img src={resolveSrc(clip.src)} />
     );

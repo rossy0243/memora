@@ -47,6 +47,20 @@ _PACE_BY_DELIVERABLE = {
     "full": "gentle",
 }
 
+# Livrables qui gardent la voix des invites (musique duckee pendant ces passages).
+# Le teaser reste musique seule : format partage, punchy, sans dialogue.
+_GUEST_AUDIO_DELIVERABLES = {"hero", "full"}
+
+
+def _clip_keeps_audio(upload):
+    """Vrai si le plan doit garder son audio : video dont l'analyse a detecte de
+    la voix (tag « voix »). Sans analyse exploitable, on reste musique seule."""
+    if upload.media_type != GuestUpload.MediaType.VIDEO:
+        return False
+    analysis = getattr(upload, "analysis", None)
+    tags = getattr(analysis, "tags", None) or []
+    return "voix" in tags
+
 
 def _seconds_to_frames(seconds, fps):
     return max(int(round(seconds * fps)), 1)
@@ -70,7 +84,7 @@ def _clip_seconds(upload, beat_interval):
     return snapped
 
 
-def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced"):
+def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", allow_guest_audio=False):
     """Construit le dict FilmProps (aligne avec remotion/src/types.ts).
 
     Les `src` sont des noms de fichiers relatifs au dossier d'assets materialise ;
@@ -91,6 +105,7 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced"):
                 "durationInFrames": _seconds_to_frames(seconds, fps),
                 "category": getattr(category, "code", "") or "",
                 "label": getattr(category, "label", "") or "",
+                "keepAudio": bool(allow_guest_audio and _clip_keeps_audio(upload)),
             }
         )
 
@@ -117,6 +132,8 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced"):
         "transitionDurationInFrames": max(int(round(fps / 2)), 1),
         "grade": _GRADE_BY_MOOD.get(getattr(soundtrack, "mood", ""), "romantic"),
         "pace": pace if pace in ("punchy", "balanced", "gentle") else "balanced",
+        "musicVolume": float(getattr(settings, "MEMORA_REMOTION_MUSIC_VOLUME", 0.85)),
+        "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.18)),
     }
 
 
@@ -151,7 +168,13 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
 
     uploads = list(uploads)
     pace = _PACE_BY_DELIVERABLE.get(deliverable, "balanced")
-    props = build_film_props(event, uploads, soundtrack, pace=pace)
+    props = build_film_props(
+        event,
+        uploads,
+        soundtrack,
+        pace=pace,
+        allow_guest_audio=deliverable in _GUEST_AUDIO_DELIVERABLES,
+    )
 
     with tempfile.TemporaryDirectory(prefix="memora_remotion_") as work_dir:
         assets_dir = Path(work_dir) / "assets"

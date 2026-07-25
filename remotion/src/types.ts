@@ -13,6 +13,10 @@ export interface FilmClip {
   // Libelle humain accentue du moment (« Cérémonie », « Cocktail »…), fourni par
   // Django. Affiche en lower-third sur le premier plan de chaque moment.
   label?: string;
+  // Garder le son du plan (voix des invites). Django ne l'active que sur les
+  // videos avec voix, pour le heros et l'integrale — jamais sur le teaser.
+  // La musique est automatiquement duckee pendant ces passages.
+  keepAudio?: boolean;
 }
 
 export interface FilmProps {
@@ -34,6 +38,10 @@ export interface FilmProps {
   // Rythme par format : le teaser est punchy (Ken Burns marque), l'integrale
   // respire (mouvement plus calme). Le heros est equilibre.
   pace: "punchy" | "balanced" | "gentle";
+  // Volume de la musique, et volume reduit (ducking) quand un plan garde la
+  // voix des invites (keepAudio). Alignes sur les reglages du pipeline FFmpeg.
+  musicVolume: number;
+  duckedMusicVolume: number;
 }
 
 export const defaultFilmProps: FilmProps = {
@@ -48,4 +56,6 @@ export const defaultFilmProps: FilmProps = {
   transitionDurationInFrames: 15,
   grade: "romantic",
   pace: "balanced",
+  musicVolume: 0.85,
+  duckedMusicVolume: 0.25,
 };
