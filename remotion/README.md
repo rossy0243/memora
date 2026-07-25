@@ -218,15 +218,32 @@ relative de Chrome n'est pas bloquante — un pic de festivités est absorbé pa
   l'amplitude du Ken Burns. Teaser = punchy, héros = équilibré, intégrale =
   respire. Django mappe `deliverable -> pace`.
 
+### ✅ Voix des invités + ducking musique (fait)
+
+Décision produit : « il faut de temps en temps mélanger musique + voix invité ».
+
+- Django marque `keepAudio: true` les plans **vidéo avec voix détectée**
+  (tag « voix » de l'analyse média) — uniquement pour le **héros** et
+  l'**intégrale**. Le teaser reste musique seule (format partagé, punchy).
+- Côté composition : la vidéo de premier plan est démutée (le fond flouté
+  reste muet, sinon audio doublé) et le volume de la musique est automatisé —
+  il descend à `MEMORA_REMOTION_DUCKED_MUSIC_VOLUME` pendant les passages
+  voix, avec une rampe d'⅓ s de part et d'autre (positions calculées avec le
+  chevauchement des transitions).
+- Réglages dédiés `MEMORA_REMOTION_MUSIC_VOLUME` (0.85) et
+  `MEMORA_REMOTION_DUCKED_MUSIC_VOLUME` (0.18). **Ne pas réutiliser** les
+  valeurs FFmpeg (0.22/0.08) : elles sont calibrées pour un mixage différent
+  et écraseraient le lit musical.
+- Vérifié au décibel près : vidéo silencieuse `keepAudio` → atténuation
+  mesurée de −14,9 dB pendant le segment (= 0.18 exactement), −1,4 dB
+  ailleurs (= 0.85).
+
 ### Reste à faire
 
 - Affiner encore durées/transitions **par format** si besoin après un vrai
   film de mariage (les durées restent pilotées côté Django).
-- Décider du **son des invités** : lit musical seul (teaser) vs. musique + voix des
-  invités avec ducking (héros/intégrale) — le ducking se fait au montage audio FFmpeg
-  final ou dans Remotion.
-- Éventuels **lower-thirds** (prénoms/rôles) et cartons de chapitre par moment
-  (cérémonie, soirée…).
+- Éventuels **lower-thirds de prénoms/rôles** (les cartons de chapitre par
+  moment sont faits, voir plus haut).
 
 ---
 
