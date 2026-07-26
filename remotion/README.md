@@ -242,6 +242,23 @@ relative de Chrome n'est pas bloquante — un pic de festivités est absorbé pa
   (plan standard, 1 CPU).
 - `render.yaml` : `MEMORA_MOVIE_RENDER_PROVIDER=remotion` (web + worker + crons).
 
+### ⚙️ Mode hybride beta (décision 2026-07, mesures à l'appui)
+
+Mesuré en prod (worker Standard, 1 CPU, GL logiciel) : ~2,75 s/frame sur
+photos, teaser 60 s **avec vidéos non terminé en 2 h** (timeout). Le flou
+d'arrière-plan n'est pas le goulot (~11 % mesuré) : c'est le raster Chrome
+logiciel. Décision du propriétaire : **hybride à 0 $** plutôt qu'un upgrade
+de plan.
+
+- `MEMORA_REMOTION_DELIVERABLES=teaser` en prod : **seul le teaser** (vitrine
+  partagée) passe par Remotion (~2 h 30-3 h, asynchrone, timeout 4 h) ;
+  héros + intégrale restent FFmpeg.
+- Le réglage accepte `hero,full,teaser` : repasser au tout-Remotion le jour où
+  le worker monte en gamme (Pro Plus ≈ 4× plus vite) ou via Remotion Lambda.
+- En code : le pipeline complet Remotion ne s'active que si `hero` est dans le
+  périmètre ; sinon `_render_movie_variants` tente Remotion par déclinaison
+  (repli FFmpeg individuel). `render_provider` devient `ffmpeg+remotion`.
+
 ---
 
 ## Phase 3 : polish ultra premium des 3 formats (en cours)

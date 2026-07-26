@@ -564,8 +564,15 @@ def process_generated_movie(movie):
 
             # Rendu premium Remotion derriere le feature flag. En cas d'echec du
             # heros, on retombe integralement sur le pipeline Runway/ffmpeg.
+            # Le pipeline complet ne s'active que si le heros fait partie des
+            # livrables Remotion configures ; sinon (mode hybride, ex. teaser
+            # seul), le flux ffmpeg garde la main et les declinaisons tentent
+            # Remotion individuellement dans _render_movie_variants.
             remotion_rendered = False
-            if settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion":
+            if (
+                settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion"
+                and "hero" in settings.MEMORA_REMOTION_DELIVERABLES
+            ):
                 remotion_rendered = _render_movie_with_remotion_pipeline(
                     movie, event, uploads, soundtrack, temp_path, ffmpeg_binary
                 )
@@ -1341,6 +1348,8 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
             _update_movie_progress(movie, progress, "Déclinaisons premium (intégrale et teaser).")
             variant_path = temp_path / f"memora_{_clean_name(event.title)}_{deliverable}_remotion.mp4"
             try:
+                if deliverable not in settings.MEMORA_REMOTION_DELIVERABLES:
+                    raise RuntimeError("livrable hors perimetre Remotion (config)")
                 render_movie_with_remotion(
                     event, variant_uploads, soundtrack, variant_path, deliverable=deliverable
                 )
@@ -1388,7 +1397,10 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
     """Produit l'integrale et le teaser vertical en plus du film heros.
 
     Ces declinaisons sont un bonus : toute erreur est journalisee sans jamais
-    compromettre le film principal deja rendu.
+    compromettre le film principal deja rendu. En mode hybride (provider
+    "remotion" avec un perimetre MEMORA_REMOTION_DELIVERABLES reduit), chaque
+    declinaison du perimetre tente d'abord le rendu premium Remotion, puis
+    retombe sur le moteur ffmpeg.
     """
     if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
         return
@@ -1396,6 +1408,7 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
     variants = (
         (
             "integrale",
+            "full",
             settings.MEMORA_MOVIE_FULL_DURATION_SECONDS,
             None,
             None,
@@ -1403,6 +1416,7 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
             "full_duration",
         ),
         (
+            "teaser",
             "teaser",
             settings.MEMORA_MOVIE_TEASER_DURATION_SECONDS,
             settings.MEMORA_MOVIE_TEASER_WIDTH,
@@ -1412,21 +1426,50 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
         ),
     )
 
-    for label, max_duration, width, height, file_field, duration_field in variants:
+    for label, deliverable, max_duration, width, height, file_field, duration_field in variants:
         try:
             uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
             if not uploads:
                 continue
 
-            variant_path = build_movie_variant(
-                event,
-                uploads,
-                temp_path,
-                ffmpeg_binary,
-                label=label,
-                width=width,
-                height=height,
-            )
+            variant_path = None
+            if (
+                settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion"
+                and deliverable in settings.MEMORA_REMOTION_DELIVERABLES
+            ):
+                remotion_data = movie.edit_decision_data.setdefault("remotion", {}).setdefault(
+                    "deliverables", {}
+                )
+                try:
+                    soundtrack = choose_movie_soundtrack(event, uploads)
+                    remotion_path = temp_path / f"memora_{_clean_name(event.title)}_{deliverable}_remotion.mp4"
+                    render_movie_with_remotion(
+                        event, uploads, soundtrack, remotion_path, deliverable=deliverable
+                    )
+                    remotion_data[deliverable] = {"ok": True, "clips": len(uploads)}
+                    if "remotion" not in movie.render_provider:
+                        movie.render_provider = f"{movie.render_provider}+remotion"
+                    variant_path = remotion_path
+                except Exception as exc:
+                    remotion_data[deliverable] = {"ok": False, "error": str(exc), "fallback": "ffmpeg"}
+                    logger.warning(
+                        "Remotion variant failed movie=%s event=%s label=%s error=%s",
+                        movie.pk,
+                        event.pk,
+                        deliverable,
+                        exc,
+                    )
+
+            if not variant_path:
+                variant_path = build_movie_variant(
+                    event,
+                    uploads,
+                    temp_path,
+                    ffmpeg_binary,
+                    label=label,
+                    width=width,
+                    height=height,
+                )
             if not variant_path:
                 continue
 

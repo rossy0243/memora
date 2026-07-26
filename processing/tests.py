@@ -584,6 +584,41 @@ class MovieGenerationServiceTests(TestCase):
         self.assertFalse(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["ok"])
 
     @override_settings(
+        MEMORA_MOVIE_RENDER_PROVIDER="remotion",
+        MEMORA_REMOTION_DELIVERABLES={"teaser"},
+    )
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_generate_event_movie_hybrid_renders_only_teaser_with_remotion(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+
+        def create_output(command):
+            Path(command[-1]).write_bytes(b"movie-bytes")
+
+        run_ffmpeg.side_effect = create_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        # Mode hybride : heros et integrale par ffmpeg, teaser par Remotion.
+        self.assertEqual(movie.render_provider, "ffmpeg+remotion")
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["teaser"])
+        self.assertTrue(movie.final_file.name.endswith(".mp4"))
+        self.assertTrue(movie.full_file.name)
+        self.assertTrue(movie.teaser_file.name)
+        self.assertTrue(movie.edit_decision_data["remotion"]["deliverables"]["teaser"]["ok"])
+
+    @override_settings(
         MEMORA_PUBLIC_BASE_URL="https://memora.example",
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     )

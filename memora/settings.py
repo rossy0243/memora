@@ -387,6 +387,15 @@ MEMORA_REMOTION_TIMEOUT_SECONDS = env_int("MEMORA_REMOTION_TIMEOUT_SECONDS", 180
 # les passages qui gardent la voix des invites (heros/integrale).
 MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.85"))
 MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.18"))
+# Livrables rendus par Remotion quand le provider est "remotion". Le rendu
+# Chrome est lent sur un petit CPU : en prod beta, seul le teaser (la vitrine
+# partagee) passe par Remotion — heros et integrale restent FFmpeg. Mettre
+# "hero,full,teaser" pour le tout-Remotion (worker plus costaud requis).
+MEMORA_REMOTION_DELIVERABLES = {
+    part.strip()
+    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,full,teaser").split(",")
+    if part.strip()
+}
 MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))
 MEMORA_RUNWAY_WORKFLOW_ID = os.getenv("MEMORA_RUNWAY_WORKFLOW_ID", "")

@@ -328,6 +328,14 @@ services:
       # Rendu Remotion : 1 seul rendu Chrome a la fois (plan standard, 1 CPU).
       - key: REMOTION_CONCURRENCY
         value: "1"
+      # Mode hybride beta : seul le teaser passe par Remotion (le rendu Chrome
+      # est trop lent sur 1 CPU pour heros/integrale — mesure 2026-07 : teaser
+      # 60s avec videos > 2h). Repasser a "hero,full,teaser" avec un worker
+      # plus costaud (Pro Plus) pour le tout-Remotion.
+      - key: MEMORA_REMOTION_DELIVERABLES
+        value: teaser
+      - key: MEMORA_REMOTION_TIMEOUT_SECONDS
+        value: "14400"
 
   - type: cron
     name: memora-schedule-movies
