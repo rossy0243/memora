@@ -623,6 +623,120 @@ h2 {
   font-weight: 700;
 }
 
+.pricing-band__note {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--color-champagne);
+  border-radius: 0 var(--radius-sm, 8px) var(--radius-sm, 8px) 0;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.94rem;
+}
+
+.pricing-band__note strong {
+  color: #fff;
+}
+
+.plan-cards {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin-top: 8px;
+}
+
+.plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.plan-card--featured {
+  border-color: var(--color-champagne);
+  background: rgba(216, 180, 106, 0.13);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+}
+
+.plan-card__flag {
+  position: absolute;
+  top: -11px;
+  left: 20px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-champagne);
+  color: var(--color-ink);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-card__name {
+  color: var(--color-champagne);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.plan-card__price {
+  color: #fff;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(2.1rem, 7vw, 2.9rem);
+  line-height: 1;
+}
+
+.plan-card__unit {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.plan-card__features {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.94rem;
+}
+
+.plan-card__features li {
+  position: relative;
+  padding-left: 18px;
+}
+
+.plan-card__features li::before {
+  content: "";
+  position: absolute;
+  top: 0.52em;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-champagne);
+}
+
+.plan-card__tagline {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+.plan-card .button {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.plan-card > .button {
+  margin-top: 16px;
+  text-align: center;
+}
+
 .foundation {
   padding: 42px 20px 54px;
   background: var(--color-surface-soft);
@@ -901,6 +1015,13 @@ h2 {
   .pricing-band__inner {
     grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
     align-items: center;
+  }
+
+  /* Avec des formules, les cartes tiennent une rangee pleine largeur sous le
+     texte : la colonne etroite du bloc « offre unique » les ecraserait. */
+  .pricing-band__inner--plans {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
   }
 
   .pricing-card {

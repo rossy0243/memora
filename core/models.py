@@ -23,9 +23,49 @@ class SiteConfiguration(models.Model):
         default=settings.MEMORA_EVENT_PRICE_CURRENCY,
         help_text="Code devise ISO sur 3 lettres, par exemple USD ou EUR.",
     )
+    commission_mode = models.CharField(
+        max_length=12,
+        choices=[("percent", "Pourcentage du prix"), ("fixed", "Montant fixe")],
+        default="percent",
+        help_text=(
+            "Mode de calcul des commissions. « Pourcentage » s'adapte automatiquement "
+            "aux formules (un événement à 199 rapporte plus qu'un à 49)."
+        ),
+    )
+    commission_starter_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("10.00"),
+        help_text="Commission en % du prix de l'événement pour le palier Starter. Exemple : 10 pour 10 %.",
+    )
+    commission_medium_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("15.00"),
+        help_text="Commission en % du prix de l'événement pour le palier Medium.",
+    )
+    commission_premium_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("20.00"),
+        help_text="Commission en % du prix de l'événement pour le palier Premium.",
+    )
+    commission_referral_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("10.00"),
+        help_text="Commission en % versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
+    )
+    upload_quota_grace_percent = models.PositiveSmallIntegerField(
+        default=10,
+        help_text=(
+            "Marge de tolérance en % au-delà du quota de souvenirs de la formule, avant "
+            "blocage réel. Évite de bloquer des invités en pleine fête. Exemple : 10."
+        ),
+    )
     commission_starter_amount = models.PositiveIntegerField(
         default=settings.MEMORA_COMMISSION_STARTER_AMOUNT,
-        help_text="Commission en centimes par événement payé pour le palier Starter. Exemple : 500 pour 5 USD.",
+        help_text="Commission en centimes par événement payé pour le palier Starter. Exemple : 500 pour 5 USD. Utilisé uniquement en mode « Montant fixe ».",
     )
     commission_medium_amount = models.PositiveIntegerField(
         default=settings.MEMORA_COMMISSION_MEDIUM_AMOUNT,
@@ -146,8 +186,35 @@ class SiteConfiguration(models.Model):
             return "medium"
         return "starter"
 
-    def commission_amount_for_paid_count(self, paid_count):
-        """Montant en centimes gagné pour le n-ième événement payé de l'organisateur."""
+    @property
+    def uses_percent_commissions(self):
+        return self.commission_mode == "percent"
+
+    def commission_percent_for_paid_count(self, paid_count):
+        tier = self.tier_for_paid_count(paid_count)
+        return {
+            "starter": self.commission_starter_percent,
+            "medium": self.commission_medium_percent,
+            "premium": self.commission_premium_percent,
+        }[tier]
+
+    @staticmethod
+    def _percent_of(price_amount, percent):
+        """Applique un pourcentage a un montant en centimes, arrondi au centime."""
+        if not price_amount or not percent:
+            return 0
+        return int((Decimal(price_amount) * Decimal(percent) / Decimal("100")).to_integral_value())
+
+    def commission_amount_for_paid_count(self, paid_count, price_amount=None):
+        """Montant en centimes gagné pour le n-ième événement payé de l'organisateur.
+
+        En mode pourcentage, le montant dépend du prix de l'événement (donc de sa
+        formule) : `price_amount` est alors requis pour un calcul exact ; sans lui
+        on retombe sur le prix global du site, ce qui sert l'affichage.
+        """
+        if self.uses_percent_commissions:
+            base = price_amount if price_amount is not None else self.event_price_amount
+            return self._percent_of(base, self.commission_percent_for_paid_count(paid_count))
         tier = self.tier_for_paid_count(paid_count)
         return {
             "starter": self.commission_starter_amount,
@@ -155,21 +222,34 @@ class SiteConfiguration(models.Model):
             "premium": self.commission_premium_amount,
         }[tier]
 
+    def referral_commission_amount(self, price_amount=None):
+        """Montant en centimes versé au parrain pour un événement payé d'un filleul."""
+        if self.uses_percent_commissions:
+            base = price_amount if price_amount is not None else self.event_price_amount
+            return self._percent_of(base, self.commission_referral_percent)
+        return self.commission_referral_amount
+
+    def _format_commission(self, amount, percent):
+        if self.uses_percent_commissions:
+            normalized = percent.normalize() if percent else Decimal("0")
+            return f"{normalized:f} %"
+        return format_price_amount(amount, self.event_price_currency)
+
     @property
     def formatted_commission_starter(self):
-        return format_price_amount(self.commission_starter_amount, self.event_price_currency)
+        return self._format_commission(self.commission_starter_amount, self.commission_starter_percent)
 
     @property
     def formatted_commission_medium(self):
-        return format_price_amount(self.commission_medium_amount, self.event_price_currency)
+        return self._format_commission(self.commission_medium_amount, self.commission_medium_percent)
 
     @property
     def formatted_commission_premium(self):
-        return format_price_amount(self.commission_premium_amount, self.event_price_currency)
+        return self._format_commission(self.commission_premium_amount, self.commission_premium_percent)
 
     @property
     def formatted_commission_referral(self):
-        return format_price_amount(self.commission_referral_amount, self.event_price_currency)
+        return self._format_commission(self.commission_referral_amount, self.commission_referral_percent)
 
     @property
     def effective_legal_entity_name(self):

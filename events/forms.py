@@ -15,12 +15,19 @@ from uploads.services import (
     sync_event_upload_categories,
 )
 
-from .models import Event, EventType
+from .models import Event, EventPlan, EventType
 
 
 class MomentMultipleChoiceField(forms.MultipleChoiceField):
     def valid_value(self, value):
         return True
+
+
+class EventPlanChoiceField(forms.ModelChoiceField):
+    """Affiche la formule telle qu'un organisateur la lit : nom, invites, prix."""
+
+    def label_from_instance(self, plan):
+        return f"{plan.label} — {plan.guests_label} — {plan.formatted_price}"
 
 
 class EventForm(forms.ModelForm):
@@ -37,6 +44,17 @@ class EventForm(forms.ModelForm):
         help_text="Recherchez des moments existants ou ajoutez les vôtres. Vos invités les choisiront au moment d'envoyer un souvenir.",
     )
 
+    plan = EventPlanChoiceField(
+        queryset=EventPlan.objects.none(),
+        required=False,
+        empty_label=None,
+        label="Formule",
+        help_text=(
+            "Choisissez selon le nombre d'invités attendus. Le nombre d'invités n'est jamais "
+            "bloqué : la formule fixe le nombre de souvenirs inclus."
+        ),
+    )
+
     class Meta:
         model = Event
         fields = (
@@ -44,6 +62,7 @@ class EventForm(forms.ModelForm):
             "couple_name",
             "event_type",
             "custom_event_type_label",
+            "plan",
             "moments",
             "event_date",
             "cover_image",
@@ -75,6 +94,15 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["event_type"].queryset = EventType.objects.filter(is_active=True)
+        plans = EventPlan.objects.filter(is_active=True)
+        self.fields["plan"].queryset = plans
+        if not self.initial.get("plan") and not (self.instance and self.instance.plan_id):
+            default_plan = EventPlan.default_plan()
+            if default_plan:
+                self.initial["plan"] = default_plan.pk
+        # Sans formule configuree, on masque le champ : le prix global s'applique.
+        if not plans.exists():
+            self.fields.pop("plan")
         self._moment_templates = list(get_available_moment_templates())
         self.fields["moments"].choices = [(str(moment.pk), moment.label) for moment in self._moment_templates]
         placeholders = {

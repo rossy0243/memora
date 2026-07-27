@@ -8,18 +8,40 @@ class SiteConfigurationAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {"fields": ("event_price_amount", "event_price_currency", "updated_at")}),
         (
+            "Formules et quotas",
+            {
+                "description": (
+                    "Les formules (prix, invités annoncés, souvenirs inclus) se gèrent dans "
+                    "« Formules ». Ici on règle la tolérance appliquée au-delà du quota."
+                ),
+                "fields": ("upload_quota_grace_percent",),
+            },
+        ),
+        (
             "Commissions sur événements propres (par palier)",
             {
+                "description": (
+                    "En mode « Pourcentage », la commission suit le prix réel de l'événement, "
+                    "donc sa formule. Les montants fixes ci-dessous ne servent qu'en mode "
+                    "« Montant fixe »."
+                ),
                 "fields": (
+                    "commission_mode",
+                    "commission_starter_percent",
+                    "commission_medium_percent",
+                    "commission_premium_percent",
                     "commission_starter_amount",
                     "commission_medium_amount",
                     "commission_premium_amount",
                     "tier_medium_min_events",
                     "tier_premium_min_events",
-                )
+                ),
             },
         ),
-        ("Commission de parrainage", {"fields": ("commission_referral_amount",)}),
+        (
+            "Commission de parrainage",
+            {"fields": ("commission_referral_percent", "commission_referral_amount")},
+        ),
         (
             "Informations légales (CGU et confidentialité)",
             {

@@ -18,9 +18,95 @@ from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, MomentTemplate, UploadCategory
 
-from .models import Event, EventType
+from .models import Event, EventPlan, EventType
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+class EventPlanTests(TestCase):
+    """Formules : prix, quota de souvenirs, et tolerance au depassement."""
+
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(
+            username="orga-plan", password="secret"
+        )
+        self.event_type, _ = EventType.objects.get_or_create(
+            code="wedding", defaults={"label": "Mariage", "sort_order": 1}
+        )
+        self.plan = EventPlan.objects.create(
+            code="intime-test",
+            label="Intime",
+            max_guests=50,
+            upload_quota=10,
+            price_amount=4900,
+        )
+
+    def _event(self, plan=None):
+        return Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage formule",
+            event_type=self.event_type,
+            event_date=date(2026, 8, 1),
+            plan=plan,
+        )
+
+    def _upload(self, event, index):
+        category, _ = UploadCategory.objects.get_or_create(
+            event=event,
+            code="ceremony",
+            defaults={"label": "Cérémonie", "sort_order": 1},
+        )
+        return GuestUpload.objects.create(
+            event=event,
+            category=category,
+            media_type=GuestUpload.MediaType.IMAGE,
+            media_file=f"events/test/uploads/p{index}.jpg",
+            original_filename=f"p{index}.jpg",
+            file_size=1024,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+
+    def test_plan_sets_event_price(self):
+        event = self._event(plan=self.plan)
+        self.assertEqual(event.price_amount, 4900)
+
+    def test_event_without_plan_falls_back_to_site_price(self):
+        event = self._event()
+        self.assertEqual(event.price_amount, SiteConfiguration.current().event_price_amount)
+
+    def test_quota_state_tracks_usage(self):
+        event = self._event(plan=self.plan)
+        for index in range(8):
+            self._upload(event, index)
+
+        state = event.upload_quota_state
+        self.assertEqual(state["quota"], 10)
+        self.assertEqual(state["used"], 8)
+        self.assertEqual(state["remaining"], 2)
+        self.assertTrue(state["is_nearly_reached"])
+        self.assertFalse(state["is_reached"])
+
+    def test_grace_margin_lets_uploads_through_past_the_quota(self):
+        """Un invite n'est jamais bloque net au quota : la marge absorbe le trop-plein."""
+        from uploads.services import get_upload_limit_error
+
+        configuration = SiteConfiguration.current()
+        configuration.upload_quota_grace_percent = 20
+        configuration.save(update_fields=["upload_quota_grace_percent"])
+
+        event = self._event(plan=self.plan)
+        for index in range(10):  # quota atteint
+            self._upload(event, index)
+
+        self.assertTrue(event.upload_quota_state["is_reached"])
+        # ... mais on accepte encore jusqu'a 12 (quota + 20 %).
+        self.assertEqual(event.upload_hard_limit, 12)
+        self.assertEqual(get_upload_limit_error(event, "session-x", "10.0.0.1"), "")
+
+        for index in range(10, 12):
+            self._upload(event, index)
+        message = get_upload_limit_error(event, "session-y", "10.0.0.2")
+        self.assertIn("formule", message)
 
 
 class EventModelTests(TestCase):

@@ -32,6 +32,90 @@ class EventType(models.Model):
         return self.label
 
 
+class EventPlan(models.Model):
+    """Formule commerciale d'un evenement : un prix, un nombre d'invites annonce,
+    et un quota de souvenirs.
+
+    Le nombre d'invites est l'etiquette que comprend le client ; le quota de
+    souvenirs est ce qui est reellement applique (c'est lui qui suit le cout de
+    stockage, et il est mesurable, contrairement au nombre d'invites : les
+    invites scannent un QR sans compte, on ne peut pas les compter de facon
+    fiable). On ne bloque JAMAIS un invite parce qu'il arriverait « en trop ».
+    """
+
+    code = models.SlugField(max_length=40, unique=True)
+    label = models.CharField(max_length=80)
+    tagline = models.CharField(
+        max_length=160,
+        blank=True,
+        help_text="Phrase courte affichee sous le nom de la formule.",
+    )
+    max_guests = models.PositiveIntegerField(
+        default=0,
+        help_text="Nombre d'invités annoncé, pour l'affichage. 0 = sans limite affichée.",
+    )
+    upload_quota = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Nombre de souvenirs (photos + vidéos) inclus. C'est la limite réellement "
+            "appliquée. 0 = utiliser la limite globale du site."
+        ),
+    )
+    price_amount = models.PositiveIntegerField(
+        default=0,
+        help_text="Prix en centimes. Exemple : 7900 pour 79 USD. 0 = prix global du site.",
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Formule pre-selectionnee a la creation d'un evenement.",
+    )
+
+    class Meta:
+        ordering = ["sort_order", "price_amount", "label"]
+        verbose_name = "formule"
+        verbose_name_plural = "formules"
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def effective_price_amount(self):
+        if self.price_amount:
+            return self.price_amount
+        return SiteConfiguration.current().event_price_amount
+
+    @property
+    def effective_upload_quota(self):
+        if self.upload_quota:
+            return self.upload_quota
+        return settings.MEMORA_EVENT_UPLOAD_LIMIT
+
+    @property
+    def formatted_price(self):
+        return format_price_amount(
+            self.effective_price_amount, SiteConfiguration.current().event_price_currency
+        )
+
+    @property
+    def guests_label(self):
+        if not self.max_guests:
+            return "Invités illimités"
+        return f"Jusqu'à {self.max_guests} invités"
+
+    @classmethod
+    def default_plan(cls):
+        active = cls.objects.filter(is_active=True)
+        return active.filter(is_default=True).first() or active.first()
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Une seule formule par defaut.
+        if self.is_default:
+            EventPlan.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+
+
 class Event(models.Model):
     class PaymentStatus(models.TextChoices):
         PENDING = "pending", "En attente"
@@ -52,6 +136,14 @@ class Event(models.Model):
         EventType,
         on_delete=models.PROTECT,
         related_name="events",
+    )
+    plan = models.ForeignKey(
+        EventPlan,
+        on_delete=models.PROTECT,
+        related_name="events",
+        blank=True,
+        null=True,
+        help_text="Formule choisie : fixe le prix et le quota de souvenirs.",
     )
     event_date = models.DateField()
     location = models.CharField(max_length=255, blank=True)
@@ -125,6 +217,44 @@ class Event(models.Model):
     def formatted_price(self):
         return format_price_amount(self.price_amount, self.price_currency)
 
+    @property
+    def upload_quota(self):
+        """Nombre de souvenirs inclus. Suit la formule, sinon la limite globale."""
+        if self.plan_id:
+            return self.plan.effective_upload_quota
+        return settings.MEMORA_EVENT_UPLOAD_LIMIT
+
+    @property
+    def upload_hard_limit(self):
+        """Plafond reel accepte : le quota plus une marge de tolerance.
+
+        La marge evite d'humilier un invite (et l'organisateur) en pleine fete
+        pour quelques souvenirs de trop : on encaisse le depassement, on alerte
+        l'organisateur, et on ne bloque qu'au-dela.
+        """
+        quota = self.upload_quota
+        grace = SiteConfiguration.current().upload_quota_grace_percent
+        return quota + int(quota * grace / 100)
+
+    def uploads_used(self):
+        return self.guest_uploads.filter(is_deleted=False).count()
+
+    @property
+    def upload_quota_state(self):
+        """Etat du quota, pour le tableau de bord et les relances d'upsell."""
+        quota = self.upload_quota
+        used = self.uploads_used()
+        percent = int(used * 100 / quota) if quota else 0
+        return {
+            "quota": quota,
+            "used": used,
+            "remaining": max(quota - used, 0),
+            "percent": min(percent, 100),
+            "is_reached": used >= quota,
+            "is_hard_blocked": used >= self.upload_hard_limit,
+            "is_nearly_reached": percent >= 80,
+        }
+
     def mark_paid(self, reference="", provider="manual"):
         self.payment_status = self.PaymentStatus.PAID
         self.paid_at = self.paid_at or timezone.now()
@@ -153,7 +283,12 @@ class Event(models.Model):
         if not self.price_amount or not self.price_currency:
             site_configuration = SiteConfiguration.current()
             if not self.price_amount:
-                self.price_amount = site_configuration.event_price_amount
+                # La formule fixe le prix ; a defaut, le prix global du site.
+                self.price_amount = (
+                    self.plan.effective_price_amount
+                    if self.plan_id
+                    else site_configuration.event_price_amount
+                )
             if not self.price_currency:
                 self.price_currency = site_configuration.event_price_currency
         if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:

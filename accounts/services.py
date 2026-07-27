@@ -19,7 +19,11 @@ def record_event_commissions(event):
 
         # Commission sur l'événement propre : réservée aux ambassadeurs désignés par Memora.
         tier = configuration.tier_for_paid_count(paid_count)
-        own_amount = configuration.commission_amount_for_paid_count(paid_count)
+        # En mode pourcentage, la commission suit le prix reel de l'evenement
+        # (donc sa formule) : un evenement Prestige rapporte plus qu'un Intime.
+        own_amount = configuration.commission_amount_for_paid_count(
+            paid_count, price_amount=event.price_amount
+        )
         if organizer_profile.is_ambassador and own_amount:
             entry, was_created = CommissionLedger.objects.get_or_create(
                 event=event,
@@ -42,13 +46,16 @@ def record_event_commissions(event):
         referrer_is_ambassador = bool(
             referrer and OrganizerProfile.for_user(referrer).is_ambassador
         )
-        if referrer_is_ambassador and configuration.commission_referral_amount:
+        referral_amount = configuration.referral_commission_amount(
+            price_amount=event.price_amount
+        )
+        if referrer_is_ambassador and referral_amount:
             entry, was_created = CommissionLedger.objects.get_or_create(
                 event=event,
                 kind=CommissionLedger.Kind.REFERRAL_EVENT,
                 defaults={
                     "beneficiary": referrer,
-                    "amount": configuration.commission_referral_amount,
+                    "amount": referral_amount,
                     "currency": configuration.event_price_currency,
                 },
             )
@@ -97,13 +104,20 @@ def tier_progress_for_profile(profile):
         next_label = "Medium"
         remaining = max(configuration.tier_medium_min_events - paid_count, 0)
 
-    current_amount = configuration.commission_amount_for_paid_count(max(paid_count, 1))
+    # En mode pourcentage on affiche le taux (« 15 % »), pas un montant : celui-ci
+    # depend de la formule de chaque evenement.
+    if configuration.uses_percent_commissions:
+        percent = configuration.commission_percent_for_paid_count(max(paid_count, 1))
+        current_rate = f"{percent.normalize():f} %"
+    else:
+        current_amount = configuration.commission_amount_for_paid_count(max(paid_count, 1))
+        current_rate = format_price_amount(current_amount, currency)
 
     return {
         "tier": tier,
         "tier_label": profile.Tier(tier).label,
         "paid_count": paid_count,
-        "current_rate": format_price_amount(current_amount, currency),
+        "current_rate": current_rate,
         "next_tier_label": next_label,
         "events_to_next_tier": remaining,
     }

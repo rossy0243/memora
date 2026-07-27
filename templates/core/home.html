@@ -67,19 +67,42 @@
   </div>
 </section>
 
-<section class="pricing-band" aria-label="Prix Memora">
-  <div class="pricing-band__inner">
+<section class="pricing-band" aria-label="Formules Memora">
+  <div class="pricing-band__inner{% if memora_event_plans %} pricing-band__inner--plans{% endif %}">
     <div class="reveal">
-      <p class="section__label">Offre unique</p>
-      <h2>Tout Memora pour un seul événement.</h2>
-      <p>Une seule offre, sans option cachée : collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique.</p>
+      <p class="section__label">{% if memora_event_plans %}Nos formules{% else %}Offre unique{% endif %}</p>
+      <h2>Tout Memora, à la taille de votre événement.</h2>
+      <p>Payez une fois, pour l'événement : collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique. Aucun abonnement, aucune option cachée.</p>
+      {% if memora_event_plans %}
+      <p class="pricing-band__note">Le nombre d'invités n'est jamais bloqué&nbsp;: <strong>tous vos invités peuvent participer</strong>, quelle que soit la formule. Elle détermine simplement le nombre de souvenirs inclus.</p>
+      {% endif %}
     </div>
+    {% if memora_event_plans %}
+    <div class="plan-cards reveal-group">
+      {% for plan in memora_event_plans %}
+      <article class="plan-card{% if plan.is_default %} plan-card--featured{% endif %}">
+        {% if plan.is_default %}<span class="plan-card__flag">Le plus choisi</span>{% endif %}
+        <span class="plan-card__name">{{ plan.label }}</span>
+        <strong class="plan-card__price">{{ plan.formatted_price }}</strong>
+        <span class="plan-card__unit">par événement</span>
+        <ul class="plan-card__features">
+          <li>{{ plan.guests_label }}</li>
+          <li>{{ plan.upload_quota }} souvenirs inclus</li>
+          <li>Film souvenir + teaser vertical</li>
+        </ul>
+        {% if plan.tagline %}<p class="plan-card__tagline">{{ plan.tagline }}</p>{% endif %}
+        <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{% url 'events:create' %}">Choisir {{ plan.label }}</a>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
     <article class="pricing-card reveal">
       <span>Memora événement</span>
       <strong>{{ memora_event_price }}</strong>
       <p>par événement</p>
       <a class="button button--primary" href="{% url 'events:create' %}">Créer mon événement</a>
     </article>
+    {% endif %}
   </div>
 </section>
 
@@ -163,8 +186,18 @@
       </details>
       <details class="faq__item">
         <summary>Combien ça coûte&nbsp;?</summary>
+        {% if memora_event_plans %}
+        <p>Vous payez une fois, par événement, selon la formule choisie&nbsp;: de {{ memora_plan_price_range.min }} à {{ memora_plan_price_range.max }}. Collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique sont inclus dans toutes les formules.</p>
+        {% else %}
         <p>Une seule offre&nbsp;: {{ memora_event_price }} par événement, sans option cachée. Collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique inclus.</p>
+        {% endif %}
       </details>
+      {% if memora_event_plans %}
+      <details class="faq__item">
+        <summary>Que se passe-t-il si j'ai plus d'invités que prévu&nbsp;?</summary>
+        <p>Rien de gênant&nbsp;: <strong>aucun invité n'est jamais bloqué</strong>. Memora ne compte pas les personnes, mais les souvenirs envoyés. Si votre événement approche du nombre de souvenirs inclus, vous êtes prévenu et vous pouvez passer à la formule supérieure — la collecte continue pendant ce temps.</p>
+      </details>
+      {% endif %}
     </div>
   </div>
 </section>

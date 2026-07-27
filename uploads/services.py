@@ -240,15 +240,21 @@ def get_upload_quota(event, session_key):
 def get_upload_limit_error(event, session_key, ip_address):
     event_uploads = GuestUpload.objects.filter(event=event, is_deleted=False)
 
-    if event_uploads.count() >= settings.MEMORA_EVENT_UPLOAD_LIMIT:
-        return "Cet evenement a deja atteint sa limite de souvenirs."
+    # Quota de la formule, avec marge de tolerance : on ne bloque jamais un invite
+    # « en trop » — la limite porte sur le nombre de souvenirs, pas sur les
+    # personnes — et le depassement leger passe quand meme.
+    if event_uploads.count() >= event.upload_hard_limit:
+        return (
+            "Cet événement a atteint le nombre de souvenirs inclus dans sa formule. "
+            "L'organisateur peut passer à une formule supérieure pour en collecter plus."
+        )
 
     if session_key and event_uploads.filter(session_key=session_key).count() >= settings.MEMORA_SESSION_UPLOAD_LIMIT:
         label = "souvenir" if settings.MEMORA_SESSION_UPLOAD_LIMIT == 1 else "souvenirs"
-        return f"Vous avez atteint la limite de {settings.MEMORA_SESSION_UPLOAD_LIMIT} {label} pour cet evenement."
+        return f"Vous avez atteint la limite de {settings.MEMORA_SESSION_UPLOAD_LIMIT} {label} pour cet événement."
 
     if ip_address and event_uploads.filter(ip_address=ip_address).count() >= settings.MEMORA_IP_UPLOAD_LIMIT:
-        return "Trop d'envois depuis cette connexion. Reessayez plus tard."
+        return "Trop d'envois depuis cette connexion. Réessayez plus tard."
 
     cooldown_seconds = settings.MEMORA_UPLOAD_COOLDOWN_SECONDS
     if cooldown_seconds > 0:

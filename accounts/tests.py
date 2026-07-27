@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -118,6 +119,7 @@ class OwnEventCommissionTests(TestCase):
         self.organizer = get_user_model().objects.create_user(username="orga", password="secret")
         make_ambassador(self.organizer)
         self.config = configure(
+            commission_mode="fixed",
             commission_starter_amount=500,
             commission_medium_amount=1000,
             commission_premium_amount=2000,
@@ -196,6 +198,7 @@ class ReferralCommissionTests(TestCase):
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
         configure(
+            commission_mode="fixed",
             commission_starter_amount=500,
             commission_medium_amount=1000,
             commission_premium_amount=2000,
@@ -242,6 +245,7 @@ class DashboardEarningsPanelTests(TestCase):
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
         configure(
+            commission_mode="fixed",
             commission_starter_amount=500,
             commission_referral_amount=500,
         )
@@ -263,6 +267,69 @@ class DashboardEarningsPanelTests(TestCase):
         self.assertContains(response, "par événement payé")
 
 
+class PercentCommissionTests(TestCase):
+    """Commissions en pourcentage : elles suivent le prix, donc la formule."""
+
+    def setUp(self):
+        self.event_type, _ = EventType.objects.get_or_create(
+            code="wedding", defaults={"label": "Mariage", "sort_order": 1}
+        )
+        configure(
+            commission_mode="percent",
+            commission_starter_percent=Decimal("10"),
+            commission_medium_percent=Decimal("15"),
+            commission_premium_percent=Decimal("20"),
+            commission_referral_percent=Decimal("10"),
+            tier_medium_min_events=51,
+        )
+        self.organizer = get_user_model().objects.create_user(username="orga-pct", password="secret")
+        make_ambassador(self.organizer)
+
+    def _paid_event(self, price_amount, title="Evenement pct"):
+        return Event.objects.create(
+            organizer=self.organizer,
+            title=title,
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            payment_status=Event.PaymentStatus.PAID,
+            price_amount=price_amount,
+            price_currency="USD",
+        )
+
+    def test_commission_scales_with_the_plan_price(self):
+        cheap = self._paid_event(4900, title="Intime")
+        pricey = self._paid_event(19900, title="Prestige")
+
+        self.assertEqual(
+            CommissionLedger.objects.get(event=cheap, kind=CommissionLedger.Kind.OWN_EVENT).amount,
+            490,  # 10 % de 49 USD
+        )
+        self.assertEqual(
+            CommissionLedger.objects.get(event=pricey, kind=CommissionLedger.Kind.OWN_EVENT).amount,
+            1990,  # 10 % de 199 USD
+        )
+
+    def test_percent_follows_ambassador_tier(self):
+        configuration = SiteConfiguration.current()
+        # Palier medium (15 %) sur un evenement a 79 USD.
+        self.assertEqual(
+            configuration.commission_amount_for_paid_count(51, price_amount=7900), 1185
+        )
+        # Palier starter (10 %) sur le meme prix.
+        self.assertEqual(
+            configuration.commission_amount_for_paid_count(1, price_amount=7900), 790
+        )
+
+    def test_referral_commission_is_a_percent_of_the_event_price(self):
+        configuration = SiteConfiguration.current()
+        self.assertEqual(configuration.referral_commission_amount(price_amount=12900), 1290)
+
+    def test_rates_are_displayed_as_percentages(self):
+        configuration = SiteConfiguration.current()
+        self.assertEqual(configuration.formatted_commission_starter, "10 %")
+        self.assertEqual(configuration.formatted_commission_premium, "20 %")
+
+
 class AmbassadorGatingTests(TestCase):
     """Le programme est reserve aux ambassadeurs designes par Memora."""
 
@@ -270,7 +337,9 @@ class AmbassadorGatingTests(TestCase):
         self.event_type, _ = EventType.objects.get_or_create(
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
-        configure(commission_starter_amount=500, commission_referral_amount=500)
+        configure(
+            commission_mode="fixed", commission_starter_amount=500, commission_referral_amount=500
+        )
         self.organizer = get_user_model().objects.create_user(username="simple", password="secret")
 
     def test_new_organizers_are_not_ambassadors(self):

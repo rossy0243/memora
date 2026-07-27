@@ -4,7 +4,40 @@ from uploads.models import UploadCategory
 
 from core.models import SiteConfiguration
 
-from .models import Event, EventType
+from .models import Event, EventPlan, EventType
+
+
+@admin.register(EventPlan)
+class EventPlanAdmin(admin.ModelAdmin):
+    list_display = (
+        "label",
+        "code",
+        "guests_label",
+        "upload_quota",
+        "formatted_price",
+        "sort_order",
+        "is_default",
+        "is_active",
+    )
+    list_editable = ("upload_quota", "sort_order", "is_default", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("label", "code")
+    prepopulated_fields = {"code": ("label",)}
+    fieldsets = (
+        ("Formule", {"fields": ("label", "code", "tagline", "sort_order", "is_default", "is_active")}),
+        (
+            "Tarif et limites",
+            {
+                "fields": ("price_amount", "max_guests", "upload_quota"),
+                "description": (
+                    "Le nombre d'invités est une étiquette commerciale. La limite réellement "
+                    "appliquée est le quota de souvenirs : un invité n'est jamais bloqué "
+                    "parce qu'il arriverait « en trop ». La marge de tolérance au-delà du "
+                    "quota se règle dans la configuration Memora."
+                ),
+            },
+        ),
+    )
 
 
 @admin.register(EventType)
@@ -63,6 +96,7 @@ class EventAdmin(admin.ModelAdmin):
             "Paiement",
             {
                 "fields": (
+                    "plan",
                     "payment_status",
                     "price_amount",
                     "price_currency",

@@ -1,9 +1,31 @@
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.templatetags.static import static
 
 from .models import SiteConfiguration
+
+
+def _active_event_plans():
+    """Formules actives, pour les pages publiques. Silencieux avant migration."""
+    try:
+        from events.models import EventPlan
+
+        return list(EventPlan.objects.filter(is_active=True))
+    except (DatabaseError, ImportError):
+        return []
+
+
+def _plan_price_range(plans):
+    """Fourchette de prix affichable (« de 49 USD à 199 USD »)."""
+    if not plans:
+        return {"min": "", "max": ""}
+    by_price = sorted(plans, key=lambda plan: plan.effective_price_amount)
+    return {
+        "min": by_price[0].formatted_price,
+        "max": by_price[-1].formatted_price,
+    }
 
 
 def site_metadata(request):
@@ -16,6 +38,7 @@ def site_metadata(request):
     default_og_image = urljoin(f"{site_url}/", static("img/memora-hero.png").lstrip("/")) if site_url else static("img/memora-hero.png")
 
     site_configuration = SiteConfiguration.current()
+    event_plans = _active_event_plans()
 
     return {
         "site_name": site_configuration.company_name or "Memora",
@@ -24,6 +47,8 @@ def site_metadata(request):
         "canonical_url": canonical_url,
         "default_og_image": default_og_image,
         "memora_event_price": site_configuration.formatted_event_price,
+        "memora_event_plans": event_plans,
+        "memora_plan_price_range": _plan_price_range(event_plans),
         "memora_commission_starter": site_configuration.formatted_commission_starter,
         "memora_commission_medium": site_configuration.formatted_commission_medium,
         "memora_commission_premium": site_configuration.formatted_commission_premium,

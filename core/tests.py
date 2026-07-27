@@ -3,6 +3,7 @@ import base64
 import os
 import tempfile
 from datetime import date
+from decimal import Decimal
 from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,7 +14,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from memora import settings as memora_settings
-from events.models import Event, EventType
+from events.models import Event, EventPlan, EventType
 from processing.models import GeneratedMovie
 
 from .checks import storage_configuration_check
@@ -31,14 +32,29 @@ class HomePageTests(TestCase):
         self.assertContains(response, "Une caméra pensée pour les invités")
         self.assertContains(response, "Une collecte maîtrisée")
         self.assertContains(response, "Un film préparé automatiquement")
-        self.assertContains(response, "59 USD")
         self.assertContains(response, "par événement")
         self.assertContains(response, "og:title")
         self.assertContains(response, "twitter:card")
         self.assertContains(response, "canonical")
         self.assertContains(response, "img/memora-mark.svg")
 
-    def test_home_page_uses_admin_event_price(self):
+    def test_home_lists_active_plans_with_guest_reassurance(self):
+        """Les formules seedees par migration s'affichent, avec la promesse-cle."""
+        response = self.client.get(reverse("core:home"))
+
+        self.assertContains(response, "Intime")
+        self.assertContains(response, "Prestige")
+        self.assertContains(response, "49 USD")
+        self.assertContains(response, "199 USD")
+        self.assertContains(response, "Jusqu&#x27;à 50 invités")
+        self.assertContains(response, "300 souvenirs inclus")
+        # La promesse qui evite l'angoisse du « et si j'ai plus d'invites ? ».
+        # Texte statique du template : l'apostrophe n'y est pas echappee.
+        self.assertContains(response, "n'est jamais bloqué")
+        self.assertContains(response, "Le plus choisi")
+
+    def test_home_falls_back_to_single_price_without_plans(self):
+        EventPlan.objects.update(is_active=False)
         site_configuration = SiteConfiguration.current()
         site_configuration.event_price_amount = 7900
         site_configuration.event_price_currency = "EUR"
@@ -47,7 +63,8 @@ class HomePageTests(TestCase):
         response = self.client.get(reverse("core:home"))
 
         self.assertContains(response, "79 EUR")
-        self.assertNotContains(response, "59 USD")
+        self.assertContains(response, "Offre unique")
+        self.assertNotContains(response, "plan-card")
 
     def test_home_shows_ambassador_program_teaser(self):
         response = self.client.get(reverse("core:home"))
@@ -57,8 +74,9 @@ class HomePageTests(TestCase):
 
 
 class AmbassadorProgramPageTests(TestCase):
-    def test_page_renders_with_dynamic_amounts(self):
+    def test_page_renders_fixed_amounts_in_fixed_mode(self):
         config = SiteConfiguration.current()
+        config.commission_mode = "fixed"
         config.event_price_currency = "USD"
         config.commission_starter_amount = 500
         config.commission_medium_amount = 1000
@@ -78,6 +96,23 @@ class AmbassadorProgramPageTests(TestCase):
         self.assertContains(response, "Jusqu'à 50 événements")
         self.assertContains(response, "De 51 à 100 événements")
         self.assertContains(response, "Plus de 100 événements")
+
+    def test_page_renders_percentages_in_percent_mode(self):
+        """Mode par defaut : la page publique annonce des taux, pas des montants."""
+        config = SiteConfiguration.current()
+        config.commission_mode = "percent"
+        config.commission_starter_percent = Decimal("10")
+        config.commission_medium_percent = Decimal("15")
+        config.commission_premium_percent = Decimal("20")
+        config.commission_referral_percent = Decimal("10")
+        config.save()
+
+        response = self.client.get(reverse("core:ambassador_program"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "10 %")
+        self.assertContains(response, "15 %")
+        self.assertContains(response, "20 %")
 
     def test_page_is_reachable_without_login(self):
         response = self.client.get(reverse("core:ambassador_program"))
