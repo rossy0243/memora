@@ -96,8 +96,28 @@
   </section>
 
   <section>
-    <h2>12. Programme de rémunération des Organisateurs</h2>
-    <p>{{ site_name }} peut proposer un programme de commissions récompensant les Organisateurs, comprenant une commission sur leurs propres événements payés selon un palier, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'ils ont amenés. Les taux ou montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer. Lorsque la commission est exprimée en pourcentage, elle s'entend du prix payé pour l'événement concerné, hors taxes le cas échéant. Le versement des commissions est subordonné aux conditions publiées&nbsp;; les commissions constituent, le cas échéant, un revenu dont la déclaration incombe à leur bénéficiaire.</p>
+    <h2>12. Programme Ambassadeur et rémunération des Organisateurs</h2>
+    <p>{{ site_name }} propose un programme de commissions réservé aux Organisateurs auxquels le statut d'<strong>Ambassadeur</strong> a été accordé par {{ legal_entity }}. Ce statut est discrétionnaire&nbsp;: il peut être accordé, refusé ou retiré à tout moment. Un Organisateur qui n'est pas Ambassadeur ne perçoit aucune commission. Le retrait du statut ne remet pas en cause les commissions déjà acquises.</p>
+    <p>Le programme comprend une commission sur les propres événements payés de l'Ambassadeur, selon un palier fonction du nombre d'événements payés, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'il a amenés. Les taux ou montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer&nbsp;; le taux applicable est celui en vigueur à la date de l'événement payé concerné. Lorsque la commission est exprimée en pourcentage, elle s'entend du <strong>prix effectivement payé</strong> pour l'événement, c'est-à-dire après application de toute remise, hors taxes le cas échéant.</p>
+
+    <h3>12.1 Durée de l'affiliation</h3>
+    {% if memora_referral_duration_days %}
+    <p>Le rattachement d'un Organisateur parrainé à son Ambassadeur (l'«&nbsp;affiliation&nbsp;») est conclu pour une durée de <strong>{{ memora_referral_duration_days }} jours</strong> à compter de sa date d'établissement. À l'expiration de ce délai, l'affiliation prend fin automatiquement et sans formalité&nbsp;: l'Ambassadeur cesse de percevoir des commissions sur les événements ultérieurs de cet Organisateur. Les commissions acquises avant l'expiration restent dues. Un Organisateur ne peut être rattaché qu'à un seul Ambassadeur&nbsp;; ce rattachement n'est pas transférable.</p>
+    {% else %}
+    <p>Le rattachement d'un Organisateur parrainé à son Ambassadeur est conclu sans limitation de durée. Un Organisateur ne peut être rattaché qu'à un seul Ambassadeur&nbsp;; ce rattachement n'est pas transférable.</p>
+    {% endif %}
+
+    {% if memora_first_event_discount_percent %}
+    <h3>12.2 Remise de bienvenue</h3>
+    <p>L'Organisateur qui s'inscrit ou crée son premier événement en utilisant le code d'un Ambassadeur bénéficie d'une remise de <strong>{{ memora_first_event_discount }}</strong> sur le prix de son <strong>premier événement payé</strong>, quelle que soit la formule choisie. Cette remise est accordée une seule fois par Organisateur, n'est pas cumulable avec une autre offre, ne peut faire l'objet d'aucune contrepartie en espèces, et est acquise au moment du paiement de l'événement concerné. Un Organisateur ne peut pas utiliser son propre code. Le taux de la remise peut évoluer&nbsp;; le taux applicable est celui affiché au moment de la commande.</p>
+    {% endif %}
+
+    <h3>12.{% if memora_first_event_discount_percent %}3{% else %}2{% endif %} Versement des gains</h3>
+    <p>Les commissions sont enregistrées au crédit de l'Ambassadeur au fur et à mesure des événements payés. Leur versement intervient sur <strong>demande de l'Ambassadeur</strong> depuis son tableau de bord, sous réserve d'un solde disponible au moins égal à <strong>{{ memora_minimum_payout }}</strong>. L'Ambassadeur communique les coordonnées de versement de son choix (Mobile Money, virement bancaire ou autre moyen accepté) et répond de leur exactitude&nbsp;; {{ legal_entity }} ne saurait être tenue responsable d'un versement effectué sur des coordonnées erronées communiquées par l'Ambassadeur.</p>
+    <p>Une seule demande peut être en cours à la fois&nbsp;: le montant demandé est réservé jusqu'à son traitement. {{ legal_entity }} traite les demandes dans un délai raisonnable et peut refuser une demande, notamment en cas de coordonnées invalides, de soupçon de fraude ou de manquement aux présentes CGU&nbsp;; les commissions concernées redeviennent alors disponibles. Les commissions constituent, le cas échéant, un revenu dont la déclaration et l'imposition incombent à leur bénéficiaire.</p>
+
+    <h3>12.{% if memora_first_event_discount_percent %}4{% else %}3{% endif %} Fraude</h3>
+    <p>Sont notamment prohibés&nbsp;: la création de comptes fictifs, l'auto-parrainage sous quelque forme que ce soit, et toute manœuvre visant à générer artificiellement des commissions ou des remises. {{ legal_entity }} peut annuler les commissions correspondantes, refuser un versement et retirer le statut d'Ambassadeur.</p>
   </section>
 
   <section>

@@ -76,4 +76,11 @@ def site_metadata(request):
         "memora_commission_referral": site_configuration.formatted_commission_referral,
         "memora_tier_medium_min": site_configuration.tier_medium_min_events,
         "memora_tier_premium_min": site_configuration.tier_premium_min_events,
+        "memora_first_event_discount": site_configuration.formatted_first_event_discount,
+        "memora_first_event_discount_percent": site_configuration.first_event_discount_percent,
+        "memora_referral_duration_days": site_configuration.referral_duration_days,
+        "memora_minimum_payout": site_configuration.formatted_minimum_payout,
+        "memora_session_idle_minutes": int(
+            getattr(settings, "MEMORA_SESSION_IDLE_TIMEOUT_SECONDS", 0) / 60
+        ),
     }

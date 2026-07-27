@@ -24,7 +24,7 @@
       <li><strong>Données de compte (Organisateurs)&nbsp;:</strong> nom d'utilisateur, adresse e-mail, mot de passe (sous forme chiffrée), et données liées aux événements créés.</li>
       <li><strong>Contenus (Invités)&nbsp;:</strong> photos et vidéos déposées, catégorie du souvenir et métadonnées techniques (date d'envoi, type et taille du média). Aucun compte n'est requis pour les Invités.</li>
       <li><strong>Données de paiement&nbsp;:</strong> les informations de paiement sont traitées directement par notre prestataire {{ payment_provider_name|default:"de paiement" }}. {{ legal_entity }} ne stocke pas les numéros de carte bancaire.</li>
-      <li><strong>Données de rémunération&nbsp;:</strong> pour les Organisateurs participant au programme de commissions, les informations nécessaires au suivi et au versement des commissions.</li>
+      <li><strong>Données de rémunération (Ambassadeurs)&nbsp;:</strong> code de parrainage, rattachement à un parrain et date de début d'affiliation, historique des commissions, et — lorsque vous demandez un versement — le <strong>moyen de versement choisi et les coordonnées que vous saisissez</strong> (numéro Mobile Money, coordonnées bancaires ou autre). Ces coordonnées ne sont utilisées que pour exécuter le versement demandé.</li>
       <li><strong>Données techniques&nbsp;:</strong> données de connexion et journaux nécessaires au fonctionnement, à la sécurité et à la prévention des abus.</li>
     </ul>
   </section>
@@ -35,6 +35,7 @@
       <li><strong>Fourniture du Service</strong> (collecte des souvenirs, création du film souvenir, mise à disposition des médias)&nbsp;: exécution du contrat.</li>
       <li><strong>Dépôt de souvenirs par les Invités</strong>&nbsp;: consentement de l'Invité.</li>
       <li><strong>Gestion des paiements et de la facturation</strong>&nbsp;: exécution du contrat et obligations légales.</li>
+      <li><strong>Gestion du programme Ambassadeur</strong> (suivi des affiliations, calcul des commissions, traitement des demandes de versement)&nbsp;: exécution du contrat.</li>
       <li><strong>Sécurité, prévention des abus et amélioration du Service</strong>&nbsp;: intérêt légitime.</li>
       <li><strong>Communications relatives à vos événements</strong>&nbsp;: exécution du contrat.</li>
     </ul>
@@ -63,13 +64,22 @@
       <li><strong>Souvenirs des Invités&nbsp;:</strong> conservés pendant la durée déterminée par l'Organisateur pour chaque événement, puis supprimés automatiquement.</li>
       <li><strong>Données de compte&nbsp;:</strong> conservées tant que le compte est actif, puis pendant les délais légaux applicables.</li>
       <li><strong>Données de facturation&nbsp;:</strong> conservées conformément aux obligations comptables et fiscales.</li>
+      <li><strong>Données du programme Ambassadeur&nbsp;:</strong> historique des commissions et des demandes de versement, conservé conformément aux obligations comptables. Les coordonnées de versement sont conservées le temps nécessaire au traitement des demandes et à leur justification.</li>
       <li><strong>Journaux techniques&nbsp;:</strong> conservés pendant une durée limitée à des fins de sécurité.</li>
     </ul>
   </section>
 
   <section>
-    <h2>7. Cookies</h2>
-    <p>Le Service utilise uniquement les cookies strictement nécessaires à son fonctionnement (session, sécurité). Aucun cookie publicitaire ou de suivi tiers n'est déposé sans votre consentement préalable.</p>
+    <h2>7. Cookies et sessions</h2>
+    <p>Le Service utilise uniquement des cookies <strong>strictement nécessaires</strong> à son fonctionnement. Aucun cookie publicitaire, aucun traceur tiers et aucun outil de mesure d'audience externe n'est déposé. Aucun bandeau de consentement n'est donc requis pour ces cookies.</p>
+    <ul>
+      <li><strong>Cookie de session&nbsp;:</strong> identifie votre session pour vous garder connecté (Organisateur) ou pour appliquer le quota d'envois par personne (Invité). Il est <em>HttpOnly</em> (inaccessible aux scripts), transmis uniquement en HTTPS et limité à notre site (<em>SameSite&nbsp;: Lax</em>).</li>
+      <li><strong>Cookie de sécurité CSRF&nbsp;:</strong> protège les formulaires contre les envois frauduleux depuis un autre site.</li>
+    </ul>
+    {% if memora_session_idle_minutes %}
+    <p>Par sécurité, la session d'un Organisateur est <strong>automatiquement fermée après {{ memora_session_idle_minutes }} minutes d'inactivité</strong>&nbsp;; une reconnexion est alors nécessaire. Les sessions des Invités ne sont pas fermées de cette manière, car elles portent le décompte de leurs envois pour l'événement en cours.</p>
+    {% endif %}
+    <p>Vous pouvez supprimer ces cookies depuis votre navigateur&nbsp;; le Service pourrait alors ne plus fonctionner correctement (déconnexion, perte du décompte d'envois).</p>
   </section>
 
   <section>

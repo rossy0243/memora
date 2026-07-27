@@ -60,16 +60,44 @@
     <div class="reveal">
       <p class="section__label">Parrainage</p>
       <h2>Amenez d'autres organisateurs, gagnez avec eux.</h2>
-      <p>Une fois ambassadeur, partagez votre lien de parrainage depuis votre tableau de bord. Dès qu'un organisateur que vous avez amené vend un événement, Memora vous verse <strong>{{ memora_commission_referral }}</strong>{% if memora_commission_is_percent %} du prix de la vente{% endif %}&nbsp;— pour chacun de ses événements payés, sans limite.</p>
+      <p>Une fois ambassadeur, partagez votre lien de parrainage — ou votre code — depuis votre tableau de bord. Dès qu'un organisateur que vous avez amené vend un événement, Memora vous verse <strong>{{ memora_commission_referral }}</strong>{% if memora_commission_is_percent %} du prix de la vente{% endif %}&nbsp;— pour <strong>chacun</strong> de ses événements payés, pas seulement le premier.</p>
       <ol class="program-steps reveal-group">
-        <li><strong>Partagez</strong> votre lien de parrainage unique.</li>
+        <li><strong>Partagez</strong> votre lien ou votre code de parrainage.</li>
         <li><strong>Ils s'inscrivent</strong> et créent leurs événements.</li>
         <li><strong>Vous touchez</strong> {{ memora_commission_referral }}{% if memora_commission_is_percent %} du prix{% endif %} à chaque événement qu'ils vendent.</li>
       </ol>
+      {% if memora_referral_duration_days %}
+      <p class="program-referral__note">Chaque affiliation court pendant <strong>{{ memora_referral_duration_days }} jours</strong> à compter de l'inscription de votre filleul. Passé ce délai, elle prend fin&nbsp;: les commissions déjà acquises vous restent dues.</p>
+      {% endif %}
       <div class="program-referral__actions">
         <a class="button button--primary" href="{% url 'accounts:signup' %}">Rejoindre le programme</a>
       </div>
     </div>
+  </div>
+</section>
+
+{% if memora_first_event_discount_percent %}
+<section class="program-perk" aria-label="Remise de bienvenue">
+  <div class="program-perk__inner reveal">
+    <p class="section__label">Votre argument</p>
+    <h2>Votre code offre {{ memora_first_event_discount }} à ceux que vous amenez.</h2>
+    <p>Ce n'est pas qu'un lien de suivi&nbsp;: l'organisateur qui arrive avec votre code obtient <strong>{{ memora_first_event_discount }} de remise sur son premier événement</strong>. Vous ne demandez pas une faveur, vous offrez quelque chose — et vous touchez quand même votre commission sur la vente.</p>
+    <p class="program-perk__fineprint">La remise s'applique une seule fois, au premier événement payé du filleul. Vos commissions, elles, continuent sur tous ses événements suivants.</p>
+  </div>
+</section>
+{% endif %}
+
+<section class="program-payout" aria-label="Versement des gains">
+  <div class="program-payout__inner reveal">
+    <p class="section__label">Vos versements</p>
+    <h2>Vous demandez, Memora verse.</h2>
+    <p>Vos gains s'accumulent sur votre tableau de bord, où vous suivez leur évolution mois par mois. Dès que votre solde disponible atteint <strong>{{ memora_minimum_payout }}</strong>, vous demandez un retrait en indiquant vos coordonnées (Mobile Money, virement bancaire ou autre).</p>
+    <ol class="program-steps reveal-group">
+      <li><strong>Vos commissions</strong> s'ajoutent à chaque événement payé.</li>
+      <li><strong>Vous demandez</strong> le versement de votre solde disponible.</li>
+      <li><strong>Memora verse</strong> et vos commissions passent en « payées ».</li>
+    </ol>
+    <p class="program-payout__fineprint">Une demande à la fois&nbsp;: le montant demandé est réservé jusqu'au versement. Si une demande est refusée, les commissions redeviennent disponibles.</p>
   </div>
 </section>
 

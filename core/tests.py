@@ -183,8 +183,10 @@ class LegalPagesTests(TestCase):
         # Texte statique du template : les apostrophes n'y sont pas echappees.
         self.assertContains(response, "n'est pas limité")
         self.assertContains(response, "tolérance de 10")
-        # Une commission en pourcentage doit dire de quoi elle est un pourcentage.
-        self.assertContains(response, "s'entend du prix payé")
+        # Une commission en pourcentage doit dire de quoi elle est un pourcentage,
+        # et lever l'ambiguite prix affiche / prix reellement encaisse.
+        self.assertContains(response, "s'entend du <strong>prix effectivement payé</strong>")
+        self.assertContains(response, "après application de toute remise")
 
     def test_privacy_page_renders_with_dynamic_values(self):
         self._configure(
@@ -453,3 +455,86 @@ class ClientIpTests(SimpleTestCase):
         )
 
         self.assertEqual(get_client_ip(request), "203.0.113.20")
+
+
+class LegalAndProgramAlignmentTests(TestCase):
+    """Les pages publiques doivent decrire le produit reellement vendu."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_terms_describe_affiliation_duration_discount_and_payouts(self):
+        response = self.client.get(reverse("core:terms"))
+        config = SiteConfiguration.current()
+
+        self.assertEqual(response.status_code, 200)
+        # Programme reserve aux ambassadeurs, statut discretionnaire.
+        self.assertContains(response, "Ambassadeur")
+        self.assertContains(response, "discrétionnaire")
+        # Duree d'affiliation.
+        self.assertContains(response, f"{config.referral_duration_days} jours")
+        # Remise de bienvenue, une seule fois.
+        self.assertContains(response, "Remise de bienvenue")
+        self.assertContains(response, "premier événement payé")
+        # Versement des gains et minimum.
+        self.assertContains(response, "Versement des gains")
+        self.assertContains(response, config.formatted_minimum_payout)
+        # Commission calculee sur le prix apres remise.
+        self.assertContains(response, "prix effectivement payé")
+        # Clause anti-fraude.
+        self.assertContains(response, "auto-parrainage")
+
+    def test_privacy_documents_cookies_sessions_and_payout_details(self):
+        response = self.client.get(reverse("core:privacy"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cookies et sessions")
+        self.assertContains(response, "HttpOnly")
+        self.assertContains(response, "CSRF")
+        # Deconnexion automatique documentee.
+        self.assertContains(response, "inactivité")
+        # Les coordonnees de versement sont une donnee personnelle collectee.
+        self.assertContains(response, "coordonnées que vous saisissez")
+
+    def test_ambassador_page_sells_the_discount_and_explains_payouts(self):
+        response = self.client.get(reverse("core:ambassador_program"))
+        config = SiteConfiguration.current()
+
+        self.assertEqual(response.status_code, 200)
+        # La remise est l'argument de vente du parrain.
+        self.assertContains(response, config.formatted_first_event_discount)
+        self.assertContains(response, "remise sur son premier événement")
+        # Versements.
+        self.assertContains(response, config.formatted_minimum_payout)
+        self.assertContains(response, "Vous demandez, Memora verse.")
+        # Duree d'affiliation annoncee honnetement.
+        self.assertContains(response, f"{config.referral_duration_days} jours")
+        # La distinction qui compte : remise unique, commissions recurrentes.
+        self.assertContains(response, "pas seulement le premier")
+
+    def test_pages_follow_admin_configuration(self):
+        """Tout est piloté depuis l'admin : on change, les pages suivent."""
+        config = SiteConfiguration.current()
+        config.referral_duration_days = 180
+        config.minimum_payout_amount = 5000
+        config.first_event_discount_percent = Decimal("25")
+        config.save()
+
+        terms = self.client.get(reverse("core:terms"))
+        program = self.client.get(reverse("core:ambassador_program"))
+
+        self.assertContains(terms, "180 jours")
+        self.assertContains(terms, "50 USD")
+        self.assertContains(program, "25 %")
+        self.assertContains(program, "50 USD")
+
+    def test_discount_section_disappears_when_disabled(self):
+        config = SiteConfiguration.current()
+        config.first_event_discount_percent = Decimal("0")
+        config.save()
+
+        terms = self.client.get(reverse("core:terms"))
+        program = self.client.get(reverse("core:ambassador_program"))
+
+        self.assertNotContains(terms, "Remise de bienvenue")
+        self.assertNotContains(program, "remise sur son premier événement")

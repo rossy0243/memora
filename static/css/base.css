@@ -4178,3 +4178,54 @@ body.capture-review-open {
   font-size: 0.88rem;
   opacity: 0.85;
 }
+
+/* Sections « remise de bienvenue » et « versements » de la page Ambassadeur */
+.program-perk {
+  padding: 36px 20px 44px;
+  background: var(--color-ink);
+  color: #fff;
+}
+
+.program-perk__inner,
+.program-payout__inner {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+.program-perk h2 {
+  max-width: 640px;
+  margin-bottom: 12px;
+}
+
+.program-perk p {
+  max-width: 660px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1.05rem;
+}
+
+.program-perk strong {
+  color: #fff;
+}
+
+.program-perk__fineprint,
+.program-payout__fineprint,
+.program-referral__note {
+  margin-top: 12px;
+  font-size: 0.92rem;
+  opacity: 0.78;
+}
+
+.program-payout {
+  padding: 36px 20px 46px;
+}
+
+.program-payout h2 {
+  max-width: 620px;
+  margin-bottom: 12px;
+}
+
+.program-payout p {
+  max-width: 660px;
+  color: var(--color-body);
+  font-size: 1.05rem;
+}
