@@ -45,14 +45,74 @@
           <strong>{{ earnings_panel.paid_count }}</strong>
         </div>
         <div class="stat-card">
-          <span>Filleuls</span>
+          <span>Filleuls actifs</span>
           <strong>{{ earnings_panel.referred_count }}</strong>
+          {% if earnings_panel.referred_expired_count %}<small>{{ earnings_panel.referred_expired_count }} affiliation{{ earnings_panel.referred_expired_count|pluralize }} expirée{{ earnings_panel.referred_expired_count|pluralize }}</small>{% endif %}
         </div>
       </div>
+
+      {% if earnings_panel.monthly %}
+      <div class="earnings-trend">
+        <p class="earnings-trend__title">Évolution de vos gains</p>
+        <div class="earnings-trend__chart">
+          {% for month in earnings_panel.monthly %}
+          <div class="earnings-trend__col" title="{{ month.label }} : {{ month.formatted }}">
+            <span class="earnings-trend__value">{{ month.formatted }}</span>
+            <span class="earnings-trend__bar" style="height: {{ month.height_percent }}%"></span>
+            <span class="earnings-trend__label">{{ month.label }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="payout-block">
+        <div class="payout-block__head">
+          <div>
+            <p class="payout-block__title">Retrait de vos gains</p>
+            <p class="payout-block__available">Disponible&nbsp;: <strong>{{ earnings_panel.available }}</strong> <small>(minimum {{ earnings_panel.minimum_payout }})</small></p>
+          </div>
+        </div>
+
+        {% if earnings_panel.open_payout %}
+          <p class="payout-block__pending">Demande de {{ earnings_panel.open_payout.formatted_amount }} en cours ({{ earnings_panel.open_payout.get_status_display }}), envoyée le {{ earnings_panel.open_payout.requested_at|date:"d/m/Y" }}.</p>
+        {% elif earnings_panel.can_request_payout %}
+          <form method="post" action="{% url 'accounts:request_payout' %}" class="payout-form">
+            {% csrf_token %}
+            <label>
+              <span>Mode de versement</span>
+              <select name="method" class="form-control">
+                {% for value, label in earnings_panel.payout_methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>
+              <span>Coordonnées</span>
+              <input type="text" name="payout_details" class="form-control" placeholder="Numéro Mobile Money, IBAN..." required>
+            </label>
+            <button class="button button--primary button--compact" type="submit">Demander {{ earnings_panel.available }}</button>
+          </form>
+        {% else %}
+          <p class="payout-block__pending">Vous pourrez demander un retrait dès {{ earnings_panel.minimum_payout }} de gains disponibles.</p>
+        {% endif %}
+
+        {% if earnings_panel.recent_payouts %}
+        <div class="latest-media-list">
+          {% for payout in earnings_panel.recent_payouts %}
+          <div class="latest-media-row">
+            <span>{{ payout.get_status_display }}</span>
+            <strong>{{ payout.formatted_amount }} - {{ payout.get_method_display }}</strong>
+            <small>{{ payout.requested_at|date:"d/m/Y" }}</small>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
       <div class="earnings-panel__referral">
-        <p>Partagez votre lien de parrainage : chaque événement payé d'un organisateur que vous avez amené vous rapporte une commission.</p>
+        <p>Partagez votre lien de parrainage : chaque événement payé d'un organisateur que vous avez amené vous rapporte une commission{% if earnings_panel.referral_duration_days %}, pendant {{ earnings_panel.referral_duration_days }} jours à compter de son inscription{% endif %}.</p>
         <code id="referral-url">{{ earnings_panel.referral_url }}</code>
         <button class="button button--secondary button--compact" type="button" data-copy-target="referral-url">Copier mon lien de parrainage</button>
+        <p class="earnings-panel__code">Votre code&nbsp;: <strong>{{ earnings_panel.referral_code }}</strong> — vos filleuls peuvent aussi le saisir à la création de leur événement pour leur remise de bienvenue.</p>
       </div>
       {% if earnings_panel.entries %}
         <div class="latest-media-list">

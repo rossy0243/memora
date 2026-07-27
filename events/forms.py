@@ -126,10 +126,9 @@ class EventForm(forms.ModelForm):
         if not referrer or not organizer or referrer == organizer:
             return
 
-        profile = OrganizerProfile.for_user(organizer)
-        if not profile.referred_by_id:
-            profile.referred_by = referrer
-            profile.save(update_fields=["referred_by", "updated_at"])
+        # attach_referrer ne fait rien s'il y a deja un parrain, et demarre le
+        # compteur d'affiliation sinon.
+        OrganizerProfile.for_user(organizer).attach_referrer(referrer)
 
     def plan_options(self):
         """Paires (bouton radio, formule) pour un affichage en cartes.

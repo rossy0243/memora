@@ -35,7 +35,6 @@ class OrganizerSignupForm(UserCreationForm):
             user.save()
             referrer = getattr(self, "_referrer", None)
             if referrer:
-                profile = OrganizerProfile.for_user(user)
-                profile.referred_by = referrer
-                profile.save(update_fields=["referred_by", "updated_at"])
+                # attach_referrer demarre aussi le compteur d'affiliation.
+                OrganizerProfile.for_user(user).attach_referrer(referrer)
         return user

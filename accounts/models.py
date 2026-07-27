@@ -1,4 +1,5 @@
 import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -48,6 +49,14 @@ class OrganizerProfile(models.Model):
         related_name="referred_profiles",
         help_text="Organisateur dont le code de parrainage a été utilisé à l'inscription.",
     )
+    referred_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Début de l'affiliation. Elle expire après la durée réglée dans la "
+            "configuration Memora ; le parrain cesse alors de toucher des commissions."
+        ),
+    )
     tier_updated_at = models.DateTimeField(null=True, blank=True)
     first_event_discount_used_at = models.DateTimeField(
         null=True,
@@ -91,6 +100,45 @@ class OrganizerProfile(models.Model):
         if not self.referred_by_id:
             return False
         return OrganizerProfile.for_user(self.referred_by).is_ambassador
+
+    @property
+    def referral_expires_at(self):
+        """Fin de l'affiliation. None si pas de parrain ou affiliation a vie."""
+        from core.models import SiteConfiguration
+
+        if not self.referred_by_id:
+            return None
+        duration = SiteConfiguration.current().referral_duration_days
+        if not duration:
+            return None
+        start = self.referred_at or self.created_at
+        if not start:
+            return None
+        return start + timedelta(days=duration)
+
+    @property
+    def referral_is_active(self):
+        """Vrai tant que l'affiliation court : au-dela, le filleul quitte son parrain."""
+        if not self.referred_by_id:
+            return False
+        expires_at = self.referral_expires_at
+        return expires_at is None or timezone.now() < expires_at
+
+    @property
+    def referral_days_remaining(self):
+        expires_at = self.referral_expires_at
+        if expires_at is None:
+            return None
+        return max((expires_at - timezone.now()).days, 0)
+
+    def attach_referrer(self, referrer):
+        """Rattache un parrain et demarre le compteur d'affiliation."""
+        if self.referred_by_id or not referrer or referrer == self.user:
+            return False
+        self.referred_by = referrer
+        self.referred_at = timezone.now()
+        self.save(update_fields=["referred_by", "referred_at", "updated_at"])
+        return True
 
     def is_eligible_for_first_event_discount(self, exclude_event_pk=None):
         """Vrai si le prochain evenement cree peut porter la remise de bienvenue.
@@ -175,6 +223,14 @@ class CommissionLedger(models.Model):
     amount = models.PositiveIntegerField(help_text="Montant en centimes, figé au moment du gain.")
     currency = models.CharField(max_length=3)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    payout_request = models.ForeignKey(
+        "accounts.PayoutRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commissions",
+        help_text="Demande de retrait qui porte cette commission.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True, default="")
@@ -199,3 +255,77 @@ class CommissionLedger(models.Model):
     def mark_paid(self):
         self.status = self.Status.PAID
         self.paid_at = self.paid_at or timezone.now()
+
+
+class PayoutRequest(models.Model):
+    """Demande de retrait des gains d'un ambassadeur.
+
+    Une demande fige les commissions en attente qui lui sont rattachees : elles
+    ne peuvent pas etre demandees deux fois. Un refus les libere, un paiement
+    les marque payees.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuvée"
+        PAID = "paid", "Payée"
+        REJECTED = "rejected", "Refusée"
+
+    class Method(models.TextChoices):
+        MOBILE_MONEY = "mobile_money", "Mobile Money"
+        BANK_TRANSFER = "bank", "Virement bancaire"
+        OTHER = "other", "Autre"
+
+    beneficiary = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="payout_requests",
+    )
+    amount = models.PositiveIntegerField(help_text="Montant demande en centimes, fige a la demande.")
+    currency = models.CharField(max_length=3)
+    method = models.CharField(max_length=20, choices=Method.choices, default=Method.MOBILE_MONEY)
+    payout_details = models.CharField(
+        max_length=200,
+        help_text="Numero Mobile Money, IBAN ou coordonnees de versement.",
+    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    admin_note = models.CharField(max_length=300, blank=True, default="")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "demande de retrait"
+        verbose_name_plural = "demandes de retrait"
+        ordering = ["-requested_at"]
+
+    def __str__(self):
+        return f"{self.beneficiary.username} - {self.formatted_amount} ({self.get_status_display()})"
+
+    @property
+    def formatted_amount(self):
+        from core.models import format_price_amount
+
+        return format_price_amount(self.amount, self.currency)
+
+    @property
+    def is_open(self):
+        """Une demande ouverte bloque une nouvelle demande du meme beneficiaire."""
+        return self.status in {self.Status.PENDING, self.Status.APPROVED}
+
+    def mark_paid(self):
+        """Verse la demande : les commissions rattachees passent en payees."""
+        self.status = self.Status.PAID
+        self.processed_at = timezone.now()
+        self.save(update_fields=["status", "processed_at"])
+        for entry in self.commissions.all():
+            entry.mark_paid()
+            entry.save(update_fields=["status", "paid_at"])
+
+    def reject(self, note=""):
+        """Refuse la demande et remet les commissions a disposition."""
+        self.status = self.Status.REJECTED
+        self.processed_at = timezone.now()
+        if note:
+            self.admin_note = note
+        self.save(update_fields=["status", "processed_at", "admin_note"])
+        self.commissions.update(payout_request=None)

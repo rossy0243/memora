@@ -59,6 +59,18 @@ class SiteConfiguration(models.Model):
         default=Decimal("10.00"),
         help_text="Commission en % versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
     )
+    referral_duration_days = models.PositiveIntegerField(
+        default=365,
+        help_text=(
+            "Durée d'une affiliation, en jours. Passé ce délai le filleul n'est plus "
+            "rattaché à son parrain, qui cesse de toucher des commissions sur lui. "
+            "0 = affiliation à vie."
+        ),
+    )
+    minimum_payout_amount = models.PositiveIntegerField(
+        default=2000,
+        help_text="Montant minimum en centimes pour demander un retrait. Exemple : 2000 pour 20 USD.",
+    )
     first_event_discount_percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -238,6 +250,10 @@ class SiteConfiguration(models.Model):
             "medium": self.commission_medium_amount,
             "premium": self.commission_premium_amount,
         }[tier]
+
+    @property
+    def formatted_minimum_payout(self):
+        return format_price_amount(self.minimum_payout_amount, self.event_price_currency)
 
     def first_event_discount_amount(self, price_amount):
         """Remise en centimes sur un prix donne. 0 si la remise est desactivee."""

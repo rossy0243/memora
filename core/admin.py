@@ -43,6 +43,16 @@ class SiteConfigurationAdmin(admin.ModelAdmin):
             {"fields": ("commission_referral_percent", "commission_referral_amount")},
         ),
         (
+            "Affiliation et retraits",
+            {
+                "description": (
+                    "L'affiliation expire automatiquement : passé ce délai le filleul quitte "
+                    "son parrain, qui cesse de toucher des commissions sur lui."
+                ),
+                "fields": ("referral_duration_days", "minimum_payout_amount"),
+            },
+        ),
+        (
             "Remise de bienvenue",
             {
                 "description": (

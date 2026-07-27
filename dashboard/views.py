@@ -2,9 +2,13 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.utils import timezone
 
-from accounts.models import OrganizerProfile
-from accounts.services import commission_summary_for_user, tier_progress_for_profile
-from core.models import format_price_amount
+from accounts.models import OrganizerProfile, PayoutRequest
+from accounts.services import (
+    commission_summary_for_user,
+    monthly_earnings_for_user,
+    tier_progress_for_profile,
+)
+from core.models import SiteConfiguration, format_price_amount
 from events.models import Event
 from processing.models import GeneratedMovie
 
@@ -34,6 +38,22 @@ def dashboard_home(request):
 def _build_earnings_panel(request, profile):
     summary = commission_summary_for_user(request.user)
     progress = tier_progress_for_profile(profile)
+    configuration = SiteConfiguration.current()
+
+    # Filleuls : on distingue ceux dont l'affiliation court encore de ceux qui
+    # sont partis a l'expiration — l'ambassadeur doit voir la difference.
+    referred_profiles = OrganizerProfile.objects.filter(referred_by=request.user)
+    active_referred = [p for p in referred_profiles if p.referral_is_active]
+
+    open_payout = (
+        PayoutRequest.objects.filter(
+            beneficiary=request.user,
+            status__in=[PayoutRequest.Status.PENDING, PayoutRequest.Status.APPROVED],
+        )
+        .order_by("-requested_at")
+        .first()
+    )
+    available = summary["available_amount"]
     return {
         "tier": progress["tier"],
         "tier_label": progress["tier_label"],
@@ -48,8 +68,18 @@ def _build_earnings_panel(request, profile):
         "pending": format_price_amount(summary["pending_amount"], summary["currency"]),
         "paid": format_price_amount(summary["paid_amount"], summary["currency"]),
         "total": format_price_amount(summary["total_amount"], summary["currency"]),
+        "available": format_price_amount(available, summary["currency"]),
         "entries": summary["entries"][:5],
-        "referred_count": OrganizerProfile.objects.filter(referred_by=request.user).count(),
+        "referred_count": len(active_referred),
+        "referred_expired_count": len(referred_profiles) - len(active_referred),
+        "referral_duration_days": configuration.referral_duration_days,
+        "monthly": monthly_earnings_for_user(request.user),
+        "payout_methods": PayoutRequest.Method.choices,
+        "open_payout": open_payout,
+        "minimum_payout": configuration.formatted_minimum_payout,
+        "can_request_payout": available >= configuration.minimum_payout_amount
+        and open_payout is None,
+        "recent_payouts": PayoutRequest.objects.filter(beneficiary=request.user)[:5],
     }
 
 

@@ -1,7 +1,13 @@
+from django.contrib import messages
 from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import OrganizerSignupForm
+from .models import OrganizerProfile, PayoutRequest
+from .services import request_payout
 
 
 def signup(request):
@@ -22,3 +28,35 @@ def signup(request):
         form = OrganizerSignupForm(initial=initial)
 
     return render(request, "accounts/signup.html", {"form": form})
+
+
+@login_required
+@require_POST
+def request_payout_view(request):
+    """Demande de retrait des gains disponibles (ambassadeurs uniquement)."""
+    profile = OrganizerProfile.for_user(request.user)
+    if not profile.is_ambassador:
+        raise Http404
+
+    method = request.POST.get("method") or PayoutRequest.Method.MOBILE_MONEY
+    details = (request.POST.get("payout_details") or "").strip()
+
+    if not details:
+        messages.error(request, "Indiquez où vous souhaitez recevoir le versement.")
+        return redirect("dashboard:home")
+    if method not in PayoutRequest.Method.values:
+        messages.error(request, "Mode de versement invalide.")
+        return redirect("dashboard:home")
+
+    try:
+        payout = request_payout(request.user, method, details)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("dashboard:home")
+
+    messages.success(
+        request,
+        f"Demande de retrait de {payout.formatted_amount} enregistrée. "
+        "Memora la traite sous quelques jours ouvrés.",
+    )
+    return redirect("dashboard:home")

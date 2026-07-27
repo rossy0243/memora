@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from core.models import SiteConfiguration
+from core.models import SiteConfiguration, format_price_amount
 
 from .models import CommissionLedger, OrganizerProfile
 
@@ -46,10 +46,13 @@ def record_event_commissions(event):
         # Le palier de l'organisateur suit son nombre d'événements payés.
         organizer_profile.refresh_tier(paid_count=paid_count)
 
-        # Commission de parrainage : le parrain doit lui aussi être ambassadeur.
+        # Commission de parrainage : le parrain doit être ambassadeur ET l'affiliation
+        # doit courir encore (elle expire après la durée réglée en admin).
         referrer = organizer_profile.referred_by
         referrer_is_ambassador = bool(
-            referrer and OrganizerProfile.for_user(referrer).is_ambassador
+            referrer
+            and organizer_profile.referral_is_active
+            and OrganizerProfile.for_user(referrer).is_ambassador
         )
         referral_amount = configuration.referral_commission_amount(
             price_amount=event.price_amount
@@ -74,6 +77,7 @@ def commission_summary_for_user(user):
     entries = CommissionLedger.objects.filter(beneficiary=user)
     pending = 0
     paid = 0
+    available = 0  # en attente ET pas deja engage dans une demande de retrait
     currency = SiteConfiguration.current().event_price_currency
     for entry in entries:
         currency = entry.currency or currency
@@ -81,13 +85,95 @@ def commission_summary_for_user(user):
             paid += entry.amount
         else:
             pending += entry.amount
+            if entry.payout_request_id is None:
+                available += entry.amount
     return {
         "entries": entries,
         "pending_amount": pending,
         "paid_amount": paid,
+        "available_amount": available,
         "total_amount": pending + paid,
         "currency": currency,
     }
+
+
+def monthly_earnings_for_user(user, months=6):
+    """Gains par mois, du plus ancien au plus recent — l'evolution du dashboard.
+
+    Renvoie une liste de dicts prets a afficher, avec une hauteur relative pour
+    dessiner les barres sans bibliotheque de graphiques.
+    """
+    from django.db.models import Sum
+    from django.db.models.functions import TruncMonth
+
+    rows = (
+        CommissionLedger.objects.filter(beneficiary=user)
+        .annotate(month=TruncMonth("created_at"))
+        .values("month")
+        .annotate(total=Sum("amount"))
+        .order_by("-month")[:months]
+    )
+    rows = list(reversed(rows))
+    if not rows:
+        return []
+
+    currency = SiteConfiguration.current().event_price_currency
+    peak = max(row["total"] for row in rows) or 1
+    labels = [
+        "janv.", "févr.", "mars", "avril", "mai", "juin",
+        "juil.", "août", "sept.", "oct.", "nov.", "déc.",
+    ]
+    return [
+        {
+            "label": f"{labels[row['month'].month - 1]} {row['month'].strftime('%y')}",
+            "amount": row["total"],
+            "formatted": format_price_amount(row["total"], currency),
+            "height_percent": max(int(row["total"] * 100 / peak), 4),
+        }
+        for row in rows
+    ]
+
+
+def request_payout(user, method, payout_details):
+    """Cree une demande de retrait portant tous les gains disponibles.
+
+    Leve ValueError si le solde est sous le minimum ou si une demande est deja
+    ouverte : deux demandes concurrentes engageraient deux fois le meme argent.
+    """
+    from .models import PayoutRequest
+
+    configuration = SiteConfiguration.current()
+    summary = commission_summary_for_user(user)
+    available = summary["available_amount"]
+
+    if PayoutRequest.objects.filter(
+        beneficiary=user,
+        status__in=[PayoutRequest.Status.PENDING, PayoutRequest.Status.APPROVED],
+    ).exists():
+        raise ValueError("Vous avez déjà une demande de retrait en cours.")
+
+    minimum = configuration.minimum_payout_amount
+    if available < minimum:
+        raise ValueError(
+            f"Le montant minimum pour un retrait est de {configuration.formatted_minimum_payout}."
+        )
+
+    with transaction.atomic():
+        payout = PayoutRequest.objects.create(
+            beneficiary=user,
+            amount=available,
+            currency=summary["currency"],
+            method=method,
+            payout_details=payout_details,
+        )
+        # On engage les commissions disponibles : elles ne peuvent plus etre
+        # incluses dans une autre demande.
+        CommissionLedger.objects.filter(
+            beneficiary=user,
+            status=CommissionLedger.Status.PENDING,
+            payout_request__isnull=True,
+        ).update(payout_request=payout)
+    return payout
 
 
 def tier_progress_for_profile(profile):

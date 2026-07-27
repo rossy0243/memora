@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
@@ -30,7 +31,12 @@ def make_ambassador(user):
 
 
 def configure(**fields):
-    """Met à jour le SiteConfiguration singleton (seedé par migration) sans en créer un second."""
+    """Met à jour le SiteConfiguration singleton (seedé par migration) sans en créer un second.
+
+    Vide le cache au passage : il survit au rollback de la base entre tests et
+    rendrait les resultats dependants de l'ordre d'execution.
+    """
+    cache.clear()
     config = SiteConfiguration.objects.first() or SiteConfiguration.objects.create()
     for key, value in fields.items():
         setattr(config, key, value)

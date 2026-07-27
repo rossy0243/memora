@@ -18,4 +18,5 @@ urlpatterns = [
         auth_views.LogoutView.as_view(),
         name="logout",
     ),
+    path("gains/retrait/", views.request_payout_view, name="request_payout"),
 ]
