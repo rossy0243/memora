@@ -4050,3 +4050,26 @@ body.capture-review-open {
   font-size: 0.85rem;
   font-style: italic;
 }
+
+/* Code promo et remise de bienvenue */
+.promo-field {
+  margin-top: 14px;
+}
+
+.payment-required-panel__discount {
+  margin-top: 8px;
+  color: var(--color-champagne);
+  font-size: 0.94rem;
+}
+
+.payment-required-panel__amount {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  text-align: right;
+}
+
+.payment-required-panel__full {
+  opacity: 0.6;
+  font-size: 1rem;
+}

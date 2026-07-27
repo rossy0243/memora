@@ -26,8 +26,14 @@
         <p class="section__label">Activation requise</p>
         <h2>Paiement en attente</h2>
         <p>Cet événement sera accessible aux invités après validation manuelle du paiement par l'administrateur.</p>
+        {% if event.has_discount %}
+        <p class="payment-required-panel__discount">Remise de bienvenue de {{ event.discount_percent|floatformat:"-2" }}&nbsp;% appliquée grâce au code <strong>{{ event.promo_code }}</strong>&nbsp;: vous économisez {{ event.formatted_discount }}.</p>
+        {% endif %}
       </div>
-      <strong>{{ event.formatted_price }}</strong>
+      <div class="payment-required-panel__amount">
+        {% if event.has_discount %}<s class="payment-required-panel__full">{{ event.formatted_full_price }}</s>{% endif %}
+        <strong>{{ event.formatted_price }}</strong>
+      </div>
     </article>
   {% endif %}
 

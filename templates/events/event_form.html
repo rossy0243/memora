@@ -88,6 +88,15 @@
         {% endfor %}
       </div>
       {{ form.plan.errors }}
+
+      {% if form.promo_code %}
+      <label class="promo-field">
+        <span>{{ form.promo_code.label }}</span>
+        {{ form.promo_code }}
+        <small>{{ form.promo_code.help_text }}</small>
+        {{ form.promo_code.errors }}
+      </label>
+      {% endif %}
     </section>
     {% endif %}
 

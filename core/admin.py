@@ -43,6 +43,17 @@ class SiteConfigurationAdmin(admin.ModelAdmin):
             {"fields": ("commission_referral_percent", "commission_referral_amount")},
         ),
         (
+            "Remise de bienvenue",
+            {
+                "description": (
+                    "Remise accordée sur le premier événement payé d'un organisateur venu "
+                    "avec le code d'un ambassadeur. La commission de l'ambassadeur est "
+                    "calculée sur le prix APRÈS remise. Mettre 0 pour désactiver."
+                ),
+                "fields": ("first_event_discount_percent",),
+            },
+        ),
+        (
             "Informations légales (CGU et confidentialité)",
             {
                 "description": (

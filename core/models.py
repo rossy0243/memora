@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 from django.core.cache import cache
@@ -58,6 +58,15 @@ class SiteConfiguration(models.Model):
         decimal_places=2,
         default=Decimal("10.00"),
         help_text="Commission en % versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
+    )
+    first_event_discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("15.00"),
+        help_text=(
+            "Remise en % accordée sur le PREMIER événement d'un organisateur venu avec "
+            "le code d'un ambassadeur. 0 pour désactiver la remise."
+        ),
     )
     upload_quota_grace_percent = models.PositiveSmallIntegerField(
         default=10,
@@ -203,10 +212,15 @@ class SiteConfiguration(models.Model):
 
     @staticmethod
     def _percent_of(price_amount, percent):
-        """Applique un pourcentage a un montant en centimes, arrondi au centime."""
+        """Applique un pourcentage a un montant en centimes.
+
+        Arrondi commercial explicite (0,5 arrondi au superieur) : le defaut de
+        Decimal est l'arrondi « banquier », qui surprendrait sur une facture.
+        """
         if not price_amount or not percent:
             return 0
-        return int((Decimal(price_amount) * Decimal(percent) / Decimal("100")).to_integral_value())
+        raw = Decimal(price_amount) * Decimal(percent) / Decimal("100")
+        return int(raw.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
     def commission_amount_for_paid_count(self, paid_count, price_amount=None):
         """Montant en centimes gagné pour le n-ième événement payé de l'organisateur.
@@ -224,6 +238,15 @@ class SiteConfiguration(models.Model):
             "medium": self.commission_medium_amount,
             "premium": self.commission_premium_amount,
         }[tier]
+
+    def first_event_discount_amount(self, price_amount):
+        """Remise en centimes sur un prix donne. 0 si la remise est desactivee."""
+        return self._percent_of(price_amount, self.first_event_discount_percent)
+
+    @property
+    def formatted_first_event_discount(self):
+        percent = self.first_event_discount_percent or Decimal("0")
+        return f"{percent.normalize():f} %"
 
     def referral_commission_amount(self, price_amount=None):
         """Montant en centimes versé au parrain pour un événement payé d'un filleul."""

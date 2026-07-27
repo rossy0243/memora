@@ -1,4 +1,5 @@
 import secrets
+from decimal import Decimal
 
 from django.conf import settings
 from django.core.cache import cache
@@ -203,6 +204,26 @@ class Event(models.Model):
     )
     price_amount = models.PositiveIntegerField(default=0)
     price_currency = models.CharField(max_length=3, blank=True, default="")
+    full_price_amount = models.PositiveIntegerField(
+        default=0,
+        help_text="Prix avant remise, en centimes. Egal au prix paye s'il n'y a pas de remise.",
+    )
+    discount_amount = models.PositiveIntegerField(
+        default=0,
+        help_text="Remise appliquee, en centimes.",
+    )
+    discount_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="Taux de remise applique, fige a la creation.",
+    )
+    promo_code = models.CharField(
+        max_length=12,
+        blank=True,
+        default="",
+        help_text="Code ambassadeur utilise pour la remise de bienvenue.",
+    )
     paid_at = models.DateTimeField(blank=True, null=True)
     payment_reference = models.CharField(max_length=120, blank=True)
     payment_provider = models.CharField(max_length=40, blank=True, default="manual")
@@ -317,11 +338,12 @@ class Event(models.Model):
             site_configuration = SiteConfiguration.current()
             if not self.price_amount:
                 # La formule fixe le prix ; a defaut, le prix global du site.
-                self.price_amount = (
+                self.full_price_amount = (
                     self.plan.effective_price_amount
                     if self.plan_id
                     else site_configuration.event_price_amount
                 )
+                self._apply_first_event_discount(site_configuration)
             if not self.price_currency:
                 self.price_currency = site_configuration.event_price_currency
         if self.payment_status == self.PaymentStatus.PAID and not self.paid_at:
@@ -332,6 +354,46 @@ class Event(models.Model):
             from accounts.services import record_event_commissions
 
             record_event_commissions(self)
+
+    def _apply_first_event_discount(self, site_configuration):
+        """Fige le prix de l'evenement, remise de bienvenue comprise si elle est due.
+
+        La remise n'est calculee qu'a la creation : le prix annonce a
+        l'organisateur ne doit plus bouger ensuite.
+        """
+        self.price_amount = self.full_price_amount
+        if not self.organizer_id:
+            return
+
+        from accounts.models import OrganizerProfile
+
+        profile = OrganizerProfile.for_user(self.organizer)
+        if not profile.is_eligible_for_first_event_discount(exclude_event_pk=self.pk):
+            return
+
+        discount = site_configuration.first_event_discount_amount(self.full_price_amount)
+        if not discount:
+            return
+
+        self.discount_percent = site_configuration.first_event_discount_percent
+        self.discount_amount = discount
+        self.price_amount = max(self.full_price_amount - discount, 0)
+        if not self.promo_code:
+            self.promo_code = OrganizerProfile.for_user(profile.referred_by).referral_code
+
+    @property
+    def has_discount(self):
+        return bool(self.discount_amount)
+
+    @property
+    def formatted_full_price(self):
+        return format_price_amount(
+            self.full_price_amount or self.price_amount, self.price_currency
+        )
+
+    @property
+    def formatted_discount(self):
+        return format_price_amount(self.discount_amount, self.price_currency)
 
     @classmethod
     def _generate_public_access_key(cls):

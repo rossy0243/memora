@@ -49,6 +49,14 @@ class OrganizerProfile(models.Model):
         help_text="Organisateur dont le code de parrainage a été utilisé à l'inscription.",
     )
     tier_updated_at = models.DateTimeField(null=True, blank=True)
+    first_event_discount_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Date a laquelle la remise de bienvenue a ete consommee (premier evenement "
+            "paye avec le code d'un ambassadeur). Vider pour la redonner."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -76,6 +84,41 @@ class OrganizerProfile(models.Model):
             organizer=self.user,
             payment_status=Event.PaymentStatus.PAID,
         ).count()
+
+    @property
+    def referrer_is_ambassador(self):
+        """La remise et les commissions de parrainage supposent un parrain ambassadeur."""
+        if not self.referred_by_id:
+            return False
+        return OrganizerProfile.for_user(self.referred_by).is_ambassador
+
+    def is_eligible_for_first_event_discount(self, exclude_event_pk=None):
+        """Vrai si le prochain evenement cree peut porter la remise de bienvenue.
+
+        Conditions : un parrain ambassadeur, aucune remise deja consommee, aucun
+        evenement deja paye, et aucun autre evenement en attente de paiement qui
+        porte deja la remise (une seule a la fois).
+        """
+        from events.models import Event
+
+        if self.first_event_discount_used_at or not self.referrer_is_ambassador:
+            return False
+        if self.paid_events_count():
+            return False
+
+        pending_with_discount = Event.objects.filter(
+            organizer=self.user, discount_amount__gt=0
+        ).exclude(payment_status=Event.PaymentStatus.PAID)
+        if exclude_event_pk:
+            pending_with_discount = pending_with_discount.exclude(pk=exclude_event_pk)
+        return not pending_with_discount.exists()
+
+    def consume_first_event_discount(self):
+        if self.first_event_discount_used_at:
+            return False
+        self.first_event_discount_used_at = timezone.now()
+        self.save(update_fields=["first_event_discount_used_at", "updated_at"])
+        return True
 
     def refresh_tier(self, paid_count=None, save=True):
         """Recalcule le palier d'après le nombre d'événements payés. Renvoie True si changé."""

@@ -17,6 +17,11 @@ def record_event_commissions(event):
         organizer_profile = OrganizerProfile.for_user(event.organizer)
         paid_count = organizer_profile.paid_events_count()
 
+        # La remise de bienvenue est consommee au paiement, pas a la creation :
+        # un evenement cree puis abandonne ne doit pas la bruler.
+        if event.discount_amount:
+            organizer_profile.consume_first_event_discount()
+
         # Commission sur l'événement propre : réservée aux ambassadeurs désignés par Memora.
         tier = configuration.tier_for_paid_count(paid_count)
         # En mode pourcentage, la commission suit le prix reel de l'evenement

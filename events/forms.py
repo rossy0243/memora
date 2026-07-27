@@ -56,6 +56,81 @@ class EventForm(forms.ModelForm):
         ),
     )
 
+    promo_code = forms.CharField(
+        required=False,
+        max_length=12,
+        label="Code ambassadeur (optionnel)",
+        help_text="Un ambassadeur Memora vous a donné son code ? Saisissez-le pour votre remise de bienvenue.",
+    )
+
+    def _prepare_promo_field(self):
+        """Pre-remplit le code du parrain et masque le champ quand il est inutile.
+
+        Le champ ne sert qu'a la creation d'un evenement encore eligible : sur un
+        evenement existant, le prix est deja fige.
+        """
+        from accounts.models import OrganizerProfile
+
+        organizer = getattr(self.instance, "organizer", None) or self._user
+        if self.instance.pk or not organizer:
+            self.fields.pop("promo_code", None)
+            return
+
+        profile = OrganizerProfile.for_user(organizer)
+        if not profile.is_eligible_for_first_event_discount() and not profile.referred_by_id:
+            # Deja consomme ou plus eligible : inutile de promettre une remise.
+            if profile.first_event_discount_used_at or profile.paid_events_count():
+                self.fields.pop("promo_code", None)
+                return
+
+        if profile.referred_by_id and not self.initial.get("promo_code"):
+            referrer_profile = OrganizerProfile.for_user(profile.referred_by)
+            self.initial["promo_code"] = referrer_profile.referral_code
+
+    def clean_promo_code(self):
+        """Valide le code et rattache l'organisateur a l'ambassadeur si besoin.
+
+        Un organisateur deja parraine garde son parrain : le code ne sert alors
+        qu'a confirmer. On refuse son propre code.
+        """
+        from accounts.models import OrganizerProfile
+
+        code = (self.cleaned_data.get("promo_code") or "").strip().upper()
+        if not code:
+            return ""
+
+        organizer = getattr(self.instance, "organizer", None) or self._user
+        own_profile = OrganizerProfile.for_user(organizer) if organizer else None
+        if own_profile and code == own_profile.referral_code:
+            raise forms.ValidationError("Vous ne pouvez pas utiliser votre propre code.")
+
+        referrer_profile = OrganizerProfile.objects.filter(referral_code=code).first()
+        if not referrer_profile:
+            raise forms.ValidationError("Ce code est inconnu.")
+        if not referrer_profile.is_ambassador:
+            raise forms.ValidationError("Ce code n'est pas (ou plus) un code ambassadeur.")
+
+        self._promo_referrer = referrer_profile.user
+        return code
+
+    def _attach_promo_referrer(self, instance):
+        """Rattache l'organisateur a l'ambassadeur dont il a saisi le code.
+
+        Uniquement s'il n'a pas encore de parrain : on ne transfere jamais un
+        filleul d'un ambassadeur a un autre.
+        """
+        from accounts.models import OrganizerProfile
+
+        referrer = getattr(self, "_promo_referrer", None)
+        organizer = getattr(instance, "organizer", None) or self._user
+        if not referrer or not organizer or referrer == organizer:
+            return
+
+        profile = OrganizerProfile.for_user(organizer)
+        if not profile.referred_by_id:
+            profile.referred_by = referrer
+            profile.save(update_fields=["referred_by", "updated_at"])
+
     def plan_options(self):
         """Paires (bouton radio, formule) pour un affichage en cartes.
 
@@ -80,6 +155,7 @@ class EventForm(forms.ModelForm):
             "event_type",
             "custom_event_type_label",
             "plan",
+            "promo_code",
             "moments",
             "event_date",
             "cover_image",
@@ -109,6 +185,7 @@ class EventForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self._user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         self.fields["event_type"].queryset = EventType.objects.filter(is_active=True)
         plans = EventPlan.objects.filter(is_active=True)
@@ -120,6 +197,7 @@ class EventForm(forms.ModelForm):
         # Sans formule configuree, on masque le champ : le prix global s'applique.
         if not plans.exists():
             self.fields.pop("plan")
+        self._prepare_promo_field()
         self._moment_templates = list(get_available_moment_templates())
         self.fields["moments"].choices = [(str(moment.pk), moment.label) for moment in self._moment_templates]
         placeholders = {
@@ -183,6 +261,7 @@ class EventForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         is_new = instance.pk is None
+        self._attach_promo_referrer(instance)
         event_type = self.cleaned_data.get("event_type")
         custom_label = self.cleaned_data.get("custom_event_type_label")
         moment_values = self.cleaned_data.get("moments") or []

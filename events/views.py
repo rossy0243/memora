@@ -42,6 +42,12 @@ class EventCreateView(LoginRequiredMixin, CreateView):
     form_class = EventForm
     template_name = "events/event_form.html"
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        # Le formulaire a besoin de l'organisateur : remise de bienvenue, code promo.
+        kwargs["user"] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         form.instance.organizer = self.request.user
         try:
@@ -60,6 +66,11 @@ class EventCreateView(LoginRequiredMixin, CreateView):
 class EventUpdateView(OrganizerEventMixin, UpdateView):
     form_class = EventForm
     template_name = "events/event_form.html"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         try:
