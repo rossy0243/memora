@@ -47,19 +47,12 @@ _PACE_BY_DELIVERABLE = {
     "full": "gentle",
 }
 
-# Livrables qui gardent la voix des invites (musique duckee pendant ces passages).
-# Le teaser reste musique seule : format partage, punchy, sans dialogue.
-_GUEST_AUDIO_DELIVERABLES = {"hero", "full"}
-
-
 def _clip_keeps_audio(upload):
-    """Vrai si le plan doit garder son audio : video dont l'analyse a detecte de
-    la voix (tag « voix »). Sans analyse exploitable, on reste musique seule."""
-    if upload.media_type != GuestUpload.MediaType.VIDEO:
-        return False
-    analysis = getattr(upload, "analysis", None)
-    tags = getattr(analysis, "tags", None) or []
-    return "voix" in tags
+    """Vrai si le plan garde son audio : toute video. Le son des invites EST
+    l'emotion — meme regle que le pipeline ffmpeg, qui mixe l'audio de tous les
+    clips sous la musique ; le ducking gere l'equilibre. (Ne pas conditionner au
+    tag « voix » : il n'est pose que par l'analyse Google, desactivee en prod.)"""
+    return upload.media_type == GuestUpload.MediaType.VIDEO
 
 
 def _seconds_to_frames(seconds, fps):
@@ -173,7 +166,7 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
         uploads,
         soundtrack,
         pace=pace,
-        allow_guest_audio=deliverable in _GUEST_AUDIO_DELIVERABLES,
+        allow_guest_audio=deliverable in settings.MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES,
     )
 
     with tempfile.TemporaryDirectory(prefix="memora_remotion_") as work_dir:

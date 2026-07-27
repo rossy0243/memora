@@ -298,9 +298,18 @@ de plan.
 
 Décision produit : « il faut de temps en temps mélanger musique + voix invité ».
 
-- Django marque `keepAudio: true` les plans **vidéo avec voix détectée**
-  (tag « voix » de l'analyse média) — uniquement pour le **héros** et
-  l'**intégrale**. Le teaser reste musique seule (format partagé, punchy).
+- Django marque `keepAudio: true` **toute vidéo d'invité**, sur les livrables
+  listés dans `MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES` (défaut : les trois,
+  **teaser compris**).
+- ⚠️ **Deux pièges corrigés le 2026-07-27**, après visionnage du premier teaser
+  livré en prod, qui était muet :
+  1. La condition initiale était « vidéo dont l'analyse a détecté de la voix
+     (tag `voix`) ». Or ce tag n'est posé que par l'analyse **Google Video
+     Intelligence**, `MEMORA_GOOGLE_VIDEO_INTELLIGENCE_ENABLED=False` en prod →
+     **aucun** clip ne gardait son son. Ne pas se fier à ce tag.
+  2. Le teaser était volontairement exclu (« format partagé, punchy »). Mauvais
+     appel : le son des invités **est** l'émotion du souvenir, et le teaser est
+     justement le format qu'on partage. Le périmètre est désormais un réglage.
 - Côté composition : la vidéo de premier plan est démutée (le fond flouté
   reste muet, sinon audio doublé) et le volume de la musique est automatisé —
   il descend à `MEMORA_REMOTION_DUCKED_MUSIC_VOLUME` pendant les passages

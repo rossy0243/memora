@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from io import BytesIO, StringIO
+import json
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -1301,24 +1302,58 @@ class RemotionEdlTests(TestCase):
         bogus = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, pace="turbo")
         self.assertEqual(bogus["pace"], "balanced")
 
-    def test_guest_audio_only_on_voiced_videos_when_allowed(self):
+    def test_guest_audio_kept_on_every_video_when_allowed(self):
         from processing.remotion import build_film_props
 
         uploads = [
-            self._upload(GuestUpload.MediaType.IMAGE, "p.jpg", voice=True),
-            self._upload(GuestUpload.MediaType.VIDEO, "muet.mp4", seconds=6, voice=False),
-            self._upload(GuestUpload.MediaType.VIDEO, "voix.mp4", seconds=6, voice=True),
+            self._upload(GuestUpload.MediaType.IMAGE, "p.jpg"),
+            self._upload(GuestUpload.MediaType.VIDEO, "sans_tag.mp4", seconds=6, voice=False),
+            self._upload(GuestUpload.MediaType.VIDEO, "avec_tag.mp4", seconds=6, voice=True),
         ]
-        # Heros/integrale : seule la video avec voix garde son audio.
+        # Toute video garde son son : le tag « voix » n'est pose que par l'analyse
+        # Google, desactivee en prod — s'y fier rendrait les films muets.
         allowed = build_film_props(
             self._event(), uploads, self._soundtrack(), fps=30, allow_guest_audio=True
         )
-        self.assertEqual([c["keepAudio"] for c in allowed["clips"]], [False, False, True])
-        # Teaser (defaut) : jamais d'audio invite.
-        teaser = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
-        self.assertFalse(any(c["keepAudio"] for c in teaser["clips"]))
+        self.assertEqual([c["keepAudio"] for c in allowed["clips"]], [False, True, True])
+        # Sans autorisation : montage musique seule.
+        muted = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+        self.assertFalse(any(c["keepAudio"] for c in muted["clips"]))
         # Volumes musique presents pour le ducking cote Remotion.
         self.assertGreater(allowed["musicVolume"], allowed["duckedMusicVolume"])
+
+    @override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"hero", "full", "teaser"})
+    @patch("processing.remotion.subprocess.run")
+    @patch("processing.remotion._materialize_upload")
+    @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
+    def test_teaser_render_keeps_guest_audio(self, _which, _materialize, subprocess_run):
+        """Le teaser doit sortir le son des videos : c'est un reglage par livrable."""
+        from processing.remotion import render_movie_with_remotion
+
+        captured = {}
+
+        def read_props(command, **kwargs):
+            # props.json vit dans un dossier temporaire efface au retour : on le
+            # lit pendant l'appel.
+            props_arg = next(arg for arg in command if arg.startswith("--props="))
+            captured["props"] = json.loads(
+                Path(props_arg.split("=", 1)[1]).read_text(encoding="utf-8")
+            )
+            return SimpleNamespace(returncode=0, stdout="OK", stderr="")
+
+        subprocess_run.side_effect = read_props
+        uploads = [self._upload(GuestUpload.MediaType.VIDEO, "v.mp4", seconds=6)]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            render_movie_with_remotion(
+                self._event(),
+                uploads,
+                self._soundtrack(has_track=False),
+                Path(tmp) / "out.mp4",
+                deliverable="teaser",
+            )
+
+        self.assertTrue(captured["props"]["clips"][0]["keepAudio"])
 
     def test_json_serialisable(self):
         import json

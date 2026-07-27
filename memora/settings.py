@@ -396,6 +396,14 @@ MEMORA_REMOTION_DELIVERABLES = {
     for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,full,teaser").split(",")
     if part.strip()
 }
+# Livrables qui gardent le son des videos des invites (rires, voeux, musique de
+# la salle), avec la musique duckee par-dessus. Par defaut les trois : le son
+# des invites EST l'emotion du souvenir. Mettre "" pour un montage muet.
+MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
+    part.strip()
+    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,full,teaser").split(",")
+    if part.strip()
+}
 MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))
 MEMORA_RUNWAY_WORKFLOW_ID = os.getenv("MEMORA_RUNWAY_WORKFLOW_ID", "")
