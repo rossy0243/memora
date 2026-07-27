@@ -60,12 +60,23 @@
 
   <section>
     <h2>7. Accès Invité</h2>
-    <p>Les Invités accèdent à l'événement via un lien ou un QR Code, sans création de compte. L'Organisateur peut restreindre l'accès par un code. Le nombre d'envois, les formats, la taille et la durée des vidéos peuvent être limités afin de garantir la qualité de la collecte.</p>
+    <p>Les Invités accèdent à l'événement via un lien ou un QR Code, sans création de compte. L'Organisateur peut restreindre l'accès par un code. <strong>Le nombre d'Invités pouvant accéder à un événement n'est pas limité</strong>&nbsp;; en revanche, le nombre d'envois par Invité, le nombre total de souvenirs déposés (selon la formule souscrite), les formats, la taille et la durée des vidéos peuvent être limités afin de garantir la qualité de la collecte.</p>
   </section>
 
   <section>
-    <h2>8. Tarifs</h2>
-    <p>Les prestations payantes sont facturées au prix indiqué sur le Service, à savoir {{ memora_event_price }} par événement, sauf offre particulière. Les prix sont indiqués dans la devise affichée et peuvent, le cas échéant, être majorés des taxes applicables. Les prix peuvent évoluer&nbsp;; le prix applicable est celui affiché au moment de la validation de la commande.</p>
+    <h2>8. Tarifs et formules</h2>
+    {% if memora_event_plans %}
+    <p>Les prestations payantes sont facturées à l'événement, selon la formule choisie par l'Organisateur au moment de la commande. Les formules proposées et leur contenu sont les suivants&nbsp;:</p>
+    <ul>
+      {% for plan in memora_event_plans %}
+      <li><strong>{{ plan.label }}</strong>&nbsp;: {{ plan.formatted_price }} par événement, {{ plan.guests_label|lower }}, {{ plan.upload_quota }} souvenirs inclus.</li>
+      {% endfor %}
+    </ul>
+    <p>Le nombre d'invités indiqué est une donnée indicative&nbsp;: l'accès des Invités à l'événement n'est pas limité en nombre de personnes. La limite effective porte sur le nombre de souvenirs (photos et vidéos) déposés, tel qu'indiqué pour chaque formule, et fait l'objet d'une tolérance de {{ memora_upload_grace_percent }}&nbsp;% avant blocage des dépôts supplémentaires. L'Organisateur peut à tout moment souscrire une formule supérieure pour poursuivre la collecte.</p>
+    {% else %}
+    <p>Les prestations payantes sont facturées au prix indiqué sur le Service, à savoir {{ memora_event_price }} par événement, sauf offre particulière.</p>
+    {% endif %}
+    <p>Les prix sont indiqués dans la devise affichée et peuvent, le cas échéant, être majorés des taxes applicables. Les prix et le contenu des formules peuvent évoluer&nbsp;; la formule et le prix applicables sont ceux affichés au moment de la validation de la commande.</p>
   </section>
 
   <section>
@@ -86,7 +97,7 @@
 
   <section>
     <h2>12. Programme de rémunération des Organisateurs</h2>
-    <p>{{ site_name }} peut proposer un programme de commissions récompensant les Organisateurs, comprenant une commission sur leurs propres événements payés selon un palier, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'ils ont amenés. Les montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer. Le versement des commissions est subordonné aux conditions publiées&nbsp;; les commissions constituent, le cas échéant, un revenu dont la déclaration incombe à leur bénéficiaire.</p>
+    <p>{{ site_name }} peut proposer un programme de commissions récompensant les Organisateurs, comprenant une commission sur leurs propres événements payés selon un palier, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'ils ont amenés. Les taux ou montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer. Lorsque la commission est exprimée en pourcentage, elle s'entend du prix payé pour l'événement concerné, hors taxes le cas échéant. Le versement des commissions est subordonné aux conditions publiées&nbsp;; les commissions constituent, le cas échéant, un revenu dont la déclaration incombe à leur bénéficiaire.</p>
   </section>
 
   <section>

@@ -152,6 +152,27 @@ class LegalPagesTests(TestCase):
         self.assertContains(response, "remboursement", status_code=200)
         self.assertContains(response, "paiement")
 
+    def test_terms_list_every_plan_and_state_guests_are_not_capped(self):
+        """Les CGU ne peuvent pas annoncer un prix unique quand on vend 4 formules."""
+        response = self.client.get(reverse("core:terms"))
+
+        self.assertContains(response, "Tarifs et formules")
+        for label, price, quota in (
+            ("Intime", "49 USD", "300 souvenirs inclus"),
+            ("Classique", "79 USD", "800 souvenirs inclus"),
+            ("Grand jour", "129 USD", "1500 souvenirs inclus"),
+            ("Prestige", "199 USD", "3000 souvenirs inclus"),
+        ):
+            self.assertContains(response, label)
+            self.assertContains(response, price)
+            self.assertContains(response, quota)
+        # L'engagement contractuel qui accompagne la tarification par formule.
+        # Texte statique du template : les apostrophes n'y sont pas echappees.
+        self.assertContains(response, "n'est pas limité")
+        self.assertContains(response, "tolérance de 10")
+        # Une commission en pourcentage doit dire de quoi elle est un pourcentage.
+        self.assertContains(response, "s'entend du prix payé")
+
     def test_privacy_page_renders_with_dynamic_values(self):
         self._configure(
             legal_entity_name="Memora SAS",

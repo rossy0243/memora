@@ -151,7 +151,7 @@
     <div>
       <p class="section__label">Programme Ambassadeur</p>
       <h2>Organisez, parrainez, gagnez.</h2>
-      <p>Programme sur sélection : les organisateurs les plus actifs deviennent ambassadeurs et touchent jusqu'à {{ memora_commission_premium }} par événement payé, plus {{ memora_commission_referral }} sur ceux des organisateurs qu'ils amènent.</p>
+      <p>Programme sur sélection : les organisateurs les plus actifs deviennent ambassadeurs et touchent jusqu'à {{ memora_commission_premium }}{% if memora_commission_is_percent %} du prix de{% else %} par{% endif %} chaque événement payé, plus {{ memora_commission_referral }} sur ceux des organisateurs qu'ils amènent.</p>
     </div>
     <a class="button button--ghost" href="{% url 'core:ambassador_program' %}">Découvrir le programme</a>
   </div>

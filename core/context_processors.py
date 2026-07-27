@@ -49,6 +49,8 @@ def site_metadata(request):
         "memora_event_price": site_configuration.formatted_event_price,
         "memora_event_plans": event_plans,
         "memora_plan_price_range": _plan_price_range(event_plans),
+        "memora_upload_grace_percent": site_configuration.upload_quota_grace_percent,
+        "memora_commission_is_percent": site_configuration.uses_percent_commissions,
         "memora_commission_starter": site_configuration.formatted_commission_starter,
         "memora_commission_medium": site_configuration.formatted_commission_medium,
         "memora_commission_premium": site_configuration.formatted_commission_premium,

@@ -36,19 +36,19 @@
       <article class="tier-card">
         <span class="tier-badge tier-badge--starter">Starter</span>
         <strong class="tier-card__amount">{{ memora_commission_starter }}</strong>
-        <span class="tier-card__unit">par événement payé</span>
+        <span class="tier-card__unit">{% if memora_commission_is_percent %}du prix de chaque événement payé{% else %}par événement payé{% endif %}</span>
         <p class="tier-card__range">Jusqu'à {{ memora_tier_medium_min|add:"-1" }} événements</p>
       </article>
       <article class="tier-card tier-card--medium">
         <span class="tier-badge tier-badge--medium">Medium</span>
         <strong class="tier-card__amount">{{ memora_commission_medium }}</strong>
-        <span class="tier-card__unit">par événement payé</span>
+        <span class="tier-card__unit">{% if memora_commission_is_percent %}du prix de chaque événement payé{% else %}par événement payé{% endif %}</span>
         <p class="tier-card__range">De {{ memora_tier_medium_min }} à {{ memora_tier_premium_min|add:"-1" }} événements</p>
       </article>
       <article class="tier-card tier-card--premium">
         <span class="tier-badge tier-badge--premium">Premium</span>
         <strong class="tier-card__amount">{{ memora_commission_premium }}</strong>
-        <span class="tier-card__unit">par événement payé</span>
+        <span class="tier-card__unit">{% if memora_commission_is_percent %}du prix de chaque événement payé{% else %}par événement payé{% endif %}</span>
         <p class="tier-card__range">Plus de {{ memora_tier_premium_min|add:"-1" }} événements</p>
       </article>
     </div>
@@ -60,11 +60,11 @@
     <div class="reveal">
       <p class="section__label">Parrainage</p>
       <h2>Amenez d'autres organisateurs, gagnez avec eux.</h2>
-      <p>Une fois ambassadeur, partagez votre lien de parrainage depuis votre tableau de bord. Dès qu'un organisateur que vous avez amené vend un événement, Memora vous verse <strong>{{ memora_commission_referral }}</strong>&nbsp;— pour chacun de ses événements payés, sans limite.</p>
+      <p>Une fois ambassadeur, partagez votre lien de parrainage depuis votre tableau de bord. Dès qu'un organisateur que vous avez amené vend un événement, Memora vous verse <strong>{{ memora_commission_referral }}</strong>{% if memora_commission_is_percent %} du prix de la vente{% endif %}&nbsp;— pour chacun de ses événements payés, sans limite.</p>
       <ol class="program-steps reveal-group">
         <li><strong>Partagez</strong> votre lien de parrainage unique.</li>
         <li><strong>Ils s'inscrivent</strong> et créent leurs événements.</li>
-        <li><strong>Vous touchez</strong> {{ memora_commission_referral }} à chaque événement qu'ils vendent.</li>
+        <li><strong>Vous touchez</strong> {{ memora_commission_referral }}{% if memora_commission_is_percent %} du prix{% endif %} à chaque événement qu'ils vendent.</li>
       </ol>
       <div class="program-referral__actions">
         <a class="button button--primary" href="{% url 'accounts:signup' %}">Rejoindre le programme</a>
