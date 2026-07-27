@@ -1,20 +1,39 @@
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import DatabaseError
 from django.templatetags.static import static
 
 from .models import SiteConfiguration
 
 
+ACTIVE_PLANS_CACHE_KEY = "memora:active_event_plans"
+
+
 def _active_event_plans():
-    """Formules actives, pour les pages publiques. Silencieux avant migration."""
+    """Formules actives, pour les pages publiques.
+
+    Mise en cache : ce context processor s'execute a CHAQUE requete, y compris
+    sur la page d'accueil. Silencieux avant migration.
+    """
+    plans = cache.get(ACTIVE_PLANS_CACHE_KEY)
+    if plans is not None:
+        return plans
+
     try:
         from events.models import EventPlan
 
-        return list(EventPlan.objects.filter(is_active=True))
+        plans = list(EventPlan.objects.filter(is_active=True))
     except (DatabaseError, ImportError):
         return []
+
+    cache.set(
+        ACTIVE_PLANS_CACHE_KEY,
+        plans,
+        getattr(settings, "MEMORA_CONFIG_CACHE_SECONDS", 60),
+    )
+    return plans
 
 
 def _plan_price_range(plans):

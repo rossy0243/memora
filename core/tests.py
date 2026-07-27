@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
@@ -23,6 +24,10 @@ from .security import get_client_ip
 
 
 class HomePageTests(TestCase):
+    def setUp(self):
+        # Le cache survit au rollback de la base entre tests : on l'isole.
+        cache.clear()
+
     def test_home_page_returns_success(self):
         response = self.client.get(reverse("core:home"))
 
@@ -74,6 +79,10 @@ class HomePageTests(TestCase):
 
 
 class AmbassadorProgramPageTests(TestCase):
+    def setUp(self):
+        # Le cache survit au rollback de la base entre tests : on l'isole.
+        cache.clear()
+
     def test_page_renders_fixed_amounts_in_fixed_mode(self):
         config = SiteConfiguration.current()
         config.commission_mode = "fixed"
@@ -120,6 +129,10 @@ class AmbassadorProgramPageTests(TestCase):
 
 
 class LegalPagesTests(TestCase):
+    def setUp(self):
+        # Le cache survit au rollback de la base entre tests : on l'isole.
+        cache.clear()
+
     def _configure(self, **fields):
         config = SiteConfiguration.current()
         for key, value in fields.items():

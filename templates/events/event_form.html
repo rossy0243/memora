@@ -64,6 +64,33 @@
       </label>
     </section>
 
+    {% if form.plan %}
+    <section class="form-section">
+      <div class="form-section__heading">
+        <p class="section__label">Formule</p>
+        <h2>À la taille de votre événement</h2>
+        <p class="form-section__note">Tous vos invités peuvent participer, quelle que soit la formule&nbsp;: elle fixe le nombre de souvenirs inclus, pas le nombre de personnes.</p>
+      </div>
+
+      <div class="plan-choice" role="radiogroup" aria-label="Formule">
+        {% for radio, plan in form.plan_options %}
+        <label class="plan-choice__option{% if radio.data.selected %} is-selected{% endif %}">
+          {{ radio.tag }}
+          <span class="plan-choice__body">
+            <span class="plan-choice__head">
+              <strong class="plan-choice__name">{{ plan.label }}</strong>
+              <span class="plan-choice__price">{{ plan.formatted_price }}</span>
+            </span>
+            <span class="plan-choice__meta">{{ plan.guests_label }} · {{ plan.upload_quota }} souvenirs inclus</span>
+            {% if plan.tagline %}<span class="plan-choice__tagline">{{ plan.tagline }}</span>{% endif %}
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      {{ form.plan.errors }}
+    </section>
+    {% endif %}
+
     <section class="form-section">
       <div class="form-section__heading">
         <p class="section__label">Moments invités</p>

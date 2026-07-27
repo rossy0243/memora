@@ -112,11 +112,19 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # Compression des reponses dynamiques (HTML, JSON) ; WhiteNoise ne compresse
+    # que les fichiers statiques. Le jeton CSRF de Django est masque a chaque
+    # requete, ce qui neutralise l'attaque BREACH visant les reponses compressees.
+    "django.middleware.gzip.GZipMiddleware",
+    # Repond 304 quand le navigateur a deja la bonne version (ETag/Last-Modified).
+    "django.middleware.http.ConditionalGetMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Apres MessageMiddleware : il depose un message avant de rediriger.
+    "core.middleware.SessionIdleTimeoutMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -229,6 +237,72 @@ LOGOUT_REDIRECT_URL = "core:home"
 EMAIL_BACKEND = os.getenv("DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", "Memora <no-reply@memora.local>")
 MEMORA_PUBLIC_BASE_URL = os.getenv("MEMORA_PUBLIC_BASE_URL", "")
+
+# --- Cache -----------------------------------------------------------------
+# Avec REDIS_URL, le cache est PARTAGE entre les workers gunicorn et les
+# services. Sans, on retombe sur un cache local au processus : suffisant pour
+# les donnees de configuration (relues a chaque requete), mais insuffisant pour
+# ce qui doit etre compte globalement — le verrouillage anti-force-brute du code
+# invite (events/access.py) devient alors permissif d'un facteur egal au nombre
+# de workers. Poser REDIS_URL des que la beta se remplit.
+REDIS_URL = os.getenv("REDIS_URL", "")
+MEMORA_CACHE_IS_SHARED = bool(REDIS_URL)
+
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "KEY_PREFIX": "memora",
+            "TIMEOUT": env_int("MEMORA_CACHE_DEFAULT_TIMEOUT", 300),
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "memora-local",
+            "KEY_PREFIX": "memora",
+            "TIMEOUT": env_int("MEMORA_CACHE_DEFAULT_TIMEOUT", 300),
+            "OPTIONS": {"MAX_ENTRIES": env_int("MEMORA_CACHE_MAX_ENTRIES", 2000)},
+        }
+    }
+
+# Duree de vie du cache de configuration (prix, formules, textes legaux). Elle
+# borne la propagation d'un changement admin entre workers quand le cache est
+# local ; l'enregistrement en admin invalide en plus explicitement.
+MEMORA_CONFIG_CACHE_SECONDS = env_int("MEMORA_CONFIG_CACHE_SECONDS", 60)
+
+# --- Sessions et cookies ---------------------------------------------------
+# `cached_db` lit la session dans le cache et n'interroge la base qu'en cas de
+# miss. On ne l'active QUE si le cache est partage : avec un cache par worker,
+# une deconnexion faite par un worker resterait invisible des autres jusqu'a
+# expiration — un utilisateur paraitrait encore connecte.
+SESSION_ENGINE = os.getenv(
+    "DJANGO_SESSION_ENGINE",
+    "django.contrib.sessions.backends.cached_db"
+    if MEMORA_CACHE_IS_SHARED
+    else "django.contrib.sessions.backends.db",
+)
+SESSION_CACHE_ALIAS = "default"
+# Duree de vie du cookie de session. Volontairement longue : elle porte aussi
+# les sessions INVITE, qui servent a compter les envois par personne
+# (MEMORA_SESSION_UPLOAD_LIMIT). La raccourcir donnerait a chaque invite une
+# session neuve, donc un quota d'envois remis a zero.
+SESSION_COOKIE_AGE = env_int("DJANGO_SESSION_COOKIE_AGE", 60 * 60 * 24 * 30)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.getenv("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = os.getenv("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")
+# Deconnexion apres inactivite — appliquee aux comptes ORGANISATEURS seulement
+# (voir core.middleware.SessionIdleTimeoutMiddleware). 0 desactive.
+MEMORA_SESSION_IDLE_TIMEOUT_SECONDS = env_int(
+    "MEMORA_SESSION_IDLE_TIMEOUT_SECONDS", 60 * 60 * 2
+)
+# On ne reecrit l'horodatage d'activite que passe ce delai, pour eviter une
+# ecriture de session a chaque requete.
+MEMORA_SESSION_ACTIVITY_REFRESH_SECONDS = env_int(
+    "MEMORA_SESSION_ACTIVITY_REFRESH_SECONDS", 60
+)
 
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

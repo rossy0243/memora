@@ -3968,3 +3968,85 @@ body.capture-review-open {
     transition: none;
   }
 }
+
+/* Choix de formule a la creation d'un evenement : cartes cliquables plutot
+   qu'un menu deroulant — c'est le moment d'achat. */
+.form-section__note {
+  margin: 6px 0 0;
+  color: var(--color-muted, #6b6b6b);
+  font-size: 0.92rem;
+}
+
+.plan-choice {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.plan-choice__option {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.plan-choice__option:hover {
+  border-color: var(--color-champagne);
+}
+
+.plan-choice__option:has(input:checked) {
+  border-color: var(--color-champagne);
+  box-shadow: 0 0 0 2px var(--color-champagne) inset;
+  background: rgba(216, 180, 106, 0.08);
+}
+
+.plan-choice__option:has(input:focus-visible) {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.plan-choice__option input {
+  margin-top: 3px;
+  accent-color: var(--color-ink);
+  flex: none;
+}
+
+.plan-choice__body {
+  display: grid;
+  gap: 3px;
+}
+
+.plan-choice__head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.plan-choice__name {
+  font-size: 1.02rem;
+}
+
+.plan-choice__price {
+  color: var(--color-ink);
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.25rem;
+  white-space: nowrap;
+}
+
+.plan-choice__meta {
+  color: var(--color-muted, #6b6b6b);
+  font-size: 0.9rem;
+}
+
+.plan-choice__tagline {
+  color: var(--color-muted, #6b6b6b);
+  font-size: 0.85rem;
+  font-style: italic;
+}

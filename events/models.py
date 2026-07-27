@@ -1,6 +1,7 @@
 import secrets
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -30,6 +31,25 @@ class EventType(models.Model):
 
     def __str__(self):
         return self.label
+
+
+class EventPlanQuerySet(models.QuerySet):
+    """Invalide le cache des formules aussi sur les ecritures en masse.
+
+    `update()` et `delete()` de queryset ne passent pas par `Model.save()` :
+    sans cette surcharge, desactiver des formules en lot laisserait les pages
+    publiques afficher l'ancienne liste jusqu'a expiration du cache.
+    """
+
+    def update(self, **kwargs):
+        result = super().update(**kwargs)
+        EventPlan._invalidate_cache()
+        return result
+
+    def delete(self, *args, **kwargs):
+        result = super().delete(*args, **kwargs)
+        EventPlan._invalidate_cache()
+        return result
 
 
 class EventPlan(models.Model):
@@ -71,6 +91,8 @@ class EventPlan(models.Model):
         default=False,
         help_text="Formule pre-selectionnee a la creation d'un evenement.",
     )
+
+    objects = EventPlanQuerySet.as_manager()
 
     class Meta:
         ordering = ["sort_order", "price_amount", "label"]
@@ -114,6 +136,17 @@ class EventPlan(models.Model):
         # Une seule formule par defaut.
         if self.is_default:
             EventPlan.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        self._invalidate_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        self._invalidate_cache()
+
+    @staticmethod
+    def _invalidate_cache():
+        from core.context_processors import ACTIVE_PLANS_CACHE_KEY
+
+        cache.delete(ACTIVE_PLANS_CACHE_KEY)
 
 
 class Event(models.Model):

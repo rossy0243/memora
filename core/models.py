@@ -1,8 +1,11 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.validators import MinValueValidator
 from django.db import DatabaseError, models
+
+SITE_CONFIGURATION_CACHE_KEY = "memora:site_configuration"
 
 
 def format_price_amount(amount, currency):
@@ -262,14 +265,37 @@ class SiteConfiguration(models.Model):
     def save(self, *args, **kwargs):
         self.event_price_currency = (self.event_price_currency or "").strip().upper()
         super().save(*args, **kwargs)
+        cache.delete(SITE_CONFIGURATION_CACHE_KEY)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.delete(SITE_CONFIGURATION_CACHE_KEY)
 
     @classmethod
     def current(cls):
+        """Configuration du site, mise en cache : elle est relue a chaque requete
+        (prix, textes legaux, en-tetes) et ne change qu'en admin."""
+        config = cache.get(SITE_CONFIGURATION_CACHE_KEY)
+        if config is not None:
+            return config
+
         try:
             config = cls.objects.order_by("pk").first()
         except DatabaseError:
-            config = None
-        return config or cls(
-            event_price_amount=settings.MEMORA_EVENT_PRICE_AMOUNT,
-            event_price_currency=settings.MEMORA_EVENT_PRICE_CURRENCY,
+            # Base indisponible (migration en cours) : valeurs de repli, non cachees.
+            return cls(
+                event_price_amount=settings.MEMORA_EVENT_PRICE_AMOUNT,
+                event_price_currency=settings.MEMORA_EVENT_PRICE_CURRENCY,
+            )
+
+        if config is None:
+            config = cls(
+                event_price_amount=settings.MEMORA_EVENT_PRICE_AMOUNT,
+                event_price_currency=settings.MEMORA_EVENT_PRICE_CURRENCY,
+            )
+        cache.set(
+            SITE_CONFIGURATION_CACHE_KEY,
+            config,
+            getattr(settings, "MEMORA_CONFIG_CACHE_SECONDS", 60),
         )
+        return config

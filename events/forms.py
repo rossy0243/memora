@@ -48,12 +48,29 @@ class EventForm(forms.ModelForm):
         queryset=EventPlan.objects.none(),
         required=False,
         empty_label=None,
+        widget=forms.RadioSelect,
         label="Formule",
         help_text=(
             "Choisissez selon le nombre d'invités attendus. Le nombre d'invités n'est jamais "
             "bloqué : la formule fixe le nombre de souvenirs inclus."
         ),
     )
+
+    def plan_options(self):
+        """Paires (bouton radio, formule) pour un affichage en cartes.
+
+        Le template a besoin de l'objet formule — prix, quota, accroche — que
+        l'iteration standard d'un champ de choix ne fournit pas.
+        """
+        field = self.fields.get("plan")
+        if not field:
+            return []
+        plans_by_pk = {str(plan.pk): plan for plan in field.queryset}
+        return [
+            (radio, plans_by_pk.get(str(radio.data["value"])))
+            for radio in self["plan"]
+            if plans_by_pk.get(str(radio.data["value"]))
+        ]
 
     class Meta:
         model = Event
