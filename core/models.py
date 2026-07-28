@@ -59,6 +59,23 @@ class SiteConfiguration(models.Model):
         default=Decimal("10.00"),
         help_text="Commission en % versée au parrain pour chaque événement payé d'un filleul. 0 pour désactiver.",
     )
+    support_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text=(
+            "Adresse de contact affichée aux organisateurs qui ont perdu leur mot de "
+            "passe. Laisser vide pour reprendre l'adresse de contact légale."
+        ),
+    )
+    support_whatsapp = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text=(
+            "Numéro WhatsApp au format international, par exemple +243990000000. "
+            "Laisser vide pour ne pas proposer WhatsApp."
+        ),
+    )
     referral_duration_days = models.PositiveIntegerField(
         default=365,
         help_text=(
@@ -300,6 +317,21 @@ class SiteConfiguration(models.Model):
     @property
     def effective_data_protection_authority(self):
         return self.data_protection_authority.strip() or "l'autorité de protection des données compétente"
+
+    @property
+    def effective_support_email(self):
+        """Adresse d'assistance : celle dediee, sinon le contact legal."""
+        return self.support_email.strip() or self.legal_contact_email.strip()
+
+    @property
+    def whatsapp_link(self):
+        """Lien wa.me : chiffres seulement, sans « + » ni separateurs."""
+        digits = "".join(char for char in self.support_whatsapp if char.isdigit())
+        return f"https://wa.me/{digits}" if digits else ""
+
+    @property
+    def has_support_contact(self):
+        return bool(self.effective_support_email or self.whatsapp_link)
 
     def save(self, *args, **kwargs):
         self.event_price_currency = (self.event_price_currency or "").strip().upper()

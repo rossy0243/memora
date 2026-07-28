@@ -43,6 +43,16 @@ class SiteConfigurationAdmin(admin.ModelAdmin):
             {"fields": ("commission_referral_percent", "commission_referral_amount")},
         ),
         (
+            "Assistance (mot de passe oublié)",
+            {
+                "description": (
+                    "Coordonnées affichées aux organisateurs qui ont perdu leur mot de "
+                    "passe. Laisser les deux vides masque la page de récupération."
+                ),
+                "fields": ("support_email", "support_whatsapp"),
+            },
+        ),
+        (
             "Affiliation et retraits",
             {
                 "description": (

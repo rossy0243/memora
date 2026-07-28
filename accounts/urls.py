@@ -18,5 +18,6 @@ urlpatterns = [
         auth_views.LogoutView.as_view(),
         name="logout",
     ),
+    path("mot-de-passe-oublie/", views.password_help, name="password_help"),
     path("gains/retrait/", views.request_payout_view, name="request_payout"),
 ]

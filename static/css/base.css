@@ -4229,3 +4229,43 @@ body.capture-review-open {
   color: var(--color-body);
   font-size: 1.05rem;
 }
+
+/* Page « mot de passe oublié » */
+.support-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.support-contacts {
+  display: grid;
+  gap: 4px 14px;
+  grid-template-columns: auto 1fr;
+  margin: 14px 0 0;
+  font-size: 0.94rem;
+}
+
+.support-contacts dt {
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.support-contacts dd {
+  margin: 0;
+}
+
+.support-note {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-champagne);
+  background: rgba(216, 180, 106, 0.1);
+  font-size: 0.9rem;
+}
+
+.form-card__footer {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  font-size: 0.92rem;
+}

@@ -25,7 +25,8 @@
       </label>
       <button class="button button--primary" type="submit">Se connecter</button>
     </form>
-    <p class="form-note">Pas encore de compte ? <a href="{% url 'accounts:signup' %}">Creer un espace organisateur</a></p>
+    <p class="form-note"><a href="{% url 'accounts:password_help' %}">Mot de passe oublié&nbsp;?</a></p>
+    <p class="form-note">Pas encore de compte ? <a href="{% url 'accounts:signup' %}">Créer un espace organisateur</a></p>
   </div>
 </section>
 {% endblock %}

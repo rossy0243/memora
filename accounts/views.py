@@ -5,6 +5,8 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
+from core.models import SiteConfiguration
+
 from .forms import OrganizerSignupForm
 from .models import OrganizerProfile, PayoutRequest
 from .services import request_payout
@@ -60,3 +62,24 @@ def request_payout_view(request):
         "Memora la traite sous quelques jours ouvrés.",
     )
     return redirect("dashboard:home")
+
+
+def password_help(request):
+    """Page « mot de passe oublié ».
+
+    Memora n'envoie pas de lien de réinitialisation automatique : la remise à
+    zéro passe par un contact humain (e-mail ou WhatsApp), dont les coordonnées
+    sont réglées en admin. On évite ainsi de promettre un e-mail que la
+    configuration d'envoi ne garantit pas encore.
+    """
+    configuration = SiteConfiguration.current()
+    return render(
+        request,
+        "accounts/password_help.html",
+        {
+            "support_email": configuration.effective_support_email,
+            "whatsapp_link": configuration.whatsapp_link,
+            "whatsapp_display": configuration.support_whatsapp,
+            "has_support_contact": configuration.has_support_contact,
+        },
+    )
