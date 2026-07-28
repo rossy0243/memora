@@ -126,6 +126,59 @@ class FirstEventDiscountTests(TestCase):
         self.assertEqual(entry.amount, 672)
         self.assertEqual(event.price_amount, 6715)
 
+
+    def test_a_race_cannot_grant_two_discounts(self):
+        """Deux creations simultanees ne doivent pas donner deux remises.
+
+        On simule l'issue de la course : deux evenements portent la remise. Le
+        paiement doit ramener le second au plein tarif.
+        """
+        self._refer()
+        first = self._event(title="Course A")
+        second = self._event(title="Course B")
+        # Etat qu'aurait produit un controle d'eligibilite double.
+        Event.objects.filter(pk=second.pk).update(
+            discount_amount=first.discount_amount,
+            discount_percent=first.discount_percent,
+            price_amount=first.price_amount,
+        )
+        second.refresh_from_db()
+        self.assertEqual(second.price_amount, 6715)
+
+        first.payment_status = Event.PaymentStatus.PAID
+        first.save()
+        second.payment_status = Event.PaymentStatus.PAID
+        second.save()
+
+        second.refresh_from_db()
+        self.assertEqual(second.price_amount, 7900)
+        self.assertEqual(second.discount_amount, 0)
+        # Le premier garde bien sa remise.
+        first.refresh_from_db()
+        self.assertEqual(first.price_amount, 6715)
+
+    def test_reverted_discount_does_not_shrink_the_commission(self):
+        """La commission du parrain suit le prix retabli, pas le prix remise."""
+        self._refer()
+        first = self._event(title="Course C")
+        second = self._event(title="Course D")
+        Event.objects.filter(pk=second.pk).update(
+            discount_amount=first.discount_amount,
+            discount_percent=first.discount_percent,
+            price_amount=first.price_amount,
+        )
+        second.refresh_from_db()
+
+        first.payment_status = Event.PaymentStatus.PAID
+        first.save()
+        second.payment_status = Event.PaymentStatus.PAID
+        second.save()
+
+        entry = CommissionLedger.objects.get(
+            event=second, kind=CommissionLedger.Kind.REFERRAL_EVENT
+        )
+        self.assertEqual(entry.amount, 790)  # 10 % de 79 USD, plein tarif
+
     def test_discount_can_be_disabled_from_admin(self):
         config = SiteConfiguration.current()
         config.first_event_discount_percent = Decimal("0")

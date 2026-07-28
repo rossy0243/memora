@@ -5,6 +5,25 @@ from core.models import SiteConfiguration, format_price_amount
 from .models import CommissionLedger, OrganizerProfile
 
 
+def _revert_first_event_discount(event):
+    """Retablit le plein tarif sur un evenement qui n'avait pas droit a la remise.
+
+    Ecriture par queryset : passer par save() relancerait record_event_commissions.
+    L'instance en memoire est mise a jour pour que la commission qui suit soit
+    calculee sur le bon prix. `promo_code` est conserve pour la tracabilite.
+    """
+    from events.models import Event
+
+    Event.objects.filter(pk=event.pk).update(
+        price_amount=event.full_price_amount,
+        discount_amount=0,
+        discount_percent=0,
+    )
+    event.price_amount = event.full_price_amount
+    event.discount_amount = 0
+    event.discount_percent = 0
+
+
 def record_event_commissions(event):
     """Crée les commissions liées à un événement payé et met à jour le palier. Idempotent."""
     if not event.pk or not event.is_paid:
@@ -19,8 +38,16 @@ def record_event_commissions(event):
 
         # La remise de bienvenue est consommee au paiement, pas a la creation :
         # un evenement cree puis abandonne ne doit pas la bruler.
+        #
+        # C'est aussi ici que la regle « une seule fois » est REELLEMENT garantie.
+        # Le controle d'eligibilite a la creation peut etre double par deux
+        # requetes simultanees (deux onglets) : chacune verrait l'autre absente et
+        # figerait une remise. Au paiement, un seul evenement peut consommer la
+        # remise ; tout autre evenement remise repasse au plein tarif avant que
+        # les commissions ne soient calculees.
         if event.discount_amount:
-            organizer_profile.consume_first_event_discount()
+            if not organizer_profile.consume_first_event_discount():
+                _revert_first_event_discount(event)
 
         # Commission sur l'événement propre : réservée aux ambassadeurs désignés par Memora.
         tier = configuration.tier_for_paid_count(paid_count)
