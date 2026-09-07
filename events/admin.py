@@ -73,7 +73,7 @@ class EventAdmin(admin.ModelAdmin):
         "media_retention_days",
         "created_at",
     )
-    list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at")
+    list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at", "guestbook_agent")
     search_fields = ("title", "couple_name", "location", "organizer__username", "payment_reference")
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ("created_at", "updated_at")
@@ -122,6 +122,17 @@ class EventAdmin(admin.ModelAdmin):
             "Retention",
             {
                 "fields": ("media_retention_days",),
+            },
+        ),
+        (
+            "Livre d'or agent",
+            {
+                "fields": ("guestbook_agent", "guestbook_started_at", "guestbook_ended_at"),
+                "description": (
+                    "Affectez un compte agent pour activer le livre d'or video a l'entree. "
+                    "Le debut est horodate automatiquement a la premiere capture. Videz la fin "
+                    "pour rouvrir une mission cloturee par erreur."
+                ),
             },
         ),
         (

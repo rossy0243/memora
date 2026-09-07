@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Livre d'or - {{ event.title }} - Memora{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell">
+  <div class="page-heading">
+    <div>
+      <p class="section__label">Livre d'or</p>
+      <h1>{{ event.title }}</h1>
+      <p class="page-heading__meta">Messages video enregistres au stand d'entree, jamais melanges au film automatique.</p>
+    </div>
+    <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">Retour dashboard</a>
+  </div>
+
+  {% if messages_list %}
+    <div class="media-library-grid">
+      {% for message in messages_list %}
+        <article class="media-library-card">
+          <div class="media-library-card__preview">
+            <video src="{{ message.media_file.url }}" controls preload="metadata"></video>
+          </div>
+          <div class="media-library-card__body">
+            <span>{{ message.guest_name|default:"Invité anonyme" }}</span>
+            <strong>{{ message.created_at|date:"d/m/Y H:i" }}</strong>
+            <small>{{ message.file_size|filesizeformat }}</small>
+            <div class="media-library-card__actions">
+              <a href="{{ message.media_file.url }}" download>Télécharger</a>
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>Aucun message pour le moment.</h2>
+      <p>Les messages enregistrés par l'agent au stand d'entrée apparaîtront ici.</p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

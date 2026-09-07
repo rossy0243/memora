@@ -1,8 +1,10 @@
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 
 from core.models import SiteConfiguration
@@ -10,6 +12,21 @@ from core.models import SiteConfiguration
 from .forms import OrganizerSignupForm
 from .models import OrganizerProfile, PayoutRequest
 from .services import request_payout
+
+
+class RoleAwareLoginView(LoginView):
+    """Envoie chaque compte vers son espace : agent Memora ou dashboard organisateur.
+
+    Un `next` explicite (lien partagé, redirection apres @login_required) garde
+    toujours la priorite sur ce routage automatique.
+    """
+
+    template_name = "accounts/login.html"
+
+    def get_default_redirect_url(self):
+        if hasattr(self.request.user, "agent_profile"):
+            return reverse_lazy("guestbook:agent_home")
+        return super().get_default_redirect_url()
 
 
 def signup(request):

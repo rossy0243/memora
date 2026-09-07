@@ -1,7 +1,14 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import CommissionLedger, OrganizerProfile, PayoutRequest
+from .models import AgentProfile, CommissionLedger, OrganizerProfile, PayoutRequest
+
+
+@admin.register(AgentProfile)
+class AgentProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "phone_number", "created_at")
+    search_fields = ("user__username", "user__email", "phone_number")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(OrganizerProfile)

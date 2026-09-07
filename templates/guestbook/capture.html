@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Livre d'or - {{ event.title }}{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block body_class %}guest-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+{% block site_nav %}{% endblock %}
+
+{% block content %}
+<section class="guest-upload-shell">
+  <header class="guest-upload-heading">
+    <div class="guest-upload-heading__content">
+      <p class="section__label">Livre d'or Memora</p>
+      <h1>{{ event.title }}</h1>
+      <p class="guest-upload-heading__hint">Enregistrez le message d'un invité &mdash; {{ max_duration_seconds }} secondes max.</p>
+      <form method="post" action="{% url 'guestbook:end_shift' event.pk %}" class="guestbook-end-form">
+        {% csrf_token %}
+        <button class="button button--secondary button--compact" type="submit" onclick="return confirm('Terminer votre service pour cet événement ?');">Terminer mon service</button>
+      </form>
+    </div>
+  </header>
+
+  <form id="guestbook-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'guestbook:capture' event.pk %}">
+    {% csrf_token %}
+    {{ form.client_duration_seconds }}
+    {{ form.non_field_errors }}
+
+    <div class="guest-form-errors" aria-live="polite">
+      {{ form.media_file.errors }}
+    </div>
+
+    <section class="camera-studio" id="camera-studio" data-max-duration="{{ max_duration_seconds }}">
+      <div class="camera-studio__intro">
+        <span>Caméra livre d'or</span>
+        <strong>Enregistrer un message.</strong>
+        <p id="camera-permission-note">Le navigateur demandera l'autorisation caméra et micro.</p>
+        <button class="button button--primary" type="button" id="start-camera-button">Lancer la caméra</button>
+      </div>
+
+      <div class="camera-panel" id="camera-panel" role="dialog" aria-modal="true" aria-label="Caméra livre d'or" hidden>
+        <div class="camera-panel__topbar">
+          <span>Livre d'or</span>
+          <button class="camera-close" type="button" id="close-camera-button" aria-label="Fermer la caméra">Fermer</button>
+        </div>
+
+        <div class="camera-live">
+          <video id="camera-live-video" autoplay muted playsinline></video>
+          <span id="camera-status">Caméra prête</span>
+          <em class="camera-orientation-hint">Tournez l'appareil en portrait pour une prise plus stable.</em>
+          <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">0,0 s</span></strong>
+          <strong class="camera-feedback" id="camera-feedback" hidden></strong>
+        </div>
+
+        <div class="camera-panel__dock">
+          <div class="camera-controls camera-controls--duo">
+            <button class="camera-pill camera-pill--lens is-active" type="button" id="lens-toggle-button" aria-label="Passer en caméra arrière">Selfie</button>
+            <button class="camera-shutter camera-shutter--video" type="button" id="camera-action-button" aria-label="Lancer l'enregistrement">
+              <span></span>
+              <strong>Vidéo</strong>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="memora-camera-input" aria-hidden="true">
+      {{ form.media_file }}
+    </div>
+
+    <div class="capture-preview" id="capture-preview" hidden>
+      <div class="capture-preview__media">
+        <video id="capture-preview-video" muted loop autoplay playsinline></video>
+      </div>
+      <div class="capture-preview__body">
+        <div>
+          <span>Message prêt à envoyer</span>
+          <p id="capture-preview-details">Vérifiez l'aperçu, ajoutez un nom si besoin, puis envoyez.</p>
+        </div>
+        <div class="guestbook-name-field">
+          <label for="{{ form.guest_name.id_for_label }}">De la part de <span>Facultatif</span></label>
+          {{ form.guest_name }}
+        </div>
+        <ul class="capture-preview__errors" hidden aria-live="assertive"></ul>
+        <div class="capture-preview__actions">
+          <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre</button>
+          <button class="button button--primary button--compact capture-preview__confirm" type="submit" id="use-capture-button">Envoyer le message</button>
+        </div>
+        <div class="upload-progress" hidden aria-live="polite">
+          <div class="upload-progress__bar">
+            <span></span>
+          </div>
+          <p>Envoi en cours...</p>
+        </div>
+      </div>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/guestbook-capture.js' %}"></script>
+{% endblock %}

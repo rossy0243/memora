@@ -194,6 +194,32 @@ class OrganizerProfile(models.Model):
         return profile
 
 
+class AgentProfile(models.Model):
+    """Marque un compte comme agent Memora : employe qui anime le livre d'or
+    video a l'entree d'un evenement. Distinct d'un organisateur : pas d'evenements
+    a lui, juste des missions affectees via l'admin (voir Event.guestbook_agent).
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="agent_profile",
+    )
+    phone_number = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Contact pratique pour coordonner une mission, facultatif.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "profil agent"
+        verbose_name_plural = "profils agents"
+
+    def __str__(self):
+        return f"{self.user.username} (agent)"
+
+
 class CommissionLedger(models.Model):
     class Kind(models.TextChoices):
         OWN_EVENT = "own", "Événement propre"

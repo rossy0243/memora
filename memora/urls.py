@@ -11,6 +11,7 @@ urlpatterns = [
     path("comptes/", include("accounts.urls")),
     path("dashboard/", include("dashboard.urls")),
     path("evenements/", include("events.urls")),
+    path("livre-dor/", include("guestbook.urls")),
     path("e/<slug:slug>/<slug:access_key>/film/", public_movie_share, name="public_movie"),
     path("e/<slug:slug>/<slug:access_key>/", include("uploads.urls")),
     path("e/<slug:slug>/<slug:access_key>/", public_event_preview, name="public_event"),
