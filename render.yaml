@@ -222,7 +222,8 @@ services:
     name: memora-movie-worker
     runtime: docker
     region: frankfurt
-    plan: standard
+    # Pro Plus (2026-09) : tout-Remotion sur hero/full/teaser. Etait "standard".
+    plan: pro-plus
     # Image dediee : Node + Chrome headless Remotion en plus de Python/FFmpeg.
     dockerfilePath: ./Dockerfile.worker
     dockerContext: .
@@ -325,15 +326,13 @@ services:
       - *env_music_volume
       - *env_voice_volume
       - *env_ducked_music_volume
-      # Rendu Remotion : 1 seul rendu Chrome a la fois (plan standard, 1 CPU).
+      # Tout-Remotion (2026-09, decision utilisateur) : worker Pro Plus, plus
+      # de coeurs pour le rendu Chrome. Ajuster REMOTION_CONCURRENCY au vCPU
+      # reel du plan une fois confirme (suppose ~4 ci-dessous, a verifier).
       - key: REMOTION_CONCURRENCY
-        value: "1"
-      # Mode hybride beta : seul le teaser passe par Remotion (le rendu Chrome
-      # est trop lent sur 1 CPU pour heros/integrale — mesure 2026-07 : teaser
-      # 60s avec videos > 2h). Repasser a "hero,full,teaser" avec un worker
-      # plus costaud (Pro Plus) pour le tout-Remotion.
+        value: "4"
       - key: MEMORA_REMOTION_DELIVERABLES
-        value: teaser
+        value: hero,full,teaser
       - key: MEMORA_REMOTION_TIMEOUT_SECONDS
         value: "14400"
 
@@ -341,7 +340,8 @@ services:
     name: memora-schedule-movies
     runtime: docker
     region: frankfurt
-    plan: standard
+    # Pro Plus (2026-09), aligne sur le worker : ce cron rend aussi des films.
+    plan: pro-plus
     # Ce cron rend aussi des films (--process-now) : meme image que le worker.
     dockerfilePath: ./Dockerfile.worker
     dockerContext: .
