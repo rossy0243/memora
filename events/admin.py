@@ -77,6 +77,7 @@ class EventAdmin(admin.ModelAdmin):
     search_fields = ("title", "couple_name", "location", "organizer__username", "payment_reference")
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("selected_music_track",)
     fieldsets = (
         (
             "Informations",
@@ -116,6 +117,18 @@ class EventAdmin(admin.ModelAdmin):
                     "qr_code_image",
                     "is_active",
                 )
+            },
+        ),
+        (
+            "Musique du film",
+            {
+                "fields": ("selected_music_track",),
+                "description": (
+                    "Facultatif : impose une piste precise pour le film de cet evenement. "
+                    "Sans choix ici, Memora retombe sur une ambiance par defaut liee au type "
+                    "d'evenement — l'invite ne choisissant plus de moment, ce choix automatique "
+                    "ne peut plus vraiment varier d'un evenement a l'autre."
+                ),
             },
         ),
         (

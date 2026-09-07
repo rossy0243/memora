@@ -187,6 +187,19 @@ class Event(models.Model):
         null=True,
     )
     welcome_message = models.TextField(blank=True)
+    selected_music_track = models.ForeignKey(
+        "processing.MusicTrack",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="selected_for_events",
+        help_text=(
+            "Piste choisie a la main pour le film de cet evenement (par l'equipe Memora, "
+            "ou l'organisateur si on le lui ouvre un jour). Remplace le choix automatique "
+            "par ambiance, qui ne peut plus vraiment varier depuis que l'invite ne choisit "
+            "plus de moment."
+        ),
+    )
     guest_access_code = models.CharField(
         max_length=24,
         blank=True,

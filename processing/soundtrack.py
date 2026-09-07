@@ -76,6 +76,21 @@ def find_db_track_for_mood(mood, event):
 
 
 def choose_movie_soundtrack(event, uploads):
+    # Choix manuel prioritaire : l'ambiance automatique par categorie ne peut
+    # plus vraiment varier depuis que l'invite ne choisit plus de moment (tout
+    # vaut "Autre"). Un humain (equipe Memora, organisateur un jour) tranche.
+    manual_track = getattr(event, "selected_music_track", None)
+    if manual_track is not None and manual_track.is_active:
+        return SoundtrackChoice(
+            mood=manual_track.mood,
+            track_path=None,
+            reason="Piste choisie manuellement pour cet événement",
+            bpm=manual_track.bpm or 0.0,
+            first_beat_offset=manual_track.first_beat_offset or 0.0,
+            track_id=manual_track.pk,
+            track_display_name=manual_track.title,
+        )
+
     mood = choose_music_mood(event, uploads)
 
     db_track = find_db_track_for_mood(mood, event)

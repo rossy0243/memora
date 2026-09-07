@@ -855,6 +855,54 @@ class MovieGenerationServiceTests(TestCase):
         self.assertTrue(edit_plan["audio_strategy"]["duck_music_when_voice_is_present"])
         self.assertEqual(edit_plan["max_duration_seconds"], 600)
 
+    def test_manually_selected_track_overrides_automatic_mood(self):
+        # Depuis que l'invite ne choisit plus de moment, l'ambiance automatique
+        # ne peut plus vraiment varier : un choix manuel doit toujours gagner.
+        upload = self.create_upload(
+            "dance.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="dancefloor",
+            duration=timedelta(seconds=8),
+        )
+        track = MusicTrack.objects.create(
+            title="Piste choisie a la main",
+            audio_file=SimpleUploadedFile("track.mp3", b"audio-bytes"),
+            mood=MusicTrack.Mood.EMOTIONAL,
+            bpm=90.0,
+            first_beat_offset=0.5,
+        )
+        self.event.selected_music_track = track
+        self.event.save(update_fields=["selected_music_track"])
+
+        soundtrack = choose_movie_soundtrack(self.event, [upload])
+
+        self.assertEqual(soundtrack.mood, MusicTrack.Mood.EMOTIONAL)
+        self.assertEqual(soundtrack.track_id, track.pk)
+        self.assertEqual(soundtrack.track_name, "Piste choisie a la main")
+
+    def test_inactive_manual_track_is_ignored(self):
+        upload = self.create_upload(
+            "dance.mp4",
+            GuestUpload.MediaType.VIDEO,
+            category_code="dancefloor",
+            duration=timedelta(seconds=8),
+        )
+        track = MusicTrack.objects.create(
+            title="Piste desactivee",
+            audio_file=SimpleUploadedFile("track.mp3", b"audio-bytes"),
+            mood=MusicTrack.Mood.EMOTIONAL,
+            is_active=False,
+        )
+        self.event.selected_music_track = track
+        self.event.save(update_fields=["selected_music_track"])
+
+        soundtrack = choose_movie_soundtrack(self.event, [upload])
+
+        # Retombe sur le choix automatique habituel : la piste choisie a la
+        # main est desactivee, on ne doit pas la jouer quand meme.
+        self.assertEqual(soundtrack.mood, "joyful_party")
+        self.assertNotEqual(soundtrack.track_id, track.pk)
+
     @patch("processing.services._run_ffmpeg")
     def test_movie_clip_can_use_storage_without_local_path(self, run_ffmpeg):
         class RemoteOnlyMedia:
