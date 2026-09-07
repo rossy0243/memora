@@ -40,8 +40,8 @@ class EventForm(forms.ModelForm):
 
     moments = MomentMultipleChoiceField(
         required=False,
-        label="Moments proposés aux invités",
-        help_text="Recherchez des moments existants ou ajoutez les vôtres. Vos invités les choisiront au moment d'envoyer un souvenir.",
+        label="Moments de l'événement",
+        help_text="Recherchez des moments existants ou ajoutez les vôtres. Ils organisent le tableau de bord, le ZIP et le film — les invités n'ont pas à les choisir.",
     )
 
     plan = EventPlanChoiceField(

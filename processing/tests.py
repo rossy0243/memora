@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from io import BytesIO, StringIO
+from itertools import count
 import json
 from pathlib import Path
 import shutil
@@ -891,6 +892,36 @@ class MovieGenerationServiceTests(TestCase):
 
         run_ffmpeg.assert_called_once()
 
+    @patch("processing.services._media_file_has_audio", return_value=True)
+    @patch("processing.services._run_ffmpeg")
+    def test_movie_video_clip_normalizes_and_fades_its_own_audio(self, run_ffmpeg, _has_audio):
+        # Sans ca, le son d'un invite arrive a un niveau different du precedent et
+        # coupe net a la place ou l'image, elle, s'enchaine (voir _build_movie_clip).
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "clip.mp4"
+            upload = SimpleNamespace(
+                pk=126,
+                media_file=SimpleUploadedFile("video.mp4", b"video-bytes", content_type="video/mp4"),
+                media_type=GuestUpload.MediaType.VIDEO,
+                original_filename="video.mp4",
+                duration=timedelta(seconds=4),
+            )
+
+            def create_output(command):
+                output_path.write_bytes(b"movie-bytes")
+
+            run_ffmpeg.side_effect = create_output
+
+            _build_movie_clip(upload, output_path, "ffmpeg")
+
+        command = run_ffmpeg.call_args.args[0]
+        filter_complex = command[command.index("-filter_complex") + 1]
+        self.assertIn("loudnorm=", filter_complex)
+        self.assertIn("afade=t=in", filter_complex)
+        self.assertIn("afade=t=out", filter_complex)
+        self.assertIn("[a]", command)
+        self.assertNotIn("0:a:0", command)
+
     @patch("processing.services._run_ffmpeg")
     def test_movie_image_clip_gets_silent_audio_for_concat(self, run_ffmpeg):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1117,41 +1148,44 @@ class TitleCardTests(TestCase):
 
 
 class NarrativeOrderTests(TestCase):
-    """Le film doit suivre le recit, pas le classement par score."""
+    """Le film doit suivre le recit (debut/coeur/fin), pas le classement par score.
 
-    def _upload(self, code, media_type=GuestUpload.MediaType.VIDEO, sort_order=0):
+    Base sur l'horaire reel des envois : l'invite ne choisissant plus de moment,
+    un classement par categorie n'aurait plus rien a distinguer (tout vaut "other").
+    """
+
+    def setUp(self):
+        self.base_time = timezone.now()
+        self._pk_seq = count(1)
+
+    def _upload(self, minutes_offset, media_type=GuestUpload.MediaType.VIDEO):
         return SimpleNamespace(
-            pk=id(code) % 10000 + sort_order,
+            pk=next(self._pk_seq),
             media_type=media_type,
-            category=SimpleNamespace(code=code, sort_order=sort_order),
+            uploaded_at=self.base_time + timedelta(minutes=minutes_offset),
         )
 
-    def test_moments_follow_the_story_arc(self):
+    def test_uploads_are_grouped_into_chronological_chapters(self):
         # Ordre volontairement chaotique, comme un tri par score.
         uploads = [
-            self._upload("dancefloor"),
-            self._upload("ceremony"),
-            self._upload("cake"),
-            self._upload("arrival"),
-            self._upload("speech"),
+            self._upload(87),
+            self._upload(2),
+            self._upload(45),
+            self._upload(0),
+            self._upload(90),
         ]
         ordered = services._order_by_narrative_arc(uploads)
-        codes = [upload.category.code for upload in ordered]
-        self.assertEqual(codes, ["arrival", "ceremony", "speech", "cake", "dancefloor"])
+        chapters = services.assign_time_chapters(uploads)
+        ranks = [chapters[u.pk][0] for u in ordered]
+        # Les rangs ne redescendent jamais : chapitres contigus, dans l'ordre du recit.
+        self.assertEqual(ranks, sorted(ranks))
+        self.assertEqual(len(ordered), len(uploads))
 
-    def test_custom_moments_follow_their_display_order(self):
+    def test_photos_and_videos_stay_interleaved_inside_a_chapter(self):
         uploads = [
-            self._upload("photo-booth", sort_order=42),
-            self._upload("ceremony"),
-        ]
-        codes = [u.category.code for u in services._order_by_narrative_arc(uploads)]
-        self.assertEqual(codes, ["ceremony", "photo-booth"])
-
-    def test_photos_and_videos_stay_interleaved_inside_a_moment(self):
-        uploads = [
-            self._upload("ceremony", GuestUpload.MediaType.VIDEO),
-            self._upload("ceremony", GuestUpload.MediaType.VIDEO),
-            self._upload("ceremony", GuestUpload.MediaType.IMAGE),
+            self._upload(10, GuestUpload.MediaType.VIDEO),
+            self._upload(11, GuestUpload.MediaType.VIDEO),
+            self._upload(12, GuestUpload.MediaType.IMAGE),
         ]
         ordered = services._order_by_narrative_arc(uploads)
         self.assertEqual(len(ordered), 3)
@@ -1160,18 +1194,65 @@ class NarrativeOrderTests(TestCase):
 
     @override_settings(MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED=False)
     def test_ordering_can_be_disabled(self):
-        uploads = [self._upload("dancefloor"), self._upload("arrival")]
-        codes = [u.category.code for u in services._order_by_narrative_arc(uploads)]
-        self.assertEqual(codes, ["dancefloor", "arrival"])
+        uploads = [self._upload(90), self._upload(0)]
+        ordered = services._order_by_narrative_arc(uploads)
+        self.assertEqual([u.pk for u in ordered], [u.pk for u in uploads])
 
     def test_no_media_is_lost_in_reordering(self):
         uploads = [
-            self._upload("dancefloor"),
-            self._upload("ceremony", GuestUpload.MediaType.IMAGE),
-            self._upload("other"),
-            self._upload("speech"),
+            self._upload(5),
+            self._upload(50, GuestUpload.MediaType.IMAGE),
+            self._upload(80),
+            self._upload(95),
         ]
         self.assertEqual(len(services._order_by_narrative_arc(uploads)), len(uploads))
+
+
+class TimeChapterTests(TestCase):
+    """Chapitres du film bases sur l'horaire reel des envois, pas la categorie."""
+
+    def setUp(self):
+        self.base_time = timezone.now()
+
+    def _upload(self, pk, minutes_offset=None):
+        return SimpleNamespace(
+            pk=pk,
+            uploaded_at=self.base_time + timedelta(minutes=minutes_offset) if minutes_offset is not None else None,
+        )
+
+    def test_splits_into_three_labeled_periods(self):
+        uploads = [
+            self._upload(1, 0),
+            self._upload(2, 5),
+            self._upload(3, 50),
+            self._upload(4, 95),
+            self._upload(5, 100),
+        ]
+        chapters = services.assign_time_chapters(uploads)
+        labels = [chapters[u.pk][1] for u in uploads]
+        self.assertEqual(labels, [
+            "Premiers instants",
+            "Premiers instants",
+            "Au coeur de l'événement",
+            "Derniers instants",
+            "Derniers instants",
+        ])
+
+    def test_uploads_bunched_within_minutes_stay_a_single_chapter(self):
+        # Une rafale d'envois en quelques secondes (comme deux inserts de suite en
+        # test, ou un petit evenement) ne raconte pas trois chapitres.
+        uploads = [self._upload(1, 0), self._upload(2, 0.01), self._upload(3, 0.02)]
+        chapters = services.assign_time_chapters(uploads)
+        self.assertEqual({chapters[u.pk][1] for u in uploads}, {"Premiers instants"})
+
+    def test_falls_back_to_a_single_chapter_without_enough_timestamps(self):
+        no_timestamps = [self._upload(1), self._upload(2)]
+        chapters = services.assign_time_chapters(no_timestamps)
+        self.assertEqual({chapters[u.pk][1] for u in no_timestamps}, {"Premiers instants"})
+
+        one_timestamp = [self._upload(1, 0), self._upload(2)]
+        chapters = services.assign_time_chapters(one_timestamp)
+        self.assertEqual({chapters[u.pk][1] for u in one_timestamp}, {"Premiers instants"})
 
 
 class BeatSyncTests(TestCase):
@@ -1235,6 +1316,64 @@ class BeatSyncTests(TestCase):
         self.assertNotIn("-ss", run_ffmpeg.call_args.args[0])
 
 
+class RemotionClipAudioNormalizationTests(TestCase):
+    """Les clips materialises pour Remotion ne passent par aucun autre traitement
+    ffmpeg : c'est _normalize_clip_audio qui doit aligner leur niveau sonore."""
+
+    def test_normalizes_mp4_clip_with_aac(self):
+        from processing.remotion import _normalize_clip_audio
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "clip_0001.mp4"
+            path.write_bytes(b"original")
+
+            def fake_run(command, **kwargs):
+                self.assertIn("loudnorm=I=-16:TP=-1.5:LRA=11", command)
+                self.assertEqual(command[command.index("-c:a") + 1], "aac")
+                Path(command[-1]).write_bytes(b"normalized")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("processing.remotion.subprocess.run", side_effect=fake_run):
+                _normalize_clip_audio(path, "ffmpeg")
+
+            self.assertEqual(path.read_bytes(), b"normalized")
+
+    def test_uses_opus_for_webm_container(self):
+        # MediaRecorder cote invite produit surtout du webm : aac y serait invalide.
+        from processing.remotion import _normalize_clip_audio
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "clip_0001.webm"
+            path.write_bytes(b"original")
+            captured = {}
+
+            def fake_run(command, **kwargs):
+                captured["codec"] = command[command.index("-c:a") + 1]
+                Path(command[-1]).write_bytes(b"normalized")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            with patch("processing.remotion.subprocess.run", side_effect=fake_run):
+                _normalize_clip_audio(path, "ffmpeg")
+
+            self.assertEqual(captured["codec"], "libopus")
+
+    def test_keeps_original_clip_when_ffmpeg_fails(self):
+        # Un plan non normalise vaut mieux qu'un film qui echoue completement.
+        from processing.remotion import _normalize_clip_audio
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "clip_0001.mp4"
+            path.write_bytes(b"original")
+
+            with patch(
+                "processing.remotion.subprocess.run",
+                return_value=SimpleNamespace(returncode=1, stdout="", stderr="boom"),
+            ):
+                _normalize_clip_audio(path, "ffmpeg")
+
+            self.assertEqual(path.read_bytes(), b"original")
+
+
 class RemotionEdlTests(TestCase):
     """Le builder EDL doit produire un FilmProps aligne avec remotion/src/types.ts."""
 
@@ -1284,13 +1423,31 @@ class RemotionEdlTests(TestCase):
         self.assertEqual(props["clips"][1]["kind"], "video")
         self.assertEqual(props["clips"][0]["src"], "clip_0001.jpg")
         self.assertEqual(props["clips"][1]["src"], "clip_0002.mp4")
-        self.assertEqual(props["clips"][0]["label"], "Cérémonie")
+        # Sans horaire connu (fixture sans uploaded_at), tout retombe sur le
+        # premier chapitre : voir TimeChapterTests pour le decoupage reel.
+        self.assertEqual(props["clips"][0]["label"], "Premiers instants")
         self.assertTrue(all(c["durationInFrames"] >= 1 for c in props["clips"]))
         self.assertEqual(props["title"], "Camille & Noé")
         self.assertEqual(props["audioSrc"], "music.mp3")
         self.assertEqual(props["audioFirstBeatOffset"], 1.25)
         self.assertEqual(props["grade"], "romantic")
         self.assertEqual(props["pace"], "balanced")
+
+    def test_clip_labels_follow_upload_timing(self):
+        """build_film_props doit refleter le decoupage debut/coeur/fin reel,
+        pas la categorie (devenue muette depuis que l'invite n'en choisit plus)."""
+        from processing.remotion import build_film_props
+
+        base_time = timezone.now()
+        early = self._upload(GuestUpload.MediaType.IMAGE, "early.jpg")
+        early.uploaded_at = base_time
+        late = self._upload(GuestUpload.MediaType.IMAGE, "late.jpg")
+        late.uploaded_at = base_time + timedelta(minutes=100)
+
+        props = build_film_props(self._event(), [early, late], self._soundtrack(), fps=30)
+
+        self.assertEqual(props["clips"][0]["label"], "Premiers instants")
+        self.assertEqual(props["clips"][1]["label"], "Derniers instants")
 
     def test_pace_defaults_and_validates(self):
         from processing.remotion import build_film_props
@@ -1324,9 +1481,10 @@ class RemotionEdlTests(TestCase):
 
     @override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"hero", "full", "teaser"})
     @patch("processing.remotion.subprocess.run")
+    @patch("processing.remotion._normalize_clip_audio")
     @patch("processing.remotion._materialize_upload")
     @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
-    def test_teaser_render_keeps_guest_audio(self, _which, _materialize, subprocess_run):
+    def test_teaser_render_keeps_guest_audio(self, _which, _materialize, _normalize, subprocess_run):
         """Le teaser doit sortir le son des videos : c'est un reglage par livrable."""
         from processing.remotion import render_movie_with_remotion
 
@@ -1354,6 +1512,46 @@ class RemotionEdlTests(TestCase):
             )
 
         self.assertTrue(captured["props"]["clips"][0]["keepAudio"])
+
+    @patch("processing.remotion.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="OK", stderr=""))
+    @patch("processing.remotion._normalize_clip_audio")
+    @patch("processing.remotion._materialize_upload")
+    @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
+    def test_only_video_clips_with_audio_get_normalized(self, _which, _materialize, normalize, _run):
+        """Une image ou une video muette n'ont pas de piste a normaliser."""
+        from processing.remotion import render_movie_with_remotion
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "p.jpg"),
+            self._upload(GuestUpload.MediaType.VIDEO, "muted.mp4", seconds=4),
+            self._upload(GuestUpload.MediaType.VIDEO, "voiced.mp4", seconds=4),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"teaser"}):
+                render_movie_with_remotion(
+                    self._event(),
+                    uploads,
+                    self._soundtrack(has_track=False),
+                    Path(tmp) / "out.mp4",
+                    deliverable="hero",
+                )
+
+        # "hero" n'est pas dans MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES ci-dessus :
+        # aucune video ne garde son audio, donc aucune normalisation a faire.
+        normalize.assert_not_called()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"hero"}):
+                render_movie_with_remotion(
+                    self._event(),
+                    uploads,
+                    self._soundtrack(has_track=False),
+                    Path(tmp) / "out.mp4",
+                    deliverable="hero",
+                )
+
+        self.assertEqual(normalize.call_count, 2)
 
     def test_json_serialisable(self):
         import json

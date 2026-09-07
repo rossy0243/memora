@@ -107,6 +107,7 @@ INSTALLED_APPS = [
     "dashboard.apps.DashboardConfig",
     "core.apps.CoreConfig",
     "processing.apps.ProcessingConfig",
+    "guestbook.apps.GuestbookConfig",
 ]
 
 MIDDLEWARE = [
@@ -388,6 +389,10 @@ MEMORA_FFPROBE_BINARY = os.getenv("MEMORA_FFPROBE_BINARY", "ffprobe")
 MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS = int(
     os.getenv("MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS", "10")
 )
+# Livre d'or agent : messages plus longs qu'un candid de soiree, mais toujours bornes.
+MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS = int(
+    os.getenv("MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS", "30")
+)
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)
 MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)
@@ -403,11 +408,13 @@ MEMORA_MOVIE_BEAT_SYNC_ENABLED = env_bool("MEMORA_MOVIE_BEAT_SYNC_ENABLED", True
 # Ordre du recit (arrivee -> ceremonie -> fete) plutot que l'ordre du score.
 MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED = env_bool("MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED", True)
 # Carton d'ouverture (prenoms + date). Deposer un .ttf dans assets/fonts/ pour une belle typo.
+# 5s (etait 3s) : l'animation Remotion (TitleCard) consomme deja ~1,5s a l'entree
+# et ~0,5s a la sortie — sous 5s, le titre n'a quasiment pas le temps de se lire.
 MEMORA_MOVIE_INTRO_CARD_ENABLED = env_bool("MEMORA_MOVIE_INTRO_CARD_ENABLED", True)
-MEMORA_MOVIE_INTRO_CARD_SECONDS = env_int("MEMORA_MOVIE_INTRO_CARD_SECONDS", 3)
+MEMORA_MOVIE_INTRO_CARD_SECONDS = env_int("MEMORA_MOVIE_INTRO_CARD_SECONDS", 5)
 # Carton de fin : sans lui le film s'arrete net sur le dernier plan.
 MEMORA_MOVIE_OUTRO_CARD_ENABLED = env_bool("MEMORA_MOVIE_OUTRO_CARD_ENABLED", True)
-MEMORA_MOVIE_OUTRO_CARD_SECONDS = env_int("MEMORA_MOVIE_OUTRO_CARD_SECONDS", 4)
+MEMORA_MOVIE_OUTRO_CARD_SECONDS = env_int("MEMORA_MOVIE_OUTRO_CARD_SECONDS", 5)
 MEMORA_MOVIE_OUTRO_TITLE = os.getenv("MEMORA_MOVIE_OUTRO_TITLE", "Merci")
 MEMORA_MOVIE_TITLE_FONT_PATH = os.getenv("MEMORA_MOVIE_TITLE_FONT_PATH", "")
 MEMORA_MOVIE_AUTOGENERATE_HOUR = env_int("MEMORA_MOVIE_AUTOGENERATE_HOUR", 12)
@@ -460,7 +467,9 @@ MEMORA_REMOTION_TIMEOUT_SECONDS = env_int("MEMORA_REMOTION_TIMEOUT_SECONDS", 180
 # musique est le lit principal (fort), et elle est duckee uniquement pendant
 # les passages qui gardent la voix des invites (heros/integrale).
 MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.85"))
-MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.18"))
+# Resserre a 0.10 (etait 0.18) pour une voix nette sous la musique, alignee sur
+# l'intensite deja utilisee cote FFmpeg (0.08) : cf. MEMORA_MOVIE_DUCKED_MUSIC_VOLUME.
+MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.10"))
 # Livrables rendus par Remotion quand le provider est "remotion". Le rendu
 # Chrome est lent sur un petit CPU : en prod beta, seul le teaser (la vitrine
 # partagee) passe par Remotion — heros et integrale restent FFmpeg. Mettre

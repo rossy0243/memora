@@ -27,7 +27,7 @@ from .access import (
     reset_guest_access_failures,
 )
 from .models import Event
-from .services import build_event_qr_code_png
+from .services import build_event_qr_code_png, build_hourly_upload_breakdown, build_readiness_checklist
 
 
 class OrganizerEventMixin(LoginRequiredMixin):
@@ -92,46 +92,22 @@ class EventDetailView(OrganizerEventMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        uploads = (
+        latest_uploads = (
             self.object.guest_uploads.filter(is_deleted=False)
             .exclude(moderation_status=GuestUpload.ModerationStatus.REJECTED)
             .select_related("category")
-            .order_by("-uploaded_at", "-pk")
+            .order_by("-uploaded_at", "-pk")[:8]
         )
-        stats = uploads.aggregate(
-            total=Count("id"),
-            photos=Count("id", filter=Q(media_type=GuestUpload.MediaType.IMAGE)),
-            videos=Count("id", filter=Q(media_type=GuestUpload.MediaType.VIDEO)),
-            approved=Count("id", filter=Q(moderation_status=GuestUpload.ModerationStatus.APPROVED)),
-            selected_for_movie=Count(
-                "id",
-                filter=Q(
-                    is_selected_for_movie=True,
-                    moderation_status=GuestUpload.ModerationStatus.APPROVED,
-                ),
-            ),
-        )
-
-        counts_by_category = {
-            item["category_id"]: item["total"]
-            for item in uploads.values("category_id").annotate(total=Count("id"))
-        }
-        category_stats = []
-        for category in UploadCategory.objects.filter(event=self.object, is_active=True):
-            category_stats.append(
-                {
-                    "category": category,
-                    "count": counts_by_category.get(category.id, 0),
-                }
-            )
 
         context.update(
             {
-                "media_stats": stats,
-                "category_stats": category_stats,
-                "latest_uploads": uploads[:8],
+                "latest_uploads": latest_uploads,
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
                 "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
+                "qr_print_sheet_url": reverse("events:qr_print_sheet", kwargs={"pk": self.object.pk}),
+                "readiness_checklist": build_readiness_checklist(self.object),
+                "has_guestbook": bool(self.object.guestbook_agent_id or self.object.guestbook_messages.exists()),
+                **get_live_stats_context(self.object),
                 **get_movie_panel_context(self.object),
             }
         )
@@ -197,6 +173,19 @@ class EventMediaListView(OrganizerEventMixin, ListView):
         return context
 
 
+@login_required
+def guestbook_messages(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    return render(
+        request,
+        "events/guestbook_messages.html",
+        {
+            "event": event,
+            "messages_list": event.guestbook_messages.select_related("recorded_by").all(),
+        },
+    )
+
+
 def public_event_preview(request, slug, access_key):
     event = get_object_or_404(
         Event,
@@ -221,7 +210,9 @@ def public_event_preview(request, slug, access_key):
             "events/public_event_access.html",
             {"event": event, "access_error": access_error},
         )
-    return render(request, "events/public_event.html", {"event": event})
+    # Le scan mene directement a la camera : la page d'accueil n'ajoutait
+    # qu'un tap sans information que le formulaire n'affiche deja.
+    return redirect("uploads:create", slug=event.slug, access_key=event.public_access_key)
 
 
 @login_required
@@ -353,6 +344,62 @@ def get_movie_panel_context(event):
             and latest_movie.status in {"pending", "processing"}
         ),
     }
+
+
+def get_live_stats_context(event):
+    uploads = event.guest_uploads.filter(is_deleted=False).exclude(
+        moderation_status=GuestUpload.ModerationStatus.REJECTED
+    )
+    stats = uploads.aggregate(
+        total=Count("id"),
+        photos=Count("id", filter=Q(media_type=GuestUpload.MediaType.IMAGE)),
+        videos=Count("id", filter=Q(media_type=GuestUpload.MediaType.VIDEO)),
+        approved=Count("id", filter=Q(moderation_status=GuestUpload.ModerationStatus.APPROVED)),
+        selected_for_movie=Count(
+            "id",
+            filter=Q(
+                is_selected_for_movie=True,
+                moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            ),
+        ),
+    )
+
+    hourly_rows = build_hourly_upload_breakdown(uploads)
+    max_hourly_count = max((row["count"] for row in hourly_rows), default=0)
+    hourly_breakdown = [
+        {
+            "hour": row["hour"],
+            "count": row["count"],
+            "bar_percent": round(row["count"] * 100 / max_hourly_count) if max_hourly_count else 0,
+        }
+        for row in hourly_rows
+    ]
+
+    return {
+        "event": event,
+        "media_stats": stats,
+        "hourly_breakdown": hourly_breakdown,
+        "live_stats_url": reverse("events:live_stats", kwargs={"pk": event.pk}),
+    }
+
+
+@login_required
+def live_stats_panel(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    return render(request, "events/partials/live_stats_panel.html", get_live_stats_context(event))
+
+
+@login_required
+def qr_print_sheet(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    return render(
+        request,
+        "events/qr_print_sheet.html",
+        {
+            "event": event,
+            "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": event.pk}),
+        },
+    )
 
 
 @login_required

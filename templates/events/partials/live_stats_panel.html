@@ -1,0 +1,59 @@
+<div data-live-stats-panel data-status-url="{{ live_stats_url }}" data-active="{% if event.is_active %}1{% else %}0{% endif %}">
+  <article class="live-dashboard__hero reveal">
+    <div>
+      <p class="section__label">Suivi en direct</p>
+      <h2>{% if event.is_active %}Collecte active{% else %}Collecte fermée{% endif %}</h2>
+      <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} reçu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Gardez le QR code visible, Memora s'occupe du tri et du film souvenir.</p>
+      <div class="live-dashboard__signals">
+        <span>{{ event.get_event_type_display }}</span>
+        <span>Film J+1 à 12:00</span>
+        {% if event.requires_guest_access_code %}
+          <span>Code invité actif</span>
+        {% else %}
+          <span>Lien secret actif</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if event.cover_image %}
+      <img class="live-dashboard__cover" src="{{ event.cover_image.url }}" alt="">
+    {% else %}
+      <div class="live-dashboard__cover live-dashboard__cover--empty"></div>
+    {% endif %}
+  </article>
+
+  <div class="stat-grid stat-grid--live reveal-group">
+    <article class="stat-card">
+      <span>Souvenirs</span>
+      <strong>{{ media_stats.total|default:0 }}</strong>
+    </article>
+    <article class="stat-card">
+      <span>Photos</span>
+      <strong>{{ media_stats.photos|default:0 }}</strong>
+    </article>
+    <article class="stat-card">
+      <span>Vidéos</span>
+      <strong>{{ media_stats.videos|default:0 }}</strong>
+    </article>
+    <article class="stat-card">
+      <span>Sélection film</span>
+      <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
+    </article>
+  </div>
+
+  <article class="detail-panel">
+    <h3>Souvenirs par heure</h3>
+    {% if hourly_breakdown %}
+      <div class="hourly-breakdown">
+        {% for row in hourly_breakdown %}
+          <div class="hourly-breakdown__row">
+            <span>{{ row.hour|time:"G\h" }}</span>
+            <div class="hourly-breakdown__bar" aria-hidden="true"><span style="width: {{ row.bar_percent }}%"></span></div>
+            <strong>{{ row.count }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted-copy">Aucun souvenir reçu pour le moment.</p>
+    {% endif %}
+  </article>
+</div>

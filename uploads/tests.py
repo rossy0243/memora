@@ -298,7 +298,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -317,7 +316,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -342,7 +340,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -359,7 +356,8 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, self.event.title)
         self.assertNotContains(response, "Inscription")
         self.assertContains(response, "Caméra Memora")
-        self.assertContains(response, "Lancer la caméra")
+        self.assertContains(response, "start-camera-photo-button")
+        self.assertContains(response, "start-camera-video-button")
         self.assertContains(response, "Selfie")
         self.assertContains(response, "REC")
         self.assertContains(response, "mode-toggle-button")
@@ -377,22 +375,21 @@ class GuestUploadViewTests(TestCase):
         self.assertNotContains(response, 'capture="environment"')
         self.assertContains(response, "Souvenir prêt à envoyer")
         self.assertContains(response, "Reprendre")
-        # La revue plein ecran propose de valider la capture sans quitter l'ecran.
-        self.assertContains(response, "Utiliser ce souvenir")
+        # La revue plein ecran envoie directement le souvenir : pas d'etape de confirmation intermediaire.
+        self.assertNotContains(response, "Utiliser ce souvenir")
         self.assertNotContains(response, "Choisir un autre fichier")
         self.assertContains(response, "capture-preview-backdrop")
-        self.assertContains(response, "Moment obligatoire")
-        self.assertNotContains(response, "Choisir le moment")
-        self.assertContains(response, "obligatoire")
-        # Placeholder explicite + marque visible que le champ est requis.
-        self.assertContains(response, "Sélectionner le moment")
-        self.assertContains(response, "Requis")
-        self.assertNotContains(response, f"{self.category.label} - {self.event.title}")
-        self.assertContains(response, "moment-select")
+        # L'invite n'a plus a choisir un moment : le champ a disparu du formulaire.
+        self.assertNotContains(response, "Moment obligatoire")
+        self.assertNotContains(response, "Sélectionner le moment")
+        self.assertNotContains(response, "moment-select")
         self.assertContains(response, "5 souvenirs maximum par appareil")
         self.assertContains(response, "Il vous reste 5 envois")
         self.assertContains(response, "Envoyer le souvenir")
         self.assertContains(response, "upload-progress.js")
+        # Un echec d'envoi (reseau, validation, stockage) doit pouvoir s'afficher
+        # sans jamais recharger toute la page ni faire perdre la capture.
+        self.assertContains(response, 'class="capture-preview__errors" hidden')
 
     def test_camera_javascript_covers_final_mobile_ux_states(self):
         script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
@@ -407,6 +404,10 @@ class GuestUploadViewTests(TestCase):
         self.assertIn("Connexion lente", script)
         self.assertIn("L'envoi a échoué", script)
         self.assertIn("capturePreview", script)
+        # Un echec (reseau, validation, stockage) ne doit plus jamais recharger
+        # toute la page : la revue reste ouverte et affiche le meme message.
+        self.assertNotIn("document.write", script)
+        self.assertIn("finishFailedSend", script)
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
     def test_guest_upload_page_shows_remaining_upload_count(self):
@@ -415,7 +416,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -442,7 +442,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -455,7 +454,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": unlocked_media,
-                "category": self.category.pk,
             },
         )
 
@@ -469,7 +467,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -484,7 +481,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -499,7 +495,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -507,7 +502,20 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Ce format n&#x27;est pas")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
-    def test_rejects_category_from_another_event(self):
+    def test_guest_upload_gets_default_category_automatically(self):
+        media = make_test_image_file("photo.jpg")
+
+        response = self.client.post(
+            self.upload_url(),
+            {"media_file": media},
+        )
+
+        self.assertRedirects(response, self.thanks_url())
+        upload = GuestUpload.objects.get(event=self.event)
+        self.assertEqual(upload.category.code, "other")
+        self.assertEqual(upload.category.event_id, self.event.pk)
+
+    def test_guest_upload_ignores_client_supplied_category(self):
         other_event = Event.objects.create(
             organizer=self.event.organizer,
             title="Autre mariage",
@@ -525,8 +533,10 @@ class GuestUploadViewTests(TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(GuestUpload.objects.count(), 0)
+        self.assertRedirects(response, self.thanks_url())
+        upload = GuestUpload.objects.get(event=self.event)
+        self.assertEqual(upload.category.code, "other")
+        self.assertNotEqual(upload.category_id, other_category.pk)
 
     @override_settings(MEMORA_MAX_UPLOAD_SIZE=4)
     def test_rejects_oversized_file(self):
@@ -536,7 +546,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -552,7 +561,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -568,7 +576,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
             },
         )
 
@@ -588,7 +595,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
                 "client_duration_seconds": "8.25",
             },
         )
@@ -610,7 +616,6 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": media,
-                "category": self.category.pk,
                 "client_duration_seconds": "8.25",
             },
         )
@@ -628,14 +633,12 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": first_media,
-                "category": self.category.pk,
             },
         )
         response = self.client.post(
             self.upload_url(),
             {
                 "media_file": second_media,
-                "category": self.category.pk,
             },
         )
 
@@ -651,8 +654,7 @@ class GuestUploadViewTests(TestCase):
                 self.upload_url(),
                 {
                     "media_file": media,
-                    "category": self.category.pk,
-                },
+                    },
             )
             self.assertRedirects(response, self.thanks_url())
 
@@ -661,13 +663,19 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": extra_media,
-                "category": self.category.pk,
             },
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Limite atteinte")
         self.assertEqual(GuestUpload.objects.count(), 5)
+
+        # Une fois la limite atteinte, l'invite ne doit plus pouvoir ouvrir la
+        # camera pour rien : aucun chemin de capture ne peut aboutir.
+        page_after_limit = self.client.get(self.upload_url())
+        self.assertContains(page_after_limit, "Limite de souvenirs atteinte.")
+        self.assertNotContains(page_after_limit, "start-camera-photo-button")
+        self.assertNotContains(page_after_limit, "start-camera-video-button")
 
     @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=60)
     def test_limits_rapid_uploads_by_session_or_ip(self):
@@ -678,14 +686,12 @@ class GuestUploadViewTests(TestCase):
             self.upload_url(),
             {
                 "media_file": first_media,
-                "category": self.category.pk,
             },
         )
         response = self.client.post(
             self.upload_url(),
             {
                 "media_file": second_media,
-                "category": self.category.pk,
             },
         )
 

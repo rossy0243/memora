@@ -86,18 +86,25 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", a
     fps = fps or settings.MEMORA_REMOTION_FPS
     beat_interval = soundtrack.beat_interval if soundtrack else 0.0
 
+    # Chapitres par horaire reel (debut/coeur/fin), pas par categorie : l'invite
+    # ne choisit plus de moment, donc tout porte le meme code desormais.
+    from .services import assign_time_chapters
+
+    chapters = assign_time_chapters(list(uploads))
+
     clips = []
     for index, upload in enumerate(uploads, start=1):
         suffix = Path(upload.original_filename or upload.media_file.name).suffix.lower() or ".media"
         seconds = _clip_seconds(upload, beat_interval)
         category = getattr(upload, "category", None)
+        _, chapter_label = chapters.get(upload.pk, (0, ""))
         clips.append(
             {
                 "kind": "video" if upload.media_type == GuestUpload.MediaType.VIDEO else "image",
                 "src": f"clip_{index:04d}{suffix}",
                 "durationInFrames": _seconds_to_frames(seconds, fps),
                 "category": getattr(category, "code", "") or "",
-                "label": getattr(category, "label", "") or "",
+                "label": chapter_label,
                 "keepAudio": bool(allow_guest_audio and _clip_keeps_audio(upload)),
             }
         )
@@ -126,7 +133,7 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", a
         "grade": _GRADE_BY_MOOD.get(getattr(soundtrack, "mood", ""), "romantic"),
         "pace": pace if pace in ("punchy", "balanced", "gentle") else "balanced",
         "musicVolume": float(getattr(settings, "MEMORA_REMOTION_MUSIC_VOLUME", 0.85)),
-        "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.18)),
+        "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.10)),
     }
 
 
@@ -139,6 +146,55 @@ def _materialize_upload(upload, destination):
                 target.write(chunk)
     finally:
         upload.media_file.close()
+
+
+# Conteneur -> codec audio compatible pour le remux (webm n'accepte pas l'aac,
+# mov/mp4 n'acceptent pas l'opus). MediaRecorder cote invite produit surtout du
+# webm (vp9/vp8 + opus) ; mp4/mov arrivent plutot des cameras natives.
+_AUDIO_CODEC_BY_CONTAINER = {
+    ".webm": "libopus",
+    ".mp4": "aac",
+    ".mov": "aac",
+}
+
+
+def _normalize_clip_audio(path, ffmpeg_binary):
+    """Aligne le niveau sonore d'un plan (loudness EBU R128) avant que Remotion
+    ne le joue : sans ca, un discours filme de pres et une ambiance de piste de
+    danse arrivent a des niveaux tres differents, et aucun ducking ne rattrape
+    cet ecart tout seul. Remux audio uniquement (`-c:v copy`) : rapide, image
+    intacte. Echec silencieux — un plan non normalise vaut mieux qu'un film en
+    panne.
+    """
+    audio_codec = _AUDIO_CODEC_BY_CONTAINER.get(path.suffix.lower(), "aac")
+    normalized_path = path.with_name(path.stem + ".normalized" + path.suffix)
+    command = [
+        ffmpeg_binary,
+        "-y",
+        "-i",
+        str(path),
+        "-c:v",
+        "copy",
+        "-af",
+        "loudnorm=I=-16:TP=-1.5:LRA=11",
+        "-c:a",
+        audio_codec,
+        str(normalized_path),
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("Normalisation audio ignoree pour %s : %s", path.name, exc)
+        return
+    if result.returncode == 0 and normalized_path.exists():
+        normalized_path.replace(path)
+    else:
+        logger.warning(
+            "Normalisation audio ignoree pour %s : %s",
+            path.name,
+            (result.stderr or "").strip()[:300],
+        )
+        normalized_path.unlink(missing_ok=True)
 
 
 def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable):
@@ -175,7 +231,10 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
 
         # Materialise les clips (dans l'ordre des props) et la musique.
         for clip, upload in zip(props["clips"], uploads):
-            _materialize_upload(upload, assets_dir / clip["src"])
+            destination = assets_dir / clip["src"]
+            _materialize_upload(upload, destination)
+            if clip["kind"] == "video" and clip["keepAudio"]:
+                _normalize_clip_audio(destination, settings.MEMORA_FFMPEG_BINARY)
 
         if props["audioSrc"]:
             track_path, cleanup = materialize_soundtrack(soundtrack, assets_dir)

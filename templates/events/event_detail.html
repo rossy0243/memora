@@ -37,47 +37,26 @@
     </article>
   {% endif %}
 
-  <section class="live-dashboard">
-    <article class="live-dashboard__hero reveal">
-      <div>
-        <p class="section__label">Suivi en direct</p>
-        <h2>{% if event.is_active %}Collecte active{% else %}Collecte fermée{% endif %}</h2>
-        <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} reçu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Gardez le QR code visible, Memora s'occupe du tri et du film souvenir.</p>
-        <div class="live-dashboard__signals">
-          <span>{{ event.get_event_type_display }}</span>
-          <span>Film J+1 à 12:00</span>
-          {% if event.requires_guest_access_code %}
-            <span>Code invité actif</span>
-          {% else %}
-            <span>Lien secret actif</span>
-          {% endif %}
-        </div>
-      </div>
-      {% if event.cover_image %}
-        <img class="live-dashboard__cover" src="{{ event.cover_image.url }}" alt="">
-      {% else %}
-        <div class="live-dashboard__cover live-dashboard__cover--empty"></div>
-      {% endif %}
-    </article>
-
-    <div class="stat-grid stat-grid--live reveal-group">
-      <article class="stat-card">
-        <span>Souvenirs</span>
-        <strong>{{ media_stats.total|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Photos</span>
-        <strong>{{ media_stats.photos|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Vidéos</span>
-        <strong>{{ media_stats.videos|default:0 }}</strong>
-      </article>
-      <article class="stat-card">
-        <span>Sélection film</span>
-        <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
-      </article>
+  <article class="readiness-panel {% if readiness_checklist.is_ready %}readiness-panel--ready{% endif %} reveal">
+    <div class="readiness-panel__heading">
+      <p class="section__label">Avant le jour J</p>
+      <h2>{% if readiness_checklist.is_ready %}Prêt pour la collecte{% else %}Il reste des étapes{% endif %}</h2>
     </div>
+    <ul class="readiness-list">
+      {% for item in readiness_checklist.items %}
+        <li class="readiness-list__item {% if item.is_done %}is-done{% elif item.is_required %}is-required{% else %}is-optional{% endif %}">
+          <span class="readiness-list__icon" aria-hidden="true">{% if item.is_done %}&#10003;{% elif item.is_required %}!{% else %}&middot;{% endif %}</span>
+          <div>
+            <strong>{{ item.label }}</strong>
+            {% if not item.is_done %}<p>{{ item.hint }}</p>{% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <section class="live-dashboard">
+    {% include "events/partials/live_stats_panel.html" %}
 
     <div class="live-dashboard__quick reveal-group">
       <article class="quick-panel public-share-panel">
@@ -93,6 +72,7 @@
           <div class="quick-actions">
             <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
             <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>Télécharger QR</a>
+            <a class="button button--secondary button--compact" href="{{ qr_print_sheet_url }}">Fiche à imprimer</a>
             {% if event.is_paid %}
               <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>
             {% else %}
@@ -163,23 +143,12 @@
         <h2>Médias invités</h2>
       </div>
       <div class="section-actions">
+        {% if has_guestbook %}
+          <a class="button button--secondary" href="{% url 'events:guestbook_messages' event.pk %}">Livre d'or</a>
+        {% endif %}
         <a class="button button--secondary" href="{% url 'events:media_list' event.pk %}">Voir tous les médias</a>
         <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}">Télécharger ZIP</a>
       </div>
-    </div>
-
-    <div class="media-panels media-panels--single reveal">
-      <article class="detail-panel">
-        <h3>Répartition par moment</h3>
-        <div class="category-list">
-          {% for item in category_stats %}
-            <div class="category-row">
-              <span>{{ item.category.label }}</span>
-              <strong>{{ item.count }}</strong>
-            </div>
-          {% endfor %}
-        </div>
-      </article>
     </div>
 
     {% if latest_uploads %}
@@ -208,4 +177,5 @@
 {% block scripts %}
 <script src="{% static 'js/copy-to-clipboard.js' %}"></script>
 <script src="{% static 'js/movie-status.js' %}"></script>
+<script src="{% static 'js/live-stats.js' %}"></script>
 {% endblock %}

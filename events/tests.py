@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 import shutil
@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from core.models import SiteConfiguration
@@ -548,11 +549,24 @@ class EventViewTests(TestCase):
         )
         self.mark_paid(event)
 
-        response = self.client.get(event.get_public_url())
+        response = self.client.get(event.get_public_url(), follow=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Lea &amp; Sam")
         self.assertContains(response, "Bienvenue dans nos souvenirs.")
+
+    def test_public_event_redirects_straight_to_upload_form(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception directe",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertRedirects(response, reverse("uploads:create", kwargs={"slug": event.slug, "access_key": event.public_access_key}))
 
     def test_public_event_with_guest_access_code_requires_session_validation(self):
         event = Event.objects.create(
@@ -575,10 +589,13 @@ class EventViewTests(TestCase):
         self.assertContains(wrong_response, "Code incorrect.")
 
         valid_response = self.client.post(event.get_public_url(), {"guest_access_code": "amour2026"})
-        self.assertRedirects(valid_response, event.get_public_url())
+        self.assertRedirects(valid_response, event.get_public_url(), target_status_code=302)
 
         unlocked_response = self.client.get(event.get_public_url())
-        self.assertContains(unlocked_response, "Ajouter un souvenir")
+        self.assertRedirects(
+            unlocked_response,
+            reverse("uploads:create", kwargs={"slug": event.slug, "access_key": event.public_access_key}),
+        )
 
     @override_settings(MEMORA_GUEST_ACCESS_ATTEMPT_LIMIT=2, MEMORA_GUEST_ACCESS_LOCKOUT_SECONDS=60)
     def test_public_event_guest_access_code_is_throttled(self):
@@ -713,6 +730,150 @@ class EventViewTests(TestCase):
         self.assertEqual(response.context["media_stats"]["photos"], 1)
         self.assertEqual(response.context["media_stats"]["videos"], 1)
         self.assertEqual(response.context["media_stats"]["selected_for_movie"], 1)
+
+    def test_event_detail_shows_hourly_breakdown_instead_of_category(self):
+        # Depuis que les invites ne choisissent plus de moment, la repartition
+        # par categorie n'aurait plus de sens (tout tomberait dans "Autre").
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Horaire",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        category = event.upload_categories.get(code="ceremony")
+        first = GuestUpload.objects.create(
+            event=event,
+            category=category,
+            media_file="events/reception-horaire/uploads/ceremony/a.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="a.jpg",
+            file_size=1,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        second = GuestUpload.objects.create(
+            event=event,
+            category=category,
+            media_file="events/reception-horaire/uploads/ceremony/b.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="b.jpg",
+            file_size=1,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        # auto_now_add ignore toute valeur passee a la creation : on la fixe apres coup.
+        GuestUpload.objects.filter(pk=first.pk).update(
+            uploaded_at=timezone.make_aware(datetime(2026, 7, 8, 19, 0))
+        )
+        GuestUpload.objects.filter(pk=second.pk).update(
+            uploaded_at=timezone.make_aware(datetime(2026, 7, 8, 20, 0))
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Souvenirs par heure")
+        self.assertNotContains(response, "Répartition par moment")
+        breakdown = response.context["hourly_breakdown"]
+        self.assertEqual([row["count"] for row in breakdown], [1, 1])
+
+    def test_event_detail_shows_readiness_checklist(self):
+        incomplete_event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Incomplete",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": incomplete_event.pk}))
+
+        self.assertContains(response, "Il reste des étapes")
+        self.assertFalse(response.context["readiness_checklist"]["is_ready"])
+        self.assertContains(response, "Paiement validé")
+
+        complete_event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Complete",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            welcome_message="Bienvenue !",
+        )
+        self.mark_paid(complete_event)
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": complete_event.pk}))
+
+        self.assertContains(response, "Prêt pour la collecte")
+        self.assertTrue(response.context["readiness_checklist"]["is_ready"])
+
+    def test_live_stats_panel_reflects_current_counts(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Live",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        category = event.upload_categories.get(code="ceremony")
+        GuestUpload.objects.create(
+            event=event,
+            category=category,
+            media_file="events/reception-live/uploads/ceremony/a.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="a.jpg",
+            file_size=1,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:live_stats", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-live-stats-panel")
+        self.assertContains(response, 'data-active="1"')
+        self.assertEqual(response.context["media_stats"]["total"], 1)
+
+    def test_live_stats_panel_is_limited_to_owner(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Autrui",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:live_stats", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_qr_print_sheet_shows_printable_code(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Fiche",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Imprimer")
+        self.assertContains(response, reverse("events:qr_code", kwargs={"pk": event.pk}))
+
+    def test_qr_print_sheet_is_limited_to_owner(self):
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Fiche Autrui",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
 
     def test_event_detail_displays_latest_generated_movie(self):
         event = Event.objects.create(

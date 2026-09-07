@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Fiche QR à imprimer - {{ event.title }}{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="qr-print-page">
+  <div class="qr-print-page__actions no-print">
+    <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">&larr; Retour au tableau de bord</a>
+    <button class="button button--primary" type="button" onclick="window.print()">Imprimer</button>
+  </div>
+
+  <article class="qr-print-sheet">
+    <p class="qr-print-sheet__eyebrow">{{ event.get_event_type_display }}</p>
+    <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
+    <p class="qr-print-sheet__tagline">Scannez pour partager vos photos et vidéos de la soirée.</p>
+    <img class="qr-print-sheet__code" src="{{ event_qr_code_url }}" alt="QR code de {{ event.title }}">
+    <p class="qr-print-sheet__footer">Memora &mdash; {{ event.event_date|date:"d/m/Y" }}</p>
+  </article>
+</section>
+{% endblock %}

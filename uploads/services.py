@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, Max
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -211,6 +211,25 @@ def create_default_categories_for_event(event):
                 "is_active": True,
             },
         )
+
+
+def get_or_create_default_upload_category(event):
+    """Categorie fourre-tout assignee automatiquement : l'invite ne choisit plus de moment."""
+    category = event.upload_categories.filter(code="other").first()
+    if category:
+        if not category.is_active:
+            category.is_active = True
+            category.save(update_fields=["is_active"])
+        return category
+
+    last_sort_order = event.upload_categories.aggregate(Max("sort_order"))["sort_order__max"] or 0
+    return UploadCategory.objects.create(
+        event=event,
+        code="other",
+        label="Autre",
+        sort_order=last_sort_order + 1,
+        is_active=True,
+    )
 
 
 def ensure_session_key(request):

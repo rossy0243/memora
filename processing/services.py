@@ -47,19 +47,12 @@ DEFAULT_ZIP_CATEGORY_FOLDERS = {
 }
 
 # Arc narratif : un film se raconte dans l'ordre du vecu, pas par score de qualite.
-# On ouvre calme, on monte vers la ceremonie et la fete, on referme en emotion.
-MOVIE_NARRATIVE_ORDER = {
-    "arrival": 1,
-    "ceremony": 2,
-    "cocktail": 3,
-    "reception": 4,
-    "speech": 5,
-    "cake": 6,
-    "dancefloor": 7,
-    "funny": 8,
-    "emotional": 9,
-    "other": 10,
-}
+# On ouvre calme, on monte vers le coeur de l'evenement, on referme en emotion.
+# Repose sur l'horaire reel des envois (pas la categorie) : depuis que l'invite
+# ne choisit plus de moment, tout porte le meme code "other" et un classement
+# par categorie n'aurait plus rien a trier. Libelles neutres (mariage, anniversaire,
+# evenement pro...) puisqu'aucun type d'evenement n'est suppose.
+NARRATIVE_TIME_CHAPTER_LABELS = ["Premiers instants", "Au coeur de l'événement", "Derniers instants"]
 
 MOVIE_CATEGORY_SCORE_BOOSTS = {
     "ceremony": 16,
@@ -1089,35 +1082,69 @@ def build_outro_card_clip(event, output_path, ffmpeg_binary, width=None, height=
     )
 
 
-def _narrative_rank(upload):
-    """Position d'un moment dans le recit. Les moments personnalises suivent leur ordre d'affichage."""
-    category = getattr(upload, "category", None)
-    code = getattr(category, "code", "") or ""
-    if code in MOVIE_NARRATIVE_ORDER:
-        return MOVIE_NARRATIVE_ORDER[code]
-    return getattr(category, "sort_order", 0) or len(MOVIE_NARRATIVE_ORDER) + 1
+# En dessous, un decoupage debut/coeur/fin n'aurait pas de sens : des envois
+# groupes en quelques minutes (petit evenement, ou juste une rafale de photos)
+# ne racontent pas trois chapitres, juste un seul instant.
+MOVIE_MIN_CHAPTER_SPAN_SECONDS = 900
+
+
+def assign_time_chapters(uploads):
+    """Repartit les plans en chapitres (rang, libelle) selon l'horaire reel de la
+    collecte : debut / coeur / fin de l'evenement, en fractions egales de la
+    duree ecoulee entre le premier et le dernier envoi. Renvoie {upload.pk: (rang, libelle)}.
+
+    Remplace l'ancien classement par categorie : l'invite ne choisissant plus de
+    moment, tout upload porte desormais le meme code et un tri par categorie
+    n'aurait plus rien a distinguer.
+    """
+    labels = NARRATIVE_TIME_CHAPTER_LABELS
+    timestamps = [getattr(u, "uploaded_at", None) for u in uploads]
+    known_timestamps = [ts for ts in timestamps if ts]
+
+    if len(known_timestamps) < 2:
+        # Pas assez de repere temporel pour decouper : un seul chapitre.
+        return {upload.pk: (0, labels[0]) for upload in uploads}
+
+    start = min(known_timestamps)
+    span = (max(known_timestamps) - start).total_seconds()
+
+    if span < MOVIE_MIN_CHAPTER_SPAN_SECONDS:
+        return {upload.pk: (0, labels[0]) for upload in uploads}
+
+    chapters = {}
+    for upload, uploaded_at in zip(uploads, timestamps):
+        if not uploaded_at:
+            index = 0
+        else:
+            fraction = (uploaded_at - start).total_seconds() / span
+            index = min(int(fraction * len(labels)), len(labels) - 1)
+        chapters[upload.pk] = (index, labels[index])
+    return chapters
 
 
 def _order_by_narrative_arc(uploads):
-    """Reordonne les plans selon l'arc du recit, en conservant l'alternance photo/video.
+    """Reordonne les plans selon l'arc du recit (debut/coeur/fin), en conservant
+    l'alternance photo/video a l'interieur de chaque chapitre.
 
     Sans cela, le film suit le score de qualite : on saute de la piste de danse
-    a la ceremonie puis au gateau. On raconte une histoire, pas un classement.
+    au premier baiser puis au discours. On raconte une histoire, pas un classement.
     """
     uploads = list(uploads)
     if not settings.MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED or not uploads:
         return uploads
 
+    chapters = assign_time_chapters(uploads)
     groups = {}
     for upload in uploads:
-        groups.setdefault(_narrative_rank(upload), []).append(upload)
+        rank = chapters[upload.pk][0]
+        groups.setdefault(rank, []).append(upload)
 
     ordered = []
     for rank in sorted(groups):
         group = groups[rank]
         videos = [u for u in group if u.media_type == GuestUpload.MediaType.VIDEO]
         photos = [u for u in group if u.media_type == GuestUpload.MediaType.IMAGE]
-        # On garde l'alternance a l'interieur d'un moment pour eviter les blocs de videos.
+        # On garde l'alternance a l'interieur d'un chapitre pour eviter les blocs de videos.
         ordered.extend(_weave_photos_between_videos(videos, photos) if videos and photos else group)
 
     return ordered
@@ -1213,6 +1240,17 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
                 snapped = max(snapped - beat_interval, beat_interval)
             clip_duration = str(round(snapped, 3))
             if _media_file_has_audio(input_path):
+                # Sans ca, la voix de chaque invite arrive a un niveau tres different
+                # d'un plan a l'autre (discours filme de pres vs. ambiance de salle),
+                # et le son coupe net a chaque coupe alors que l'image, elle, fond en
+                # douceur. loudnorm aligne les niveaux, les deux afade evitent le clic.
+                fade_duration = min(0.15, snapped / 3) if snapped else 0.15
+                fade_out_start = max(snapped - fade_duration, 0)
+                audio_filter = (
+                    "[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,"
+                    f"afade=t=in:st=0:d={fade_duration},"
+                    f"afade=t=out:st={fade_out_start}:d={fade_duration}[a]"
+                )
                 command = [
                     ffmpeg_binary,
                     "-y",
@@ -1221,11 +1259,11 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
                     "-t",
                     clip_duration,
                     "-filter_complex",
-                    video_filter,
+                    f"{video_filter};{audio_filter}",
                     "-map",
                     "[v]",
                     "-map",
-                    "0:a:0",
+                    "[a]",
                     "-c:v",
                     settings.MEMORA_MOVIE_VIDEO_ENCODER,
                     "-c:a",

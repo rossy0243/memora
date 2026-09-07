@@ -106,6 +106,7 @@ export const Clip: React.FC<{
   chapterLabel?: string;
 }> = ({ clip, grade, pace, chapterLabel }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   // Ken Burns : zoom lent et continu, centre. Donne du mouvement a une photo fixe
   // et une respiration cinema a une video. L'amplitude suit le rythme du format.
@@ -114,12 +115,39 @@ export const Clip: React.FC<{
     extrapolateRight: "clamp",
   });
 
+  // La musique a deja un fondu enchaine (MemoraFilm) ; sans le meme traitement ici,
+  // la voix de l'invite entrait et sortait plein volume d'un coup — l'image fond en
+  // douceur mais le son sautait net d'un plan a l'autre. Meme rampe (~200ms) que le
+  // ducking musical, pour que l'oreille suive l'oeil.
+  // Fonction (et non nombre precalcule) : comme pour musicVolumeAt cote MemoraFilm,
+  // c'est ce qui permet a Remotion d'echantillonner le volume a chaque frame audio
+  // plutot que de figer un seul gain constant pour tout le plan.
+  const voiceFadeFrames = Math.max(
+    1,
+    Math.min(Math.round(fps * 0.2), Math.floor(clip.durationInFrames / 2))
+  );
+  const voiceVolumeAt = (localFrame: number): number => {
+    if (!clip.keepAudio) {
+      return 0;
+    }
+    return interpolate(
+      localFrame,
+      [0, voiceFadeFrames, clip.durationInFrames - voiceFadeFrames, clip.durationInFrames],
+      [0, 1, 1, 0],
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+    );
+  };
+
   // La video de premier plan garde sa piste audio quand Django l'a marquee
   // keepAudio (voix des invites, heros/integrale). Le fond floute, lui, reste
   // toujours muet — sinon l'audio serait double.
   const media =
     clip.kind === "video" ? (
-      <OffthreadVideo src={resolveSrc(clip.src)} muted={!clip.keepAudio} />
+      <OffthreadVideo
+        src={resolveSrc(clip.src)}
+        muted={!clip.keepAudio}
+        volume={voiceVolumeAt}
+      />
     ) : (
       <Img src={resolveSrc(clip.src)} />
     );

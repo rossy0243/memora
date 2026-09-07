@@ -1,10 +1,6 @@
 from datetime import timedelta
 from io import BytesIO
-import json
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 import warnings
 
 from django import forms
@@ -12,7 +8,9 @@ from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image, UnidentifiedImageError
 
-from .models import GuestUpload, UploadCategory
+from core.video import VideoDurationUnavailable, probe_video_duration
+
+from .models import GuestUpload
 
 
 IMAGE_FORMAT_BY_EXTENSION = {
@@ -30,89 +28,10 @@ IMAGE_CONTENT_TYPE_BY_FORMAT = {
 
 
 def _probe_video_duration(media_file):
-    ffprobe_binary = settings.MEMORA_FFPROBE_BINARY
-    if shutil.which(ffprobe_binary) is None and not Path(ffprobe_binary).exists():
-        raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
-
-    original_position = media_file.tell() if hasattr(media_file, "tell") else None
-    temporary_path = None
-
     try:
-        if hasattr(media_file, "seek"):
-            media_file.seek(0)
-
-        suffix = Path(media_file.name).suffix.lower() or ".video"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
-            temporary_path = Path(temporary_file.name)
-            for chunk in media_file.chunks():
-                temporary_file.write(chunk)
-
-        commands = [
-            [
-                ffprobe_binary,
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "json",
-                str(temporary_path),
-            ],
-            [
-                ffprobe_binary,
-                "-v",
-                "error",
-                "-analyzeduration",
-                "100M",
-                "-probesize",
-                "100M",
-                "-show_entries",
-                "format=duration:stream=duration",
-                "-of",
-                "json",
-                str(temporary_path),
-            ],
-        ]
-
-        for command in commands:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=15,
-            )
-            if result.returncode == 0:
-                duration = _duration_from_ffprobe_payload(result.stdout)
-                if duration is not None:
-                    return duration
-
+        return probe_video_duration(media_file, settings.MEMORA_FFPROBE_BINARY)
+    except VideoDurationUnavailable:
         raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.TimeoutExpired):
-        raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
-    finally:
-        if hasattr(media_file, "seek"):
-            media_file.seek(original_position or 0)
-        if temporary_path:
-            temporary_path.unlink(missing_ok=True)
-
-
-def _duration_from_ffprobe_payload(payload):
-    data = json.loads(payload or "{}")
-    format_duration = data.get("format", {}).get("duration")
-    if format_duration not in (None, "N/A"):
-        duration = float(format_duration)
-        if duration > 0:
-            return duration
-
-    for stream in data.get("streams", []):
-        stream_duration = stream.get("duration")
-        if stream_duration not in (None, "N/A"):
-            duration = float(stream_duration)
-            if duration > 0:
-                return duration
-
-    return None
 
 
 def _normalize_image_mode(image, image_format):
@@ -181,7 +100,7 @@ class GuestUploadForm(forms.ModelForm):
 
     class Meta:
         model = GuestUpload
-        fields = ("media_file", "category")
+        fields = ("media_file",)
         widgets = {
             "media_file": forms.FileInput(
                 attrs={
@@ -189,30 +108,14 @@ class GuestUploadForm(forms.ModelForm):
                     "class": "memora-camera-file-input",
                 }
             ),
-            "category": forms.Select,
         }
         labels = {
             "media_file": "Photo ou video",
-            "category": "Moment obligatoire",
         }
 
     def __init__(self, *args, event=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.media_duration = None
-        queryset = UploadCategory.objects.filter(is_active=True)
-        if event is not None:
-            queryset = queryset.filter(event=event)
-        self.fields["category"].queryset = queryset
-        self.fields["category"].label_from_instance = lambda category: category.label
-        self.fields["category"].empty_label = "Sélectionner le moment"
-        self.fields["category"].required = True
-        self.fields["category"].widget.attrs.update(
-            {
-                "class": "moment-select",
-                "required": "required",
-                "aria-label": "Moment obligatoire",
-            }
-        )
 
     def clean_media_file(self):
         media_file = self.cleaned_data["media_file"]
@@ -232,7 +135,7 @@ class GuestUploadForm(forms.ModelForm):
         if extension in settings.MEMORA_IMAGE_EXTENSIONS:
             media_file = _sanitize_guest_image(media_file, extension)
             if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
-                raise forms.ValidationError("Cette vidÃ©o est trop lourde.")
+                raise forms.ValidationError("Cette image est trop lourde.")
         elif extension in settings.MEMORA_VIDEO_EXTENSIONS:
             duration_seconds = self._client_duration_seconds()
             try:

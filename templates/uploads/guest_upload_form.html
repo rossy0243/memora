@@ -33,7 +33,6 @@
 
     <div class="guest-form-errors" aria-live="polite">
       {{ form.media_file.errors }}
-      {{ form.category.errors }}
     </div>
 
     <div class="upload-quota {% if upload_quota.is_reached %}upload-quota--full{% endif %}">
@@ -45,12 +44,20 @@
       {% endif %}
     </div>
 
-    <section class="camera-studio" id="camera-studio">
+    <section class="camera-studio{% if upload_quota.is_reached %} camera-studio--quota-reached{% endif %}" id="camera-studio">
       <div class="camera-studio__intro">
         <span>Caméra Memora</span>
-        <strong>Capturez sans quitter la page.</strong>
-        <p id="camera-permission-note">Votre navigateur demandera l'autorisation caméra et micro.</p>
-        <button class="button button--primary" type="button" id="start-camera-button">Lancer la caméra</button>
+        {% if upload_quota.is_reached %}
+          <strong>Limite de souvenirs atteinte.</strong>
+          <p>Vous avez déjà envoyé le maximum autorisé pour cet événement. Merci pour vos souvenirs !</p>
+        {% else %}
+          <strong>Capturez sans quitter la page.</strong>
+          <p id="camera-permission-note">Votre navigateur demandera l'autorisation caméra et micro.</p>
+          <div class="camera-studio__cta">
+            <button class="button button--primary" type="button" id="start-camera-photo-button" aria-label="Ouvrir la caméra en mode photo">Photo</button>
+            <button class="button button--primary" type="button" id="start-camera-video-button" aria-label="Ouvrir la caméra en mode vidéo">Vidéo</button>
+          </div>
+        {% endif %}
       </div>
 
       <div class="camera-panel" id="camera-panel" role="dialog" aria-modal="true" aria-label="Caméra Memora" hidden>
@@ -103,30 +110,21 @@
       <div class="capture-preview__body">
         <div>
           <span>Souvenir prêt à envoyer</span>
-          <p id="capture-preview-details">Vérifiez l'aperçu, choisissez le moment, puis envoyez.</p>
+          <p id="capture-preview-details">Vérifiez l'aperçu, puis envoyez.</p>
         </div>
+        <ul class="capture-preview__errors" hidden aria-live="assertive"></ul>
         <div class="capture-preview__actions">
           <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre</button>
-          <button class="button button--primary button--compact capture-preview__confirm" type="button" id="use-capture-button">Utiliser ce souvenir</button>
+          <button class="button button--primary button--compact capture-preview__confirm" type="submit" id="use-capture-button" {% if upload_quota.is_reached %}disabled{% endif %}>Envoyer le souvenir</button>
+        </div>
+        <div class="upload-progress" hidden aria-live="polite">
+          <div class="upload-progress__bar">
+            <span></span>
+          </div>
+          <p>Envoi en cours...</p>
         </div>
       </div>
     </div>
-
-    <div class="moment-field">
-      <label for="{{ form.category.id_for_label }}">
-        Moment <span>Requis</span>
-      </label>
-      {{ form.category }}
-    </div>
-
-    <div class="upload-progress" hidden aria-live="polite">
-      <div class="upload-progress__bar">
-        <span></span>
-      </div>
-      <p>Envoi en cours...</p>
-    </div>
-
-    <button class="button button--primary guest-submit" type="submit" {% if upload_quota.is_reached %}disabled{% endif %}>Envoyer le souvenir</button>
   </form>
 </section>
 {% endblock %}

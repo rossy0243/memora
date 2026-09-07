@@ -8,7 +8,13 @@ from events.access import has_guest_access
 from events.models import Event
 
 from .forms import GuestUploadForm
-from .services import ensure_session_key, get_client_ip, get_upload_limit_error, get_upload_quota
+from .services import (
+    ensure_session_key,
+    get_client_ip,
+    get_or_create_default_upload_category,
+    get_upload_limit_error,
+    get_upload_quota,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +43,7 @@ def guest_upload_create(request, slug, access_key):
                 media_file = form.cleaned_data["media_file"]
                 upload = form.save(commit=False)
                 upload.event = event
+                upload.category = get_or_create_default_upload_category(event)
                 upload.media_type = GuestUploadForm.get_media_type(media_file.name)
                 upload.original_filename = media_file.name
                 upload.file_size = media_file.size

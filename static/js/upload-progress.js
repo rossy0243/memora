@@ -11,10 +11,11 @@
   const previewVideo = document.getElementById("capture-preview-video");
   const previewDetails = document.getElementById("capture-preview-details");
   const retakeCameraButton = document.getElementById("retake-camera-button");
-  const useCaptureButton = document.getElementById("use-capture-button");
+  const captureErrors = document.querySelector(".capture-preview__errors");
   const previewBackdrop = document.getElementById("capture-preview-backdrop");
   const cameraStudio = document.getElementById("camera-studio");
-  const startCameraButton = document.getElementById("start-camera-button");
+  const startCameraPhotoButton = document.getElementById("start-camera-photo-button");
+  const startCameraVideoButton = document.getElementById("start-camera-video-button");
   const cameraPanel = document.getElementById("camera-panel");
   const cameraPermissionNote = document.getElementById("camera-permission-note");
   const liveVideo = document.getElementById("camera-live-video");
@@ -84,7 +85,7 @@
       previewVideo.load();
     }
     if (previewDetails) {
-      previewDetails.textContent = "Vérifiez l'aperçu, choisissez le moment, puis envoyez.";
+      previewDetails.textContent = "Vérifiez l'aperçu, puis envoyez.";
     }
   }
 
@@ -179,7 +180,10 @@
       return;
     }
     const elapsed = Math.min((Date.now() - recordingStartedAt) / 1000, maxRecordingSeconds);
-    recordingTimer.textContent = formatDuration(elapsed);
+    // Le "/ 10 s" pousse naturellement vers le chemin le plus court : laisser
+    // l'auto-stop couper au lieu de chercher le bouton pour arreter soi-meme.
+    const elapsedLabel = elapsed.toFixed(elapsed >= 10 ? 0 : 1).replace(".", ",");
+    recordingTimer.textContent = elapsedLabel + " / " + maxRecordingSeconds + " s";
     setCameraStatus("Vidéo en cours - stop pour terminer");
   }
 
@@ -483,8 +487,19 @@
   refreshCameraPermissionHint();
   updateCameraUi();
 
-  if (startCameraButton) {
-    startCameraButton.addEventListener("click", startCamera);
+  function startCameraInMode(mode) {
+    return function () {
+      cameraMode = mode;
+      updateCameraUi();
+      startCamera();
+    };
+  }
+
+  if (startCameraPhotoButton) {
+    startCameraPhotoButton.addEventListener("click", startCameraInMode("photo"));
+  }
+  if (startCameraVideoButton) {
+    startCameraVideoButton.addEventListener("click", startCameraInMode("video"));
   }
 
   function selectFacingMode(nextFacingMode) {
@@ -642,15 +657,40 @@
     });
   }
 
-  if (useCaptureButton) {
-    useCaptureButton.addEventListener("click", function () {
-      closeCaptureReview();
-      // On amene l'invite au choix du moment : l'etape qui lui reste a faire.
-      const momentField = document.querySelector(".moment-field");
-      if (momentField && momentField.scrollIntoView) {
-        momentField.scrollIntoView({ block: "center" });
-      }
+  function extractServerErrorMessages(responseText) {
+    try {
+      const doc = new DOMParser().parseFromString(responseText || "", "text/html");
+      const items = doc.querySelectorAll(".errorlist li");
+      return Array.prototype.map
+        .call(items, function (item) {
+          return item.textContent.trim();
+        })
+        .filter(Boolean);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function showCaptureErrors(messages) {
+    if (!captureErrors) {
+      return;
+    }
+    captureErrors.innerHTML = "";
+    const list = messages && messages.length ? messages : ["L'envoi a échoué. Réessayez."];
+    list.forEach(function (message) {
+      const item = document.createElement("li");
+      item.textContent = message;
+      captureErrors.appendChild(item);
     });
+    captureErrors.hidden = false;
+  }
+
+  function clearCaptureErrors() {
+    if (!captureErrors) {
+      return;
+    }
+    captureErrors.hidden = true;
+    captureErrors.innerHTML = "";
   }
 
   form.addEventListener("submit", function (event) {
@@ -664,6 +704,12 @@
 
     event.preventDefault();
 
+    // La revue plein ecran reste ouverte : l'invite voit l'envoi se terminer
+    // sans quitter l'aperçu de son souvenir, quelle que soit l'issue.
+    clearCaptureErrors();
+    if (retakeCameraButton) {
+      retakeCameraButton.disabled = true;
+    }
     if (progress) {
       progress.hidden = false;
     }
@@ -703,48 +749,48 @@
       }
     });
 
-    request.addEventListener("load", function () {
+    // Un seul chemin de sortie en cas d'echec, quelle qu'en soit la cause :
+    // la revue reste ouverte, le message apparait au meme endroit, et
+    // l'invite peut reprendre ou retenter sans jamais perdre sa capture.
+    function finishFailedSend(messages) {
       clearTimeout(slowUploadTimer);
       clearTimeout(verySlowUploadTimer);
-      if (progressBar) {
-        progressBar.style.width = "100%";
+      if (progress) {
+        progress.hidden = true;
       }
+      showCaptureErrors(messages);
+      if (retakeCameraButton) {
+        retakeCameraButton.disabled = false;
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = initialSubmitLabel;
+      }
+    }
 
+    request.addEventListener("load", function () {
       const responseUrl = request.responseURL || form.action;
       const currentAction = new URL(form.action, window.location.href).href;
 
       if (request.status >= 200 && request.status < 300 && responseUrl !== currentAction) {
+        clearTimeout(slowUploadTimer);
+        clearTimeout(verySlowUploadTimer);
+        if (progressBar) {
+          progressBar.style.width = "100%";
+        }
         window.location.assign(responseUrl);
         return;
       }
 
-      document.open();
-      document.write(request.responseText);
-      document.close();
+      finishFailedSend(extractServerErrorMessages(request.responseText));
     });
 
     request.addEventListener("error", function () {
-      clearTimeout(slowUploadTimer);
-      clearTimeout(verySlowUploadTimer);
-      if (progressText) {
-        progressText.textContent = "L'envoi a échoué. Vérifiez la connexion puis réessayez.";
-      }
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = initialSubmitLabel;
-      }
+      finishFailedSend(["L'envoi a échoué. Vérifiez la connexion puis réessayez."]);
     });
 
     request.addEventListener("abort", function () {
-      clearTimeout(slowUploadTimer);
-      clearTimeout(verySlowUploadTimer);
-      if (progressText) {
-        progressText.textContent = "L'envoi a été interrompu.";
-      }
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = initialSubmitLabel;
-      }
+      finishFailedSend(["L'envoi a été interrompu."]);
     });
 
     request.send(new FormData(form));
