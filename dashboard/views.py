@@ -1,5 +1,5 @@
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from accounts.models import OrganizerProfile, PayoutRequest
@@ -15,6 +15,10 @@ from processing.models import GeneratedMovie
 
 @login_required
 def dashboard_home(request):
+    # Un agent Memora n'a pas d'evenements a lui : son espace, c'est le livre d'or.
+    if hasattr(request.user, "agent_profile"):
+        return redirect("guestbook:agent_home")
+
     events = list(Event.objects.filter(organizer=request.user).order_by("-event_date", "-created_at"))
     today = timezone.localdate()
     for event in events:

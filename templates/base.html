@@ -28,7 +28,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header {% block header_class %}{% endblock %}">
-    <a class="brand" href="{% if user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">
+    <a class="brand" href="{% if user.agent_profile %}{% url 'guestbook:agent_home' %}{% elif user.is_authenticated %}{% url 'dashboard:home' %}{% else %}{% url 'core:home' %}{% endif %}" aria-label="Accueil Memora">
       <img class="brand__mark" src="{% static 'img/memora-mark.svg' %}" alt="" width="36" height="36">
       <span>Memora</span>
     </a>
@@ -41,12 +41,17 @@
             <span class="site-nav__name">{{ user.get_short_name|default:user.username }}</span>
           </summary>
           <div class="site-account__menu">
-            {% if user.organizer_profile.is_ambassador %}
-              <span class="site-account__tag tier-badge--{{ user.organizer_profile.tier }}">
-                Ambassadeur {{ user.organizer_profile.get_tier_display }}
-              </span>
+            {% if user.agent_profile %}
+              <span class="site-account__tag">Agent Memora</span>
+              <a href="{% url 'guestbook:agent_home' %}">Mes missions</a>
+            {% else %}
+              {% if user.organizer_profile.is_ambassador %}
+                <span class="site-account__tag tier-badge--{{ user.organizer_profile.tier }}">
+                  Ambassadeur {{ user.organizer_profile.get_tier_display }}
+                </span>
+              {% endif %}
+              <a href="{% url 'dashboard:home' %}">Mes événements</a>
             {% endif %}
-            <a href="{% url 'dashboard:home' %}">Mes événements</a>
             <form method="post" action="{% url 'accounts:logout' %}">
               {% csrf_token %}
               <button type="submit">Déconnexion</button>

@@ -33,6 +33,12 @@ from .services import build_event_qr_code_png, build_hourly_upload_breakdown, bu
 class OrganizerEventMixin(LoginRequiredMixin):
     model = Event
 
+    def dispatch(self, request, *args, **kwargs):
+        # Un agent Memora n'est pas un organisateur : il n'a rien a faire ici.
+        if request.user.is_authenticated and hasattr(request.user, "agent_profile"):
+            return redirect("guestbook:agent_home")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
         return Event.objects.filter(organizer=self.request.user)
 
@@ -41,6 +47,11 @@ class EventCreateView(LoginRequiredMixin, CreateView):
     model = Event
     form_class = EventForm
     template_name = "events/event_form.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and hasattr(request.user, "agent_profile"):
+            return redirect("guestbook:agent_home")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

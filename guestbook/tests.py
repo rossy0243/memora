@@ -153,3 +153,13 @@ class RoleAwareLoginTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("dashboard:home"))
+
+    def test_agent_is_bounced_from_organizer_areas(self):
+        agent = get_user_model().objects.create_user(username="agent-isolation", password="secret")
+        AgentProfile.objects.create(user=agent)
+        self.client.login(username="agent-isolation", password="secret")
+
+        # Le dashboard organisateur et la creation d'evenement renvoient l'agent
+        # vers son espace : il ne doit pas voir "la meme chose qu'un organisateur".
+        self.assertRedirects(self.client.get(reverse("dashboard:home")), reverse("guestbook:agent_home"))
+        self.assertRedirects(self.client.get(reverse("events:create")), reverse("guestbook:agent_home"))
