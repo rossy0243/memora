@@ -393,6 +393,13 @@ MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS = int(
 MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS = int(
     os.getenv("MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS", "30")
 )
+# Retention : media_retention_days (par evenement) masque le media. Le fichier
+# reste ensuite sur R2 ce nombre de jours de grace avant purge definitive, pour
+# laisser le temps a un support / une regeneration de film. Filet de securite :
+# meme sans film genere, un media est purge au plus tard event_date + retention
+# + BACKSTOP jours (le stockage ne peut pas croitre indefiniment).
+MEMORA_MEDIA_PURGE_GRACE_DAYS = env_int("MEMORA_MEDIA_PURGE_GRACE_DAYS", 7)
+MEMORA_MEDIA_PURGE_BACKSTOP_DAYS = env_int("MEMORA_MEDIA_PURGE_BACKSTOP_DAYS", 30)
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)
 MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)
@@ -403,6 +410,15 @@ MEMORA_MOVIE_TEASER_DURATION_SECONDS = env_int("MEMORA_MOVIE_TEASER_DURATION_SEC
 MEMORA_MOVIE_TEASER_WIDTH = env_int("MEMORA_MOVIE_TEASER_WIDTH", 1080)
 MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
 MEMORA_MOVIE_VARIANTS_ENABLED = env_bool("MEMORA_MOVIE_VARIANTS_ENABLED", True)
+# Declinaisons produites en plus du film heros. L'integrale montee ("full") est
+# retiree par defaut : le ZIP des fichiers originaux joue ce role (meilleure
+# qualite, tout est dedans) et le montage du livre d'or couvre le "tout revoir".
+# Remettre "full" ici (et dans MEMORA_REMOTION_DELIVERABLES) pour la reactiver.
+MEMORA_MOVIE_DELIVERABLES = {
+    part.strip()
+    for part in os.getenv("MEMORA_MOVIE_DELIVERABLES", "hero,teaser").split(",")
+    if part.strip()
+}
 # Coupes calees sur le tempo : le levier principal du "monte comme un pro".
 MEMORA_MOVIE_BEAT_SYNC_ENABLED = env_bool("MEMORA_MOVIE_BEAT_SYNC_ENABLED", True)
 # Ordre du recit (arrivee -> ceremonie -> fete) plutot que l'ordre du score.
@@ -470,13 +486,12 @@ MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "
 # Resserre a 0.10 (etait 0.18) pour une voix nette sous la musique, alignee sur
 # l'intensite deja utilisee cote FFmpeg (0.08) : cf. MEMORA_MOVIE_DUCKED_MUSIC_VOLUME.
 MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.10"))
-# Livrables rendus par Remotion quand le provider est "remotion". Le rendu
-# Chrome est lent sur un petit CPU : en prod beta, seul le teaser (la vitrine
-# partagee) passe par Remotion — heros et integrale restent FFmpeg. Mettre
-# "hero,full,teaser" pour le tout-Remotion (worker plus costaud requis).
+# Livrables rendus par Remotion quand le provider est "remotion". Doit rester un
+# sous-ensemble de MEMORA_MOVIE_DELIVERABLES (produire un livrable hors de cette
+# liste n'a aucun effet). Defaut aligne : heros + teaser.
 MEMORA_REMOTION_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,full,teaser").split(",")
+    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,teaser").split(",")
     if part.strip()
 }
 # Livrables qui gardent le son des videos des invites (rires, voeux, musique de
@@ -484,7 +499,7 @@ MEMORA_REMOTION_DELIVERABLES = {
 # des invites EST l'emotion du souvenir. Mettre "" pour un montage muet.
 MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,full,teaser").split(",")
+    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,teaser").split(",")
     if part.strip()
 }
 # Montage du livre d'or : tous les messages en entier, chacun precede d'un carton

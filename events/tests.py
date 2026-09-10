@@ -1444,6 +1444,41 @@ class EventViewTests(TestCase):
             self.assertFalse(any("deleted" in name for name in names))
             self.assertFalse(any("rejected" in name for name in names))
 
+    def test_event_zip_includes_the_guestbook(self):
+        from guestbook.models import GuestBookMessage
+
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Livre",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GuestBookMessage.objects.create(
+            event=event,
+            guest_name="La famille Dupont",
+            media_file=SimpleUploadedFile("msg.mp4", b"msg-bytes", content_type="video/mp4"),
+            original_filename="msg.mp4",
+            file_size=9,
+        )
+        GuestBookMessage.objects.create(
+            event=event,
+            media_file="events/x/livre-dor/purged.mp4",
+            original_filename="purged.mp4",
+            file_size=9,
+            media_purged=True,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:download_zip", kwargs={"pk": event.pk}))
+
+        with ZipFile(BytesIO(b"".join(response.streaming_content))) as archive:
+            names = archive.namelist()
+            self.assertIn("Memora_reception_livre/Livre d'or/", names)
+            self.assertTrue(
+                any("Livre d'or/la_famille_dupont_" in name for name in names)
+            )
+            self.assertFalse(any("purged" in name for name in names))
+
     def test_other_organizer_cannot_download_event_zip(self):
         event = Event.objects.create(
             organizer=self.other_user,

@@ -135,6 +135,12 @@ class GuestUpload(models.Model):
     )
     is_selected_for_movie = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
+    # Quand le media a ete masque (retention expiree). Le fichier sur R2 n'est
+    # purge qu'apres un delai de grace supplementaire — cf. cleanup_expired_media.
+    deleted_at = models.DateTimeField(blank=True, null=True)
+    # True une fois le fichier R2 reellement supprime : la ligne reste comme
+    # pierre tombale (compteurs, historique) mais media_file est vide.
+    media_purged = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-uploaded_at"]
@@ -145,6 +151,7 @@ class GuestUpload(models.Model):
             models.Index(fields=["event", "moderation_status"]),
             models.Index(fields=["ip_address", "uploaded_at"]),
             models.Index(fields=["session_key", "uploaded_at"]),
+            models.Index(fields=["is_deleted", "deleted_at", "media_purged"]),
         ]
 
     def __str__(self):

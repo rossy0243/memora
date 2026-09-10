@@ -167,7 +167,41 @@ def iter_event_zip_chunks(event):
                 upload.media_file.close()
             yield from buffer.drain()
 
+        # Livre d'or : les messages video de l'agent vivent a part du reste,
+        # donc dans leur propre dossier de l'archive.
+        guestbook_messages = list(
+            event.guestbook_messages.filter(media_purged=False)
+            .exclude(media_file="")
+            .order_by("created_at", "pk")
+        )
+        if guestbook_messages:
+            archive.writestr(f"{root_name}/Livre d'or/", "")
+            yield from buffer.drain()
+            for message in guestbook_messages:
+                if not message.media_file:
+                    continue
+                archive_name = _build_guestbook_archive_name(message)
+                archive_path = _dedupe_path(
+                    f"{root_name}/Livre d'or/{archive_name}", used_paths
+                )
+                try:
+                    message.media_file.open("rb")
+                    with archive.open(archive_path, "w") as destination:
+                        for chunk in message.media_file.chunks():
+                            destination.write(chunk)
+                            yield from buffer.drain()
+                finally:
+                    message.media_file.close()
+                yield from buffer.drain()
+
     yield from buffer.drain()
+
+
+def _build_guestbook_archive_name(message):
+    who = _clean_name(message.guest_name) if message.guest_name else "message"
+    stamp = message.created_at.strftime("%Y%m%d-%H%M%S")
+    suffix = Path(message.original_filename or message.media_file.name).suffix.lower() or ".mp4"
+    return f"{who}_{stamp}{suffix}"
 
 
 def is_unusable_for_movie(upload):
@@ -1380,6 +1414,8 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
     )
     for deliverable, label, max_duration, width, height, file_field, duration_field, progress in variants:
         try:
+            if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
+                continue
             variant_uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
             if not variant_uploads:
                 continue
@@ -1466,6 +1502,8 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
 
     for label, deliverable, max_duration, width, height, file_field, duration_field in variants:
         try:
+            if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
+                continue
             uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
             if not uploads:
                 continue

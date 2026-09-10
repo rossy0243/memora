@@ -339,7 +339,12 @@ services:
       - key: REMOTION_CONCURRENCY
         value: "4"
       - key: MEMORA_REMOTION_DELIVERABLES
-        value: hero,full,teaser
+        value: hero,teaser
+      # Integrale montee retiree du set standard : le ZIP (fichiers originaux) et
+      # le montage du livre d'or la remplacent. Ajouter "full" ici + a
+      # MEMORA_MOVIE_DELIVERABLES pour la reactiver.
+      - key: MEMORA_MOVIE_DELIVERABLES
+        value: hero,teaser
       - key: MEMORA_REMOTION_TIMEOUT_SECONDS
         value: "14400"
 

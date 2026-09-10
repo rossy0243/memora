@@ -528,7 +528,11 @@ class MovieGenerationServiceTests(TestCase):
         self.assertFalse(self.event.is_active)
         self.assertFalse(self.event.can_accept_guest_uploads)
 
-    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @override_settings(
+        MEMORA_MOVIE_RENDER_PROVIDER="remotion",
+        MEMORA_MOVIE_DELIVERABLES={"hero", "full", "teaser"},
+        MEMORA_REMOTION_DELIVERABLES={"hero", "full", "teaser"},
+    )
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch("processing.services.render_movie_with_remotion")
@@ -585,8 +589,30 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(movie.edit_decision_data["remotion"]["fallback"], "ffmpeg")
         self.assertFalse(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["ok"])
 
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_full_deliverable_is_skipped_by_default(self, render_remotion, run_ffmpeg, _which):
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"movie-bytes")
+
+        movie = generate_event_movie(self.event)
+
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["hero", "teaser"])
+        self.assertFalse(movie.full_file.name)
+        self.assertTrue(movie.teaser_file.name)
+
     @override_settings(
         MEMORA_MOVIE_RENDER_PROVIDER="remotion",
+        MEMORA_MOVIE_DELIVERABLES={"hero", "full", "teaser"},
         MEMORA_REMOTION_DELIVERABLES={"teaser"},
     )
     @patch("processing.services.shutil.which", return_value="ffmpeg")
@@ -2079,3 +2105,63 @@ class CleanupExpiredMediaCommandTests(TestCase):
         upload.refresh_from_db()
         self.assertFalse(upload.is_deleted)
         self.assertIn("1 media", output.getvalue())
+
+    def test_purges_file_from_storage_after_grace_period(self):
+        today = timezone.localdate()
+        upload = self.create_upload_for_event_date(today - timedelta(days=30))
+        GuestUpload.objects.filter(pk=upload.pk).update(
+            is_deleted=True, deleted_at=timezone.now() - timedelta(days=10)
+        )
+
+        call_command("cleanup_expired_media")
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.media_purged)
+        self.assertFalse(upload.media_file)
+
+    def test_does_not_purge_file_before_grace_period(self):
+        today = timezone.localdate()
+        upload = self.create_upload_for_event_date(today - timedelta(days=10))
+        GuestUpload.objects.filter(pk=upload.pk).update(
+            is_deleted=True, deleted_at=timezone.now() - timedelta(days=2)
+        )
+
+        call_command("cleanup_expired_media")
+
+        upload.refresh_from_db()
+        self.assertFalse(upload.media_purged)
+        self.assertTrue(upload.media_file)
+
+    def test_backstop_purges_legacy_soft_deleted_media(self):
+        today = timezone.localdate()
+        upload = self.create_upload_for_event_date(today - timedelta(days=60))
+        # Ligne masquee avant l'ajout de deleted_at : aucun horodatage.
+        GuestUpload.objects.filter(pk=upload.pk).update(is_deleted=True, deleted_at=None)
+
+        call_command("cleanup_expired_media")
+
+        upload.refresh_from_db()
+        self.assertTrue(upload.media_purged)
+        self.assertFalse(upload.media_file)
+
+    def test_purges_guestbook_message_after_event_retention(self):
+        from guestbook.models import GuestBookMessage
+
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Livre d'or expire",
+            event_type=self.event_type,
+            event_date=timezone.localdate() - timedelta(days=30),
+        )
+        message = GuestBookMessage.objects.create(
+            event=event,
+            media_file="events/x/livre-dor/m.mp4",
+            original_filename="m.mp4",
+            file_size=10,
+        )
+
+        call_command("cleanup_expired_media")
+
+        message.refresh_from_db()
+        self.assertTrue(message.media_purged)
+        self.assertFalse(message.media_file)

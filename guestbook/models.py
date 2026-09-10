@@ -45,6 +45,10 @@ class GuestBookMessage(models.Model):
         help_text="Agent qui a capture ce message.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # True une fois le fichier R2 purge (retention evenement + grace expiree).
+    # La ligne reste comme pierre tombale ; le montage du livre d'or, lui, est
+    # un livrable distinct et n'est pas purge ici.
+    media_purged = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]
