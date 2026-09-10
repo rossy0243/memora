@@ -5,7 +5,6 @@
 {% block robots %}noindex,nofollow{% endblock %}
 {% block body_class %}guest-page{% endblock %}
 {% block header_class %}site-header--solid{% endblock %}
-{% block site_nav %}{% endblock %}
 
 {% block content %}
 <section class="guest-upload-shell">
@@ -48,7 +47,7 @@
           <video id="camera-live-video" autoplay muted playsinline></video>
           <span id="camera-status">Caméra prête</span>
           <em class="camera-orientation-hint">Tournez l'appareil en portrait pour une prise plus stable.</em>
-          <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">0,0 s</span></strong>
+          <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">{{ max_duration_seconds }} s</span></strong>
           <strong class="camera-feedback" id="camera-feedback" hidden></strong>
         </div>
 

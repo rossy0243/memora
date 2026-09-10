@@ -133,7 +133,7 @@
       recordingBadge.hidden = !isRecording || isStoppingRecording;
     }
     if (!isRecording && recordingTimer) {
-      recordingTimer.textContent = "0,0 s";
+      recordingTimer.textContent = maxRecordingSeconds + " s";
     }
     updateCameraUi();
   }
@@ -142,9 +142,12 @@
     if (!recordingTimer || !recordingStartedAt) {
       return;
     }
-    const elapsed = Math.min((Date.now() - recordingStartedAt) / 1000, maxRecordingSeconds);
-    const elapsedLabel = elapsed.toFixed(elapsed >= 10 ? 0 : 1).replace(".", ",");
-    recordingTimer.textContent = elapsedLabel + " / " + maxRecordingSeconds + " s";
+    // Compte a rebours : l'agent voit le temps restant fondre vers zero, jamais
+    // une valeur figee. L'auto-stop coupe quand il atteint 0.
+    const elapsed = (Date.now() - recordingStartedAt) / 1000;
+    const remaining = Math.max(0, maxRecordingSeconds - elapsed);
+    const remainingLabel = remaining.toFixed(remaining >= 10 ? 0 : 1).replace(".", ",");
+    recordingTimer.textContent = remainingLabel + " s";
     setCameraStatus("Message en cours - stop pour terminer");
   }
 

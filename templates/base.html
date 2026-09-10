@@ -59,6 +59,7 @@
           </div>
         </details>
       {% else %}
+        <a href="{% url 'accounts:login' %}">Se connecter</a>
         <a href="{% url 'accounts:signup' %}">Inscription</a>
       {% endif %}
     </nav>
