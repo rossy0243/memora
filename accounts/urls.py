@@ -20,4 +20,5 @@ urlpatterns = [
     ),
     path("mot-de-passe-oublie/", views.password_help, name="password_help"),
     path("gains/retrait/", views.request_payout_view, name="request_payout"),
+    path("mes-donnees/", views.export_my_data, name="export_data"),
 ]

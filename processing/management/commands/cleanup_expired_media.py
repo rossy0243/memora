@@ -23,7 +23,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from guestbook.models import GuestBookMessage
+from guestbook.models import GuestBookMessage, GuestBookMovie
+from processing.models import GeneratedMovie
 from uploads.models import GuestUpload
 
 
@@ -47,16 +48,22 @@ class Command(BaseCommand):
         grace = timedelta(days=settings.MEMORA_MEDIA_PURGE_GRACE_DAYS)
         backstop = timedelta(days=settings.MEMORA_MEDIA_PURGE_BACKSTOP_DAYS)
 
+        deliverable_cutoff = today - timedelta(
+            days=settings.MEMORA_DELIVERABLE_RETENTION_DAYS
+        ) - grace
+
         masked = self._mask_expired_uploads(today, now, dry_run)
         purged_uploads = self._purge_upload_files(today, now, grace, backstop, dry_run)
         purged_messages = self._purge_guestbook_messages(today, grace, dry_run)
+        purged_deliverables = self._purge_deliverables(deliverable_cutoff, dry_run)
 
         prefix = "[dry-run] " if dry_run else ""
         self.stdout.write(
             self.style.SUCCESS(
                 f"{prefix}{masked} media masque(s), "
                 f"{purged_uploads} fichier(s) upload purge(s), "
-                f"{purged_messages} message(s) livre d'or purge(s)."
+                f"{purged_messages} message(s) livre d'or purge(s), "
+                f"{purged_deliverables} livrable(s) purge(s)."
             )
         )
 
@@ -153,6 +160,70 @@ class Command(BaseCommand):
         else:
             logger.info("Cleanup purged_guestbook_messages=%s", purged)
         return purged
+
+    def _purge_deliverables(self, cutoff, dry_run):
+        """Purge les fichiers video des livrables dont la retention a expire :
+        film souvenir + declinaisons (GeneratedMovie) et montage du livre d'or
+        (GuestBookMovie). Les lignes restent comme pierres tombales."""
+        purged = 0
+
+        movies = (
+            GeneratedMovie.objects.filter(media_purged=False)
+            .select_related("event")
+            .only("id", "final_file", "full_file", "teaser_file", "event__event_date")
+        )
+        for movie in list(movies):
+            if movie.event.event_date > cutoff:
+                continue
+            if dry_run:
+                purged += 1
+                continue
+            ok = True
+            for field in ("final_file", "full_file", "teaser_file"):
+                ok = self._clear_field(movie, field, "film") and ok
+            if not ok:
+                continue
+            movie.media_purged = True
+            movie.save(update_fields=["final_file", "full_file", "teaser_file", "media_purged"])
+            purged += 1
+
+        montages = (
+            GuestBookMovie.objects.filter(media_purged=False)
+            .select_related("event")
+            .only("id", "final_file", "event__event_date")
+        )
+        for montage in list(montages):
+            if montage.event.event_date > cutoff:
+                continue
+            if dry_run:
+                purged += 1
+                continue
+            if not self._clear_field(montage, "final_file", "montage"):
+                continue
+            montage.media_purged = True
+            montage.save(update_fields=["final_file", "media_purged"])
+            purged += 1
+
+        if dry_run:
+            logger.info("Cleanup dry-run purge deliverables count=%s", purged)
+        else:
+            logger.info("Cleanup purged_deliverables=%s", purged)
+        return purged
+
+    def _clear_field(self, instance, field_name, label):
+        field = getattr(instance, field_name)
+        if not field:
+            return True
+        try:
+            field.delete(save=False)
+        except Exception as exc:
+            logger.warning(
+                "Cleanup deliverable delete failed kind=%s pk=%s field=%s error=%s",
+                label, instance.pk, field_name, exc,
+            )
+            return False
+        setattr(instance, field_name, "")
+        return True
 
     def _delete_file(self, instance, label):
         """Supprime le fichier de R2. Renvoie True si on peut marquer la ligne

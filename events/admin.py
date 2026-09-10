@@ -5,6 +5,7 @@ from uploads.models import UploadCategory
 from core.models import SiteConfiguration
 
 from .models import Event, EventPlan, EventType
+from .services import delete_event, purge_event_media
 
 
 @admin.register(EventPlan)
@@ -59,7 +60,7 @@ class UploadCategoryInline(admin.TabularInline):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     inlines = [UploadCategoryInline]
-    actions = ("mark_events_paid",)
+    actions = ("mark_events_paid", "purge_r2_files")
     list_display = (
         "title",
         "organizer",
@@ -182,3 +183,28 @@ class EventAdmin(admin.ModelAdmin):
             event.save(update_fields=["payment_status", "paid_at", "payment_provider", "payment_reference", "updated_at"])
             updated += 1
         self.message_user(request, f"{updated} evenement(s) marque(s) comme paye(s).")
+
+    @admin.action(description="Purger les fichiers R2 (garder l'evenement)")
+    def purge_r2_files(self, request, queryset):
+        totals = {"uploads": 0, "guestbook": 0, "deliverables": 0, "event": 0}
+        for event in queryset:
+            counts = purge_event_media(event)
+            for key, value in counts.items():
+                totals[key] += value
+        self.message_user(
+            request,
+            "Fichiers R2 supprimes : "
+            f"{totals['uploads']} upload(s), {totals['guestbook']} message(s) livre d'or, "
+            f"{totals['deliverables']} livrable(s), {totals['event']} image(s) d'evenement. "
+            "Les evenements sont conserves.",
+        )
+
+    # La suppression d'un evenement (bouton et action « delete_selected »)
+    # purge d'abord les fichiers R2, puis supprime les lignes dans l'ordre
+    # (uploads avant l'evenement, sinon ProtectedError sur UploadCategory).
+    def delete_model(self, request, obj):
+        delete_event(obj)
+
+    def delete_queryset(self, request, queryset):
+        for event in list(queryset):
+            delete_event(event)

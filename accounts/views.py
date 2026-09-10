@@ -2,13 +2,14 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.http import Http404
+from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 
 from core.models import SiteConfiguration
 
+from .export import account_export_filename, iter_account_export_zip_chunks
 from .forms import OrganizerSignupForm
 from .models import OrganizerProfile, PayoutRequest
 from .services import request_payout
@@ -79,6 +80,19 @@ def request_payout_view(request):
         "Memora la traite sous quelques jours ouvrés.",
     )
     return redirect("dashboard:home")
+
+
+@login_required
+def export_my_data(request):
+    """Export RGPD : toutes les donnees du compte connecte, en une archive ZIP."""
+    response = StreamingHttpResponse(
+        iter_account_export_zip_chunks(request.user),
+        content_type="application/zip",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{account_export_filename(request.user)}"'
+    )
+    return response
 
 
 def password_help(request):

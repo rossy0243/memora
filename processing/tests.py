@@ -2165,3 +2165,49 @@ class CleanupExpiredMediaCommandTests(TestCase):
         message.refresh_from_db()
         self.assertTrue(message.media_purged)
         self.assertFalse(message.media_file)
+
+    @override_settings(MEMORA_DELIVERABLE_RETENTION_DAYS=90)
+    def test_purges_deliverables_after_their_own_retention(self):
+        from guestbook.models import GuestBookMovie
+
+        old_event = Event.objects.create(
+            organizer=self.organizer,
+            title="Vieux film",
+            event_type=self.event_type,
+            event_date=timezone.localdate() - timedelta(days=100),
+        )
+        recent_event = Event.objects.create(
+            organizer=self.organizer,
+            title="Film recent",
+            event_type=self.event_type,
+            event_date=timezone.localdate() - timedelta(days=40),
+        )
+        old_movie = GeneratedMovie.objects.create(
+            event=old_event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/old/movies/film.mp4",
+            teaser_file="events/old/movies/teaser.mp4",
+        )
+        old_montage = GuestBookMovie.objects.create(
+            event=old_event,
+            status=GuestBookMovie.Status.COMPLETED,
+            final_file="events/old/livre-dor/montage/m.mp4",
+        )
+        recent_movie = GeneratedMovie.objects.create(
+            event=recent_event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/recent/movies/film.mp4",
+        )
+
+        call_command("cleanup_expired_media")
+
+        old_movie.refresh_from_db()
+        old_montage.refresh_from_db()
+        recent_movie.refresh_from_db()
+        self.assertTrue(old_movie.media_purged)
+        self.assertFalse(old_movie.final_file)
+        self.assertFalse(old_movie.teaser_file)
+        self.assertTrue(old_montage.media_purged)
+        self.assertFalse(old_montage.final_file)
+        self.assertFalse(recent_movie.media_purged)
+        self.assertTrue(recent_movie.final_file)

@@ -1517,3 +1517,83 @@ class EventViewTests(TestCase):
         event = Event.objects.get(title="Conference Memora")
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         self.assertEqual(event.event_type, custom_type)
+
+
+class PurgeEventMediaTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="owner-purge", password="secret")
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.user,
+            title="Mariage Purge",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    def _fill(self):
+        from guestbook.models import GuestBookMessage, GuestBookMovie
+
+        category = self.event.upload_categories.first()
+        upload = GuestUpload.objects.create(
+            event=self.event,
+            category=category,
+            media_file=SimpleUploadedFile("p.jpg", b"img", content_type="image/jpeg"),
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="p.jpg",
+            file_size=3,
+        )
+        message = GuestBookMessage.objects.create(
+            event=self.event,
+            media_file=SimpleUploadedFile("m.mp4", b"vid", content_type="video/mp4"),
+            original_filename="m.mp4",
+            file_size=3,
+        )
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file=SimpleUploadedFile("f.mp4", b"mov", content_type="video/mp4"),
+        )
+        montage = GuestBookMovie.objects.create(
+            event=self.event,
+            status=GuestBookMovie.Status.COMPLETED,
+            final_file=SimpleUploadedFile("g.mp4", b"mov", content_type="video/mp4"),
+        )
+        return upload, message, movie, montage
+
+    def test_purge_event_media_clears_every_file_but_keeps_rows(self):
+        from events.services import purge_event_media
+
+        upload, message, movie, montage = self._fill()
+
+        counts = purge_event_media(self.event)
+
+        for obj in (upload, message, movie, montage):
+            obj.refresh_from_db()
+        self.assertFalse(upload.media_file)
+        self.assertTrue(upload.media_purged)
+        self.assertFalse(message.media_file)
+        self.assertTrue(message.media_purged)
+        self.assertFalse(movie.final_file)
+        self.assertTrue(movie.media_purged)
+        self.assertFalse(montage.final_file)
+        self.assertEqual(counts["uploads"], 1)
+        self.assertEqual(counts["guestbook"], 1)
+        self.assertGreaterEqual(counts["deliverables"], 2)
+        # Les lignes restent (pierres tombales).
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+        self.assertEqual(self.event.guest_uploads.count(), 1)
+
+    def test_admin_delete_purges_r2_then_removes_event(self):
+        from django.contrib.admin.sites import AdminSite
+
+        from events.admin import EventAdmin
+
+        upload, _, movie, _ = self._fill()
+        movie_pk, upload_pk = movie.pk, upload.pk
+        admin_instance = EventAdmin(Event, AdminSite())
+
+        admin_instance.delete_model(request=None, obj=self.event)
+
+        self.assertFalse(Event.objects.filter(pk=self.event.pk).exists())
+        self.assertFalse(GeneratedMovie.objects.filter(pk=movie_pk).exists())
+        self.assertFalse(GuestUpload.objects.filter(pk=upload_pk).exists())

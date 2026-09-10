@@ -51,6 +51,7 @@
                 </span>
               {% endif %}
               <a href="{% url 'dashboard:home' %}">Mes événements</a>
+              <a href="{% url 'accounts:export_data' %}">Exporter mes données</a>
             {% endif %}
             <form method="post" action="{% url 'accounts:logout' %}">
               {% csrf_token %}

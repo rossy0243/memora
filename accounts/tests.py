@@ -397,3 +397,70 @@ class AmbassadorGatingTests(TestCase):
 
         # On ne reecrit pas le passe : ce qui est du reste du.
         self.assertEqual(CommissionLedger.objects.filter(beneficiary=self.organizer).count(), 1)
+
+
+class AccountDataExportTests(TestCase):
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.SimpleUploadedFile = SimpleUploadedFile
+        self.user = get_user_model().objects.create_user(username="exporter", password="secret")
+        self.event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=self.user,
+            title="Mariage Export",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    def test_export_requires_login(self):
+        response = self.client.get(reverse("accounts:export_data"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_export_streams_a_zip_with_account_and_events(self):
+        from io import BytesIO
+        from zipfile import ZipFile
+
+        from uploads.models import GuestUpload
+
+        category = self.event.upload_categories.first()
+        GuestUpload.objects.create(
+            event=self.event,
+            category=category,
+            media_file=self.SimpleUploadedFile("p.jpg", b"img", content_type="image/jpeg"),
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="p.jpg",
+            file_size=3,
+        )
+        self.client.login(username="exporter", password="secret")
+
+        response = self.client.get(reverse("accounts:export_data"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        with ZipFile(BytesIO(b"".join(response.streaming_content))) as archive:
+            names = archive.namelist()
+            self.assertIn("compte.json", names)
+            self.assertTrue(any("evenement.json" in n for n in names))
+            self.assertTrue(any(n.endswith(".jpg") for n in names))
+            payload = archive.read("compte.json").decode()
+            self.assertIn("exporter", payload)
+
+    def test_export_only_contains_the_requesting_users_events(self):
+        from io import BytesIO
+        from zipfile import ZipFile
+
+        other = get_user_model().objects.create_user(username="someone-else", password="secret")
+        Event.objects.create(
+            organizer=other,
+            title="Pas la mienne",
+            event_type=self.event_type,
+            event_date=date(2026, 8, 1),
+        )
+        self.client.login(username="exporter", password="secret")
+
+        response = self.client.get(reverse("accounts:export_data"))
+
+        with ZipFile(BytesIO(b"".join(response.streaming_content))) as archive:
+            blob = "\n".join(archive.namelist())
+            self.assertNotIn("pas-la-mienne", blob)

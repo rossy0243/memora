@@ -159,6 +159,9 @@ class GeneratedMovie(models.Model):
     generated_at = models.DateTimeField(blank=True, null=True)
     organizer_notified_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)
+    # True une fois les fichiers video purges de R2 (retention livrable expiree).
+    # La ligne reste comme pierre tombale ; final_file/full_file/teaser_file vides.
+    media_purged = models.BooleanField(default=False)
     error_logs = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

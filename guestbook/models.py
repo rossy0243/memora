@@ -97,6 +97,8 @@ class GuestBookMovie(models.Model):
     duration = models.DurationField(blank=True, null=True)
     message_count = models.PositiveIntegerField(default=0)
     render_provider = models.CharField(max_length=40, default="remotion")
+    # True une fois le fichier final purge de R2 (retention livrable expiree).
+    media_purged = models.BooleanField(default=False)
     error_message = models.TextField(blank=True)
     # Comment la generation a ete declenchee : fin de service de l'agent,
     # rattrapage automatique (service oublie), ou demande de l'organisateur.

@@ -400,6 +400,10 @@ MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS = int(
 # + BACKSTOP jours (le stockage ne peut pas croitre indefiniment).
 MEMORA_MEDIA_PURGE_GRACE_DAYS = env_int("MEMORA_MEDIA_PURGE_GRACE_DAYS", 7)
 MEMORA_MEDIA_PURGE_BACKSTOP_DAYS = env_int("MEMORA_MEDIA_PURGE_BACKSTOP_DAYS", 30)
+# Livrables (film souvenir, teaser, montage du livre d'or) : gardes plus
+# longtemps que la matiere brute — c'est le produit livre a l'organisateur —
+# puis purges eux aussi, a event_date + ce nombre de jours (+ grace).
+MEMORA_DELIVERABLE_RETENTION_DAYS = env_int("MEMORA_DELIVERABLE_RETENTION_DAYS", 90)
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)
 MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)
