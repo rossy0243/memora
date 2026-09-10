@@ -218,18 +218,23 @@ services:
         key: MEMORA_MOVIE_DUCKED_MUSIC_VOLUME
         value: "0.08"
 
-  - type: worker
-    name: memora-movie-worker
+  - type: cron
+    name: memora-schedule-movies
     runtime: docker
     region: frankfurt
-    # Pro Plus (2026-09) : tout-Remotion sur hero/full/teaser. Etait "standard".
+    # Pro Plus : ce cron porte tout le rendu de films (Remotion complet). Il a
+    # remplace le worker permanent memora-movie-worker (supprime 2026-09), qui
+    # etait facture 24h/24 en Pro Plus alors qu'un film ne se genere qu'a J+1.
+    # Un cron n'est facture que pendant son execution reelle.
     plan: pro-plus
     # Image dediee : Node + Chrome headless Remotion en plus de Python/FFmpeg.
     dockerfilePath: ./Dockerfile.worker
     dockerContext: .
-    dockerCommand: python manage.py process_pending_movies --loop --sleep 30
+    # Toutes les 15 min : cree les films dus a J+1, puis vide la file d'attente
+    # (demandes manuelles "Generer maintenant", reprises d'echecs).
+    schedule: "*/15 * * * *"
+    dockerCommand: python manage.py generate_scheduled_movies; python manage.py process_pending_movies
     autoDeployTrigger: commit
-    maxShutdownDelaySeconds: 300
     envVars: &worker_env
       - *env_debug
       - *env_allowed_hosts
@@ -326,29 +331,15 @@ services:
       - *env_music_volume
       - *env_voice_volume
       - *env_ducked_music_volume
-      # Tout-Remotion (2026-09, decision utilisateur) : worker Pro Plus, plus
-      # de coeurs pour le rendu Chrome. Ajuster REMOTION_CONCURRENCY au vCPU
-      # reel du plan une fois confirme (suppose ~4 ci-dessous, a verifier).
+      # Tout-Remotion : plus de coeurs pour le rendu Chrome headless. Ajuster
+      # REMOTION_CONCURRENCY au vCPU reel du plan Pro Plus une fois confirme
+      # (suppose ~4 ci-dessous, a verifier).
       - key: REMOTION_CONCURRENCY
         value: "4"
       - key: MEMORA_REMOTION_DELIVERABLES
         value: hero,full,teaser
       - key: MEMORA_REMOTION_TIMEOUT_SECONDS
         value: "14400"
-
-  - type: cron
-    name: memora-schedule-movies
-    runtime: docker
-    region: frankfurt
-    # Pro Plus (2026-09), aligne sur le worker : ce cron rend aussi des films.
-    plan: pro-plus
-    # Ce cron rend aussi des films (--process-now) : meme image que le worker.
-    dockerfilePath: ./Dockerfile.worker
-    dockerContext: .
-    schedule: "0 * * * *"
-    dockerCommand: python manage.py generate_scheduled_movies --process-now
-    autoDeployTrigger: commit
-    envVars: *worker_env
 
   - type: cron
     name: memora-cleanup-expired-media
