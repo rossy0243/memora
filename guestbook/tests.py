@@ -1,15 +1,18 @@
-from datetime import date
+from datetime import date, timedelta
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import AgentProfile
 from events.models import Event, EventType
 
-from .models import GuestBookMessage
+from .models import GuestBookMessage, GuestBookMovie
+from .services import queue_abandoned_guestbook_movies
 
 
 class GuestbookViewTests(TestCase):
@@ -157,6 +160,123 @@ class GuestbookViewTests(TestCase):
         response = self.client.get(reverse("events:guestbook_messages", kwargs={"pk": self.event.pk}))
 
         self.assertEqual(response.status_code, 404)
+
+
+class GuestBookMontageTests(TestCase):
+    def setUp(self):
+        self.agent = get_user_model().objects.create_user(username="agent-m", password="secret")
+        AgentProfile.objects.create(user=self.agent)
+        self.organizer = get_user_model().objects.create_user(username="orga-m", password="secret")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Montage",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+            guestbook_agent=self.agent,
+        )
+
+    def _add_message(self, name="La famille Dupont"):
+        return GuestBookMessage.objects.create(
+            event=self.event,
+            guest_name=name,
+            media_file="events/mariage-montage/livre-dor/m.mp4",
+            original_filename="m.mp4",
+            file_size=2048,
+            duration=timedelta(seconds=18),
+            recorded_by=self.agent,
+        )
+
+    def test_ending_shift_queues_the_montage(self):
+        self._add_message()
+        self.client.login(username="agent-m", password="secret")
+        self.client.get(reverse("guestbook:capture", kwargs={"pk": self.event.pk}))
+
+        self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
+
+        movie = GuestBookMovie.objects.get(event=self.event)
+        self.assertEqual(movie.status, GuestBookMovie.Status.PENDING)
+        self.assertEqual(movie.trigger, "agent_end_shift")
+
+    def test_ending_shift_without_messages_queues_nothing(self):
+        self.client.login(username="agent-m", password="secret")
+        self.client.get(reverse("guestbook:capture", kwargs={"pk": self.event.pk}))
+
+        self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
+
+        self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
+
+    def test_organizer_can_trigger_montage(self):
+        self._add_message()
+        self.client.login(username="orga-m", password="secret")
+
+        response = self.client.post(
+            reverse("events:generate_guestbook_movie", kwargs={"pk": self.event.pk})
+        )
+
+        self.assertRedirects(
+            response, reverse("events:guestbook_messages", kwargs={"pk": self.event.pk})
+        )
+        self.assertEqual(
+            GuestBookMovie.objects.get(event=self.event).trigger, "organizer_request"
+        )
+
+    def test_organizer_trigger_is_owner_only(self):
+        self._add_message()
+        get_user_model().objects.create_user(username="intruder", password="secret")
+        self.client.login(username="intruder", password="secret")
+
+        response = self.client.post(
+            reverse("events:generate_guestbook_movie", kwargs={"pk": self.event.pk})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_abandoned_shift_is_picked_up(self):
+        self._add_message()
+        old = timezone.now() - timedelta(hours=48)
+        Event.objects.filter(pk=self.event.pk).update(
+            guestbook_started_at=old, guestbook_ended_at=None
+        )
+
+        queued = queue_abandoned_guestbook_movies()
+
+        self.assertEqual(queued, 1)
+        self.assertEqual(
+            GuestBookMovie.objects.get(event=self.event).trigger, "auto_abandon"
+        )
+
+    def test_process_guestbook_movie_completes(self):
+        self._add_message("Les voisins")
+        self._add_message("Tata Jeanne")
+        movie = GuestBookMovie.objects.create(event=self.event)
+
+        def fake_render(event, messages, output_path):
+            Path(output_path).write_bytes(b"fake-mp4-bytes")
+            return Path(output_path)
+
+        with patch(
+            "processing.guestbook_montage.render_guestbook_montage", side_effect=fake_render
+        ), patch("processing.guestbook_montage.shutil.which", return_value="/usr/bin/ffmpeg"):
+            from processing.guestbook_montage import process_guestbook_movie
+
+            process_guestbook_movie(movie)
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GuestBookMovie.Status.COMPLETED)
+        self.assertTrue(movie.final_file)
+        self.assertEqual(movie.message_count, 2)
+
+    def test_build_guestbook_props_interleaves_name_cards(self):
+        self._add_message("Les voisins")
+        from processing.guestbook_montage import build_guestbook_props
+
+        messages = list(self.event.guestbook_messages.order_by("created_at"))
+        props = build_guestbook_props(self.event, messages, None)
+
+        self.assertEqual(len(props["messages"]), 1)
+        self.assertEqual(props["messages"][0]["guestName"], "Les voisins")
+        self.assertGreater(props["messages"][0]["durationInFrames"], 0)
+        self.assertEqual(props["subtitle"], "Livre d'or")
 
 
 class RoleAwareLoginTests(TestCase):

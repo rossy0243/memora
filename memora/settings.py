@@ -487,6 +487,33 @@ MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
     for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,full,teaser").split(",")
     if part.strip()
 }
+# Montage du livre d'or : tous les messages en entier, chacun precede d'un carton
+# « De la part de … ». La musique n'est qu'un lit tres discret et descend encore
+# pendant chaque message : on veut entendre ce que les invites disent.
+MEMORA_GUESTBOOK_MONTAGE_MUSIC_VOLUME = float(
+    os.getenv("MEMORA_GUESTBOOK_MONTAGE_MUSIC_VOLUME", "0.12")
+)
+MEMORA_GUESTBOOK_MONTAGE_DUCKED_MUSIC_VOLUME = float(
+    os.getenv("MEMORA_GUESTBOOK_MONTAGE_DUCKED_MUSIC_VOLUME", "0.04")
+)
+MEMORA_GUESTBOOK_MONTAGE_NAME_CARD_SECONDS = env_int(
+    "MEMORA_GUESTBOOK_MONTAGE_NAME_CARD_SECONDS", 3
+)
+MEMORA_GUESTBOOK_MONTAGE_INTRO_CARD_SECONDS = env_int(
+    "MEMORA_GUESTBOOK_MONTAGE_INTRO_CARD_SECONDS", 5
+)
+MEMORA_GUESTBOOK_MONTAGE_OUTRO_CARD_SECONDS = env_int(
+    "MEMORA_GUESTBOOK_MONTAGE_OUTRO_CARD_SECONDS", 6
+)
+MEMORA_GUESTBOOK_MONTAGE_OUTRO_TITLE = os.getenv(
+    "MEMORA_GUESTBOOK_MONTAGE_OUTRO_TITLE", "Merci à tous"
+)
+# Delai apres l'evenement au-dela duquel Memora genere le montage meme si l'agent
+# a oublie de terminer son service.
+MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS = env_int(
+    "MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS", 12
+)
+
 MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))
 MEMORA_RUNWAY_WORKFLOW_ID = os.getenv("MEMORA_RUNWAY_WORKFLOW_ID", "")

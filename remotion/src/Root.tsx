@@ -1,7 +1,13 @@
 import React from "react";
 import { Composition } from "remotion";
 import { MemoraFilm } from "./MemoraFilm";
-import { defaultFilmProps, FilmProps } from "./types";
+import { GuestBookMontage } from "./GuestBook";
+import {
+  defaultFilmProps,
+  defaultGuestBookProps,
+  FilmProps,
+  guestBookTotalDurationInFrames,
+} from "./types";
 import { totalDurationInFrames } from "./timeline";
 
 const FPS = 30;
@@ -50,6 +56,18 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{ ...defaultFilmProps, clips: sampleClips }}
         calculateMetadata={({ props }) => ({
           durationInFrames: totalDurationInFrames(props),
+        })}
+      />
+      {/* Montage integral du livre d'or 16:9 — tous les messages, cartons inclus. */}
+      <Composition
+        id="GuestBook"
+        component={GuestBookMontage}
+        fps={FPS}
+        width={1920}
+        height={1080}
+        defaultProps={defaultGuestBookProps}
+        calculateMetadata={({ props }) => ({
+          durationInFrames: guestBookTotalDurationInFrames(props),
         })}
       />
     </>

@@ -16,6 +16,44 @@
     <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">Retour dashboard</a>
   </div>
 
+  <div class="detail-panel guestbook-montage">
+    <h3>Montage du livre d'or</h3>
+    <p class="page-heading__meta">
+      Tous les messages, en entier, dans l'ordre, chacun précédé d'un carton
+      « De la part de&nbsp;… ». Rendu avec la même exigence que le film souvenir.
+    </p>
+
+    {% if guestbook_movie and guestbook_movie.is_ready %}
+      <video src="{{ guestbook_movie.final_file.url }}" controls preload="metadata" class="guestbook-montage__preview"></video>
+      <p class="page-heading__meta">
+        {{ guestbook_movie.message_count }} message{{ guestbook_movie.message_count|pluralize }}
+        {% if guestbook_movie.completed_at %}&middot; prêt le {{ guestbook_movie.completed_at|date:"d/m/Y H:i" }}{% endif %}
+      </p>
+      <div class="guestbook-montage__actions">
+        <a class="button button--primary" href="{{ guestbook_movie.final_file.url }}" download>Télécharger le montage</a>
+        <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">
+          {% csrf_token %}
+          <button class="button button--secondary" type="submit">Regénérer</button>
+        </form>
+      </div>
+    {% elif guestbook_movie and guestbook_movie.status == "failed" %}
+      <p class="message message--error">La génération a échoué. Vous pouvez la relancer.</p>
+      <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--primary" type="submit">Relancer le montage</button>
+      </form>
+    {% elif guestbook_movie %}
+      <p class="message message--info">Montage en préparation&nbsp;: il apparaîtra ici dès qu'il est prêt.</p>
+    {% elif messages_list %}
+      <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--primary" type="submit">Générer le montage du livre d'or</button>
+      </form>
+    {% else %}
+      <p class="page-heading__meta">Le montage sera disponible dès qu'un message aura été enregistré.</p>
+    {% endif %}
+  </div>
+
   {% if messages_list %}
     <div class="media-library-grid">
       {% for message in messages_list %}

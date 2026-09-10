@@ -230,10 +230,12 @@ services:
     # Image dediee : Node + Chrome headless Remotion en plus de Python/FFmpeg.
     dockerfilePath: ./Dockerfile.worker
     dockerContext: .
-    # Toutes les 15 min : cree les films dus a J+1, puis vide la file d'attente
-    # (demandes manuelles "Generer maintenant", reprises d'echecs).
+    # Toutes les 15 min : cree les films dus a J+1, vide la file d'attente
+    # (demandes manuelles "Generer maintenant", reprises d'echecs), puis genere
+    # les montages du livre d'or (fin de service agent + rattrapage). Render
+    # exec sans shell : une seule commande parapluie, pas d'enchainement ";".
     schedule: "*/15 * * * *"
-    dockerCommand: python manage.py generate_scheduled_movies; python manage.py process_pending_movies
+    dockerCommand: python manage.py run_movie_cron
     autoDeployTrigger: commit
     envVars: &worker_env
       - *env_debug

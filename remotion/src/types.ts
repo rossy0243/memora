@@ -44,6 +44,66 @@ export interface FilmProps {
   duckedMusicVolume: number;
 }
 
+// --- Montage du livre d'or ---------------------------------------------------
+// Livrable distinct : tous les messages video en entier, dans l'ordre, chacun
+// precede d'un carton plein ecran « De la part de … ». Django fournit les clips
+// deja ordonnes chronologiquement.
+
+export interface GuestBookMessageClip {
+  // Chemin local (staticFile) du message video.
+  src: string;
+  durationInFrames: number;
+  // Nom saisi par l'agent avant l'enregistrement. Vide = message anonyme.
+  guestName: string;
+}
+
+export interface GuestBookProps {
+  messages: GuestBookMessageClip[];
+  audioSrc: string | null;
+  audioFirstBeatOffset: number;
+  title: string;
+  subtitle: string;
+  outroTitle: string;
+  introDurationInFrames: number;
+  outroDurationInFrames: number;
+  nameCardDurationInFrames: number;
+  transitionDurationInFrames: number;
+  grade: "romantic" | "warm" | "neutral";
+  // Lit musical discret ; descend encore (ducked) pendant chaque message.
+  musicVolume: number;
+  duckedMusicVolume: number;
+}
+
+export const defaultGuestBookProps: GuestBookProps = {
+  messages: [],
+  audioSrc: null,
+  audioFirstBeatOffset: 0,
+  title: "Livre d'or",
+  subtitle: "Vos messages",
+  outroTitle: "Merci à tous",
+  introDurationInFrames: 150,
+  outroDurationInFrames: 180,
+  nameCardDurationInFrames: 90,
+  transitionDurationInFrames: 15,
+  grade: "warm",
+  musicVolume: 0.12,
+  duckedMusicVolume: 0.04,
+};
+
+export function guestBookTotalDurationInFrames(props: GuestBookProps): number {
+  const segments = [
+    props.introDurationInFrames,
+    ...props.messages.flatMap((m) => [
+      props.nameCardDurationInFrames,
+      m.durationInFrames,
+    ]),
+    props.outroDurationInFrames,
+  ];
+  const sum = segments.reduce((a, b) => a + b, 0);
+  const junctions = Math.max(segments.length - 1, 0);
+  return Math.max(sum - junctions * props.transitionDurationInFrames, 1);
+}
+
 export const defaultFilmProps: FilmProps = {
   clips: [],
   audioSrc: null,

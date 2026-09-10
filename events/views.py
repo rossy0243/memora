@@ -1,3 +1,4 @@
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
@@ -193,8 +194,26 @@ def guestbook_messages(request, pk):
         {
             "event": event,
             "messages_list": event.guestbook_messages.select_related("recorded_by").all(),
+            "guestbook_movie": getattr(event, "guestbook_movie", None),
         },
     )
+
+
+@login_required
+@require_POST
+def generate_guestbook_movie(request, pk):
+    """L'organisateur (re)lance le montage integral du livre d'or."""
+    from guestbook.services import queue_guestbook_movie
+
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    if queue_guestbook_movie(event, trigger="organizer_request"):
+        messages.success(
+            request,
+            "Montage du livre d'or lancé. Il apparaîtra ici dès qu'il est prêt.",
+        )
+    else:
+        messages.info(request, "Aucun message dans le livre d'or à monter pour l'instant.")
+    return redirect("events:guestbook_messages", pk=event.pk)
 
 
 def public_event_preview(request, slug, access_key):

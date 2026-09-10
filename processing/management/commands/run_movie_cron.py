@@ -13,3 +13,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         call_command("generate_scheduled_movies")
         call_command("process_pending_movies")
+        # Montages du livre d'or : files a la fin de service de l'agent, plus le
+        # rattrapage des services jamais termines.
+        call_command("process_guestbook_movies")

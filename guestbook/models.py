@@ -58,3 +58,58 @@ class GuestBookMessage(models.Model):
     @property
     def extension(self):
         return Path(self.original_filename).suffix.lower().lstrip(".")
+
+
+class GuestBookMovie(models.Model):
+    """Montage integral du livre d'or : tous les messages, dans l'ordre, chacun
+    precede d'un carton « De la part de … ».
+
+    Livrable distinct du film souvenir (GeneratedMovie) et rendu avec la meme
+    exigence (Remotion) : un evenement a au plus un montage, regenere sur place
+    si de nouveaux messages arrivent.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        PROCESSING = "processing", "En cours"
+        COMPLETED = "completed", "Terminé"
+        FAILED = "failed", "Échec"
+
+    event = models.OneToOneField(
+        "events.Event",
+        on_delete=models.CASCADE,
+        related_name="guestbook_movie",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    final_file = models.FileField(
+        upload_to=guestbook_movie_upload_path,
+        blank=True,
+        null=True,
+    )
+    duration = models.DurationField(blank=True, null=True)
+    message_count = models.PositiveIntegerField(default=0)
+    render_provider = models.CharField(max_length=40, default="remotion")
+    error_message = models.TextField(blank=True)
+    # Comment la generation a ete declenchee : fin de service de l'agent,
+    # rattrapage automatique (service oublie), ou demande de l'organisateur.
+    trigger = models.CharField(max_length=20, blank=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(blank=True, null=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name = "montage du livre d'or"
+        verbose_name_plural = "montages du livre d'or"
+
+    def __str__(self):
+        return f"Montage livre d'or - {self.event} ({self.get_status_display()})"
+
+    @property
+    def is_ready(self):
+        return self.status == self.Status.COMPLETED and bool(self.final_file)

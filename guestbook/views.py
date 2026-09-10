@@ -13,6 +13,7 @@ from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, r
 from events.models import Event
 
 from .forms import GuestBookMessageForm
+from .services import queue_guestbook_movie
 
 
 logger = logging.getLogger(__name__)
@@ -97,5 +98,14 @@ def end_shift(request, pk):
     event = _get_assigned_event(request, pk)
     event.guestbook_ended_at = timezone.now()
     event.save(update_fields=["guestbook_ended_at", "updated_at"])
-    messages.success(request, "Service terminé. Merci pour cette mission !")
+
+    # Fin de service = declencheur normal du montage integral du livre d'or.
+    if queue_guestbook_movie(event, trigger="agent_end_shift"):
+        messages.success(
+            request,
+            "Service terminé. Le montage du livre d'or est lancé, "
+            "l'organisateur le recevra dès qu'il est prêt.",
+        )
+    else:
+        messages.success(request, "Service terminé. Merci pour cette mission !")
     return redirect("guestbook:agent_home")

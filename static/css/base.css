@@ -3624,6 +3624,29 @@ body.capture-review-open {
   font-variant-numeric: tabular-nums;
 }
 
+.guestbook-montage {
+  margin-bottom: 20px;
+}
+
+.guestbook-montage__preview {
+  width: 100%;
+  max-width: 640px;
+  border-radius: 14px;
+  margin: 12px 0;
+  background: #000;
+}
+
+.guestbook-montage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.guestbook-montage__actions form {
+  margin: 0;
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   .camera-orientation-hint {
     display: block;
