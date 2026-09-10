@@ -69,10 +69,12 @@ class EventAdmin(admin.ModelAdmin):
         "formatted_price",
         "paid_at",
         "is_active",
+        "guestbook_agent",
         "guest_access_code",
         "media_retention_days",
         "created_at",
     )
+    list_select_related = ("organizer", "event_type", "guestbook_agent")
     list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at", "guestbook_agent")
     search_fields = ("title", "couple_name", "location", "organizer__username", "payment_reference")
     prepopulated_fields = {"slug": ("title",)}
