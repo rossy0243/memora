@@ -391,7 +391,7 @@ MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS = int(
 )
 # Livre d'or agent : messages plus longs qu'un candid de soiree, mais toujours bornes.
 MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS = int(
-    os.getenv("MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS", "30")
+    os.getenv("MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS", "20")
 )
 # Retention : media_retention_days (par evenement) masque le media. Le fichier
 # reste ensuite sur R2 ce nombre de jours de grace avant purge definitive, pour

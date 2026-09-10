@@ -28,7 +28,7 @@
   const progressText = form.querySelector(".upload-progress p");
   const submitButton = form.querySelector("button[type='submit']");
   const initialSubmitLabel = submitButton ? submitButton.textContent : "";
-  const maxRecordingSeconds = (cameraStudio && parseInt(cameraStudio.dataset.maxDuration, 10)) || 30;
+  const maxRecordingSeconds = (cameraStudio && parseInt(cameraStudio.dataset.maxDuration, 10)) || 20;
 
   let previewUrl = "";
   let cameraStream = null;

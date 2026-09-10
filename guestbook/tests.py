@@ -83,14 +83,19 @@ class GuestbookViewTests(TestCase):
         self.assertEqual(message.duration.total_seconds(), 18)
 
     @patch("guestbook.forms._probe_video_duration", return_value=45)
-    def test_rejects_message_longer_than_thirty_seconds(self, _probe_video_duration):
+    def test_rejects_message_over_the_duration_limit(self, _probe_video_duration):
+        from django.conf import settings
+
         self.client.login(username="agent1", password="secret")
         media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
 
         response = self.client.post(self.capture_url(), {"media_file": media})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ce message dépasse 30 secondes.")
+        self.assertContains(
+            response,
+            f"Ce message dépasse {settings.MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS} secondes.",
+        )
         self.assertEqual(GuestBookMessage.objects.count(), 0)
 
     def test_ending_shift_closes_the_guestbook(self):
