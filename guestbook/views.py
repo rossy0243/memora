@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -30,7 +31,11 @@ def _get_assigned_event(request, pk):
 def agent_home(request):
     """Liste les missions livre d'or de l'agent connecte."""
     _require_agent(request)
-    missions = Event.objects.filter(guestbook_agent=request.user).order_by("-event_date")
+    missions = (
+        Event.objects.filter(guestbook_agent=request.user)
+        .annotate(message_count=Count("guestbook_messages"))
+        .order_by("-event_date")
+    )
     return render(request, "guestbook/agent_home.html", {"missions": missions})
 
 
@@ -71,6 +76,7 @@ def guestbook_capture(request, pk):
     else:
         form = GuestBookMessageForm()
 
+    recorded = event.guestbook_messages.order_by("-created_at")
     return render(
         request,
         "guestbook/capture.html",
@@ -78,6 +84,8 @@ def guestbook_capture(request, pk):
             "event": event,
             "form": form,
             "max_duration_seconds": settings.MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS,
+            "sent_count": recorded.count(),
+            "recent_messages": recorded[:4],
         },
     )
 

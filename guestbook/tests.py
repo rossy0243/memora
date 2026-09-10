@@ -104,6 +104,36 @@ class GuestbookViewTests(TestCase):
         closed_response = self.client.get(self.capture_url())
         self.assertContains(closed_response, "Service terminé")
 
+    def test_capture_screen_shows_recorded_count_and_recent(self):
+        GuestBookMessage.objects.create(
+            event=self.event,
+            guest_name="Les voisins",
+            media_file="events/mariage/livre-dor/message.mp4",
+            original_filename="message.mp4",
+            file_size=1024,
+            recorded_by=self.agent,
+        )
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertContains(response, "message enregistré")
+        self.assertContains(response, "Les voisins")
+
+    def test_agent_home_shows_message_count_per_mission(self):
+        GuestBookMessage.objects.create(
+            event=self.event,
+            media_file="events/mariage/livre-dor/a.mp4",
+            original_filename="a.mp4",
+            file_size=10,
+            recorded_by=self.agent,
+        )
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(reverse("guestbook:agent_home"))
+
+        self.assertContains(response, "Messages")
+
     def test_organizer_can_view_guestbook_messages(self):
         GuestBookMessage.objects.create(
             event=self.event,

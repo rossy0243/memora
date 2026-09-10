@@ -3571,6 +3571,59 @@ body.capture-review-open {
   margin-top: 10px;
 }
 
+.guestbook-tally {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.guestbook-tally strong {
+  font-size: 1.6rem;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.guestbook-tally span {
+  font-size: 0.9rem;
+  opacity: 0.82;
+}
+
+.guestbook-recent {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.guestbook-recent li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  opacity: 0.9;
+}
+
+.guestbook-recent__check {
+  color: #7bd88f;
+  font-weight: 700;
+}
+
+.guestbook-recent__who {
+  font-weight: 600;
+}
+
+.guestbook-recent time {
+  margin-left: auto;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   .camera-orientation-hint {
     display: block;

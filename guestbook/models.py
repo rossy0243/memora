@@ -9,6 +9,11 @@ def guestbook_message_upload_path(instance, filename):
     return f"events/{event_slug}/livre-dor/{filename}"
 
 
+def guestbook_movie_upload_path(instance, filename):
+    event_slug = instance.event.slug if instance.event_id else "pending"
+    return f"events/{event_slug}/livre-dor/montage/{filename}"
+
+
 class GuestBookMessage(models.Model):
     """Message video enregistre au stand livre d'or par l'agent Memora.
 

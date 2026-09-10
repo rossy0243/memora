@@ -25,6 +25,10 @@
               <dd>{{ event.event_date }}</dd>
             </div>
             <div>
+              <dt>Messages</dt>
+              <dd>{{ event.message_count }}</dd>
+            </div>
+            <div>
               <dt>Statut</dt>
               <dd>
                 {% if event.guestbook_ended_at %}

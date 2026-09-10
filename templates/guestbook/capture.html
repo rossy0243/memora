@@ -13,6 +13,23 @@
       <p class="section__label">Livre d'or Memora</p>
       <h1>{{ event.title }}</h1>
       <p class="guest-upload-heading__hint">Enregistrez le message d'un invité &mdash; {{ max_duration_seconds }} secondes max.</p>
+
+      <div class="guestbook-tally" aria-live="polite">
+        <strong>{{ sent_count }}</strong>
+        <span>message{{ sent_count|pluralize }} enregistré{{ sent_count|pluralize }} pour cette mission</span>
+      </div>
+      {% if recent_messages %}
+        <ul class="guestbook-recent">
+          {% for message in recent_messages %}
+            <li>
+              <span class="guestbook-recent__check" aria-hidden="true">&#10003;</span>
+              <span class="guestbook-recent__who">{{ message.guest_name|default:"Sans nom" }}</span>
+              <time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"H:i" }}</time>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
       <form method="post" action="{% url 'guestbook:end_shift' event.pk %}" class="guestbook-end-form">
         {% csrf_token %}
         <button class="button button--secondary button--compact" type="submit" onclick="return confirm('Terminer votre service pour cet événement ?');">Terminer mon service</button>
