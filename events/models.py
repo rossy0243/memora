@@ -242,25 +242,6 @@ class Event(models.Model):
     payment_provider = models.CharField(max_length=40, blank=True, default="manual")
     is_active = models.BooleanField(default=True)
     media_retention_days = models.PositiveIntegerField(default=7)
-    guestbook_agent = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="guestbook_missions",
-        limit_choices_to={"agent_profile__isnull": False},
-        help_text="Agent Memora affecte au livre d'or video de cet evenement. Affectation geree en interne.",
-    )
-    guestbook_started_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        help_text="Debut de la mission de l'agent, horodate automatiquement au premier demarrage.",
-    )
-    guestbook_ended_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        help_text="Fin de la mission : le livre d'or se referme, videz ce champ pour la rouvrir.",
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -272,8 +253,10 @@ class Event(models.Model):
 
     @property
     def guestbook_is_open(self):
-        """Vrai tant que l'agent est en mission : demarree, pas encore cloturee."""
-        return bool(self.guestbook_agent_id and self.guestbook_started_at and not self.guestbook_ended_at)
+        """Vrai tant qu'au moins un agent est en mission : demarree, pas cloturee."""
+        return self.guestbook_assignments.filter(
+            started_at__isnull=False, ended_at__isnull=True
+        ).exists()
 
     def get_public_url(self):
         return reverse(

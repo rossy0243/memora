@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -118,7 +119,7 @@ class EventDetailView(OrganizerEventMixin, DetailView):
                 "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
                 "qr_print_sheet_url": reverse("events:qr_print_sheet", kwargs={"pk": self.object.pk}),
                 "readiness_checklist": build_readiness_checklist(self.object),
-                "has_guestbook": bool(self.object.guestbook_agent_id or self.object.guestbook_messages.exists()),
+                "has_guestbook": self.object.guestbook_assignments.exists() or self.object.guestbook_messages.exists(),
                 **get_live_stats_context(self.object),
                 **get_movie_panel_context(self.object),
             }
@@ -187,13 +188,36 @@ class EventMediaListView(OrganizerEventMixin, ListView):
 
 @login_required
 def guestbook_messages(request, pk):
+    """Historique du livre d'or, cote organisateur — paginable et filtrable par
+    agent : avec plusieurs agents qui enregistrent en parallele, la liste
+    complete d'un gros evenement peut vite devenir trop longue a parcourir."""
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    queryset = event.guestbook_messages.select_related("recorded_by").all()
+
+    recording_agents = list(
+        event.guestbook_messages.exclude(recorded_by__isnull=True)
+        .values("recorded_by_id", "recorded_by__username", "recorded_by__first_name", "recorded_by__last_name")
+        .distinct()
+        .order_by("recorded_by__username")
+    )
+    selected_agent = request.GET.get("agent") or ""
+    if selected_agent:
+        queryset = queryset.filter(recorded_by_id=selected_agent)
+
+    paginator = Paginator(queryset, 24)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
     return render(
         request,
         "events/guestbook_messages.html",
         {
             "event": event,
-            "messages_list": event.guestbook_messages.select_related("recorded_by").all(),
+            "page_obj": page_obj,
+            "messages_list": page_obj,
+            "is_paginated": page_obj.has_other_pages(),
+            "recording_agents": recording_agents,
+            "selected_agent": selected_agent,
+            "total_message_count": event.guestbook_messages.count(),
             "guestbook_movie": getattr(event, "guestbook_movie", None),
         },
     )

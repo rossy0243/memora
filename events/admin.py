@@ -3,6 +3,7 @@ from django.contrib import admin
 from uploads.models import UploadCategory
 
 from core.models import SiteConfiguration
+from guestbook.models import GuestBookAssignment
 
 from .models import Event, EventPlan, EventType
 from .services import delete_event, purge_event_media
@@ -57,9 +58,18 @@ class UploadCategoryInline(admin.TabularInline):
     prepopulated_fields = {"code": ("label",)}
 
 
+class GuestBookAssignmentInline(admin.TabularInline):
+    model = GuestBookAssignment
+    extra = 0
+    fields = ("agent", "started_at", "ended_at")
+    autocomplete_fields = ("agent",)
+    verbose_name = "agent affecte au livre d'or"
+    verbose_name_plural = "Livre d'or — agents affectes (plusieurs possibles, chacun son service)"
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    inlines = [UploadCategoryInline]
+    inlines = [UploadCategoryInline, GuestBookAssignmentInline]
     actions = ("mark_events_paid", "purge_r2_files")
     list_display = (
         "title",
@@ -70,13 +80,13 @@ class EventAdmin(admin.ModelAdmin):
         "formatted_price",
         "paid_at",
         "is_active",
-        "guestbook_agent",
+        "guestbook_agent_count",
         "guest_access_code",
         "media_retention_days",
         "created_at",
     )
-    list_select_related = ("organizer", "event_type", "guestbook_agent")
-    list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at", "guestbook_agent")
+    list_select_related = ("organizer", "event_type")
+    list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at")
     search_fields = ("title", "couple_name", "location", "organizer__username", "payment_reference")
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ("created_at", "updated_at")
@@ -141,23 +151,21 @@ class EventAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Livre d'or agent",
-            {
-                "fields": ("guestbook_agent", "guestbook_started_at", "guestbook_ended_at"),
-                "description": (
-                    "Affectez un compte agent pour activer le livre d'or video a l'entree. "
-                    "Le debut est horodate automatiquement a la premiere capture. Videz la fin "
-                    "pour rouvrir une mission cloturee par erreur."
-                ),
-            },
-        ),
-        (
             "Dates",
             {
                 "fields": ("created_at", "updated_at"),
             },
         ),
     )
+
+    def get_queryset(self, request):
+        from django.db.models import Count
+
+        return super().get_queryset(request).annotate(_guestbook_agent_count=Count("guestbook_assignments"))
+
+    @admin.display(description="Agents livre d'or", ordering="_guestbook_agent_count")
+    def guestbook_agent_count(self, obj):
+        return obj._guestbook_agent_count
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = list(super().get_fieldsets(request, obj))

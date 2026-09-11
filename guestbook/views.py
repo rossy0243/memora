@@ -10,9 +10,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
-from events.models import Event
 
 from .forms import GuestBookMessageForm
+from .models import GuestBookAssignment
 from .services import queue_guestbook_movie
 
 
@@ -24,33 +24,42 @@ def _require_agent(request):
         raise Http404
 
 
-def _get_assigned_event(request, pk):
-    return get_object_or_404(Event, pk=pk, guestbook_agent=request.user)
+def _get_assignment(request, pk):
+    """La mission de CET agent sur cet evenement. Plusieurs agents peuvent en
+    avoir chacun une, independamment : le service de l'un ne ferme pas celui
+    des autres."""
+    return get_object_or_404(
+        GuestBookAssignment.objects.select_related("event"),
+        event_id=pk,
+        agent=request.user,
+    )
 
 
 @login_required
 def agent_home(request):
     """Liste les missions livre d'or de l'agent connecte."""
     _require_agent(request)
-    missions = (
-        Event.objects.filter(guestbook_agent=request.user)
-        .annotate(message_count=Count("guestbook_messages"))
-        .order_by("-event_date")
+    assignments = (
+        GuestBookAssignment.objects.filter(agent=request.user)
+        .select_related("event")
+        .annotate(message_count=Count("event__guestbook_messages"))
+        .order_by("-event__event_date")
     )
-    return render(request, "guestbook/agent_home.html", {"missions": missions})
+    return render(request, "guestbook/agent_home.html", {"assignments": assignments})
 
 
 @login_required
 def guestbook_capture(request, pk):
     _require_agent(request)
-    event = _get_assigned_event(request, pk)
+    assignment = _get_assignment(request, pk)
+    event = assignment.event
 
-    if event.guestbook_ended_at:
+    if assignment.ended_at:
         return render(request, "guestbook/shift_closed.html", {"event": event})
 
-    if not event.guestbook_started_at:
-        event.guestbook_started_at = timezone.now()
-        event.save(update_fields=["guestbook_started_at", "updated_at"])
+    if not assignment.started_at:
+        assignment.started_at = timezone.now()
+        assignment.save(update_fields=["started_at", "updated_at"])
 
     if request.method == "POST":
         form = GuestBookMessageForm(request.POST, request.FILES)
@@ -77,7 +86,7 @@ def guestbook_capture(request, pk):
     else:
         form = GuestBookMessageForm()
 
-    recorded = event.guestbook_messages.order_by("-created_at")
+    recorded = event.guestbook_messages.select_related("recorded_by").order_by("-created_at")
     return render(
         request,
         "guestbook/capture.html",
@@ -95,12 +104,14 @@ def guestbook_capture(request, pk):
 @require_POST
 def end_shift(request, pk):
     _require_agent(request)
-    event = _get_assigned_event(request, pk)
-    event.guestbook_ended_at = timezone.now()
-    event.save(update_fields=["guestbook_ended_at", "updated_at"])
+    assignment = _get_assignment(request, pk)
+    assignment.ended_at = timezone.now()
+    assignment.save(update_fields=["ended_at", "updated_at"])
 
     # Fin de service = declencheur normal du montage integral du livre d'or.
-    if queue_guestbook_movie(event, trigger="agent_end_shift"):
+    # D'autres agents peuvent continuer a enregistrer sur le meme evenement :
+    # le montage sera regenere a leur propre fin de service.
+    if queue_guestbook_movie(assignment.event, trigger="agent_end_shift"):
         messages.success(
             request,
             "Service terminé. Le montage du livre d'or est lancé, "

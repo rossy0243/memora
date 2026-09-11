@@ -1,6 +1,20 @@
 from django.contrib import admin
 
-from .models import GuestBookMessage, GuestBookMovie
+from .models import GuestBookAssignment, GuestBookMessage, GuestBookMovie
+
+
+@admin.register(GuestBookAssignment)
+class GuestBookAssignmentAdmin(admin.ModelAdmin):
+    """Vue transversale des missions, tous evenements confondus.
+
+    L'affectation elle-meme se fait plutot depuis la fiche evenement (inline) :
+    cette page sert a retrouver rapidement ou travaille un agent donne."""
+
+    list_display = ("event", "agent", "started_at", "ended_at", "assigned_at")
+    list_filter = ("agent",)
+    search_fields = ("event__title", "agent__username")
+    list_select_related = ("event", "agent")
+    autocomplete_fields = ("agent",)
 
 
 @admin.register(GuestBookMessage)

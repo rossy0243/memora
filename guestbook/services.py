@@ -10,12 +10,10 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Q
 from django.utils import timezone
 
-from events.models import Event
-
-from .models import GuestBookMessage, GuestBookMovie
+from .models import GuestBookAssignment, GuestBookMovie
 
 logger = logging.getLogger(__name__)
 
@@ -49,31 +47,34 @@ def queue_guestbook_movie(event, *, trigger):
 
 
 def queue_abandoned_guestbook_movies():
-    """File les livres d'or dont l'agent n'a jamais termine le service.
+    """File les livres d'or dont au moins un agent n'a jamais termine son service.
 
-    Un service ouvert depuis plus de MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS, ou
-    un evenement passe avec des messages mais sans montage, est pris en charge
-    par Memora. Renvoie le nombre de montages nouvellement files.
+    Un service ouvert depuis plus de MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS est
+    cloture d'office et pris en charge par Memora — plusieurs agents pouvant
+    travailler sur le meme evenement, la cloture de l'un n'attend pas les
+    autres. Renvoie le nombre de montages nouvellement files.
     """
     cutoff = timezone.now() - timedelta(
         hours=settings.MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS
     )
-    has_messages = GuestBookMessage.objects.filter(event=OuterRef("pk"))
-    candidates = (
-        Event.objects.filter(guestbook_movie__isnull=True)
-        .annotate(has_messages=Exists(has_messages))
-        .filter(has_messages=True)
-        .filter(guestbook_ended_at__isnull=True)
-        .filter(guestbook_started_at__lt=cutoff)
+    stale_assignments = (
+        GuestBookAssignment.objects.select_related("event")
+        .filter(ended_at__isnull=True, started_at__lt=cutoff)
     )
 
-    queued = 0
-    for event in candidates:
-        if queue_guestbook_movie(event, trigger="auto_abandon"):
-            queued += 1
-    if queued:
-        logger.info("Guestbook montage auto-queued for %s abandoned shift(s)", queued)
-    return queued
+    queued_events = set()
+    now = timezone.now()
+    for assignment in stale_assignments:
+        assignment.ended_at = now
+        assignment.save(update_fields=["ended_at", "updated_at"])
+        if assignment.event_id in queued_events:
+            continue
+        if queue_guestbook_movie(assignment.event, trigger="auto_abandon"):
+            queued_events.add(assignment.event_id)
+
+    if queued_events:
+        logger.info("Guestbook montage auto-queued for %s abandoned shift(s)", len(queued_events))
+    return len(queued_events)
 
 
 def get_pending_guestbook_movies(limit=None, include_processing=False):

@@ -14,6 +14,57 @@ def guestbook_movie_upload_path(instance, filename):
     return f"events/{event_slug}/livre-dor/montage/{filename}"
 
 
+class GuestBookAssignment(models.Model):
+    """Mission d'un agent Memora sur le livre d'or d'un evenement.
+
+    Plusieurs agents peuvent travailler simultanement sur le meme evenement,
+    chacun avec son propre compte et son propre service (debut/fin) : un agent
+    qui termine ne ferme pas le stand pour les autres. L'affectation se fait
+    en interne, via l'admin.
+    """
+
+    event = models.ForeignKey(
+        "events.Event",
+        on_delete=models.CASCADE,
+        related_name="guestbook_assignments",
+    )
+    agent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="guestbook_assignments",
+        limit_choices_to={"agent_profile__isnull": False},
+        help_text="Agent Memora affecte au livre d'or video de cet evenement.",
+    )
+    started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Debut du service de cet agent, horodate automatiquement au premier demarrage.",
+    )
+    ended_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fin du service de cet agent. Videz ce champ pour le rouvrir.",
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-assigned_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["event", "agent"], name="unique_guestbook_assignment"),
+        ]
+        verbose_name = "mission agent livre d'or"
+        verbose_name_plural = "missions agent livre d'or"
+
+    def __str__(self):
+        return f"{self.agent} - {self.event}"
+
+    @property
+    def is_open(self):
+        """Vrai tant que cet agent est en mission : demarree, pas encore cloturee."""
+        return bool(self.started_at and not self.ended_at)
+
+
 class GuestBookMessage(models.Model):
     """Message video enregistre au stand livre d'or par l'agent Memora.
 

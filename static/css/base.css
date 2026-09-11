@@ -3629,6 +3629,11 @@ body.capture-review-open {
   font-weight: 600;
 }
 
+.guestbook-recent__by {
+  opacity: 0.65;
+  font-size: 0.82em;
+}
+
 .guestbook-recent time {
   margin-left: auto;
   opacity: 0.6;

@@ -44,7 +44,7 @@
       </form>
     {% elif guestbook_movie %}
       <p class="message message--info">Montage en préparation&nbsp;: il apparaîtra ici dès qu'il est prêt.</p>
-    {% elif messages_list %}
+    {% elif total_message_count %}
       <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">
         {% csrf_token %}
         <button class="button button--primary" type="submit">Générer le montage du livre d'or</button>
@@ -53,6 +53,33 @@
       <p class="page-heading__meta">Le montage sera disponible dès qu'un message aura été enregistré.</p>
     {% endif %}
   </div>
+
+  <div class="page-heading">
+    <div>
+      <h2>Messages reçus</h2>
+      <p class="page-heading__meta">
+        {{ total_message_count }} message{{ total_message_count|pluralize }} au total
+        {% if recording_agents|length > 1 %}&middot; {{ recording_agents|length }} agents ont enregistré sur cet événement{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if recording_agents|length > 1 %}
+    <form class="media-filter-bar" method="get">
+      <label>
+        <span>Agent</span>
+        <select name="agent" onchange="this.form.submit()">
+          <option value="">Tous les agents</option>
+          {% for agent in recording_agents %}
+            <option value="{{ agent.recorded_by_id }}" {% if selected_agent == agent.recorded_by_id|stringformat:"s" %}selected{% endif %}>
+              {{ agent.recorded_by__first_name|default:agent.recorded_by__username }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <noscript><button class="button button--secondary button--compact" type="submit">Filtrer</button></noscript>
+    </form>
+  {% endif %}
 
   {% if messages_list %}
     <div class="media-library-grid">
@@ -64,13 +91,33 @@
           <div class="media-library-card__body">
             <span>{{ message.guest_name|default:"Invité anonyme" }}</span>
             <strong>{{ message.created_at|date:"d/m/Y H:i" }}</strong>
-            <small>{{ message.file_size|filesizeformat }}</small>
+            <small>
+              {{ message.file_size|filesizeformat }}
+              {% if message.recorded_by %}&middot; par {{ message.recorded_by.get_short_name|default:message.recorded_by.username }}{% endif %}
+            </small>
             <div class="media-library-card__actions">
               <a href="{{ message.media_file.url }}" download>Télécharger</a>
             </div>
           </div>
         </article>
       {% endfor %}
+    </div>
+
+    {% if is_paginated %}
+      <nav class="pagination" aria-label="Pagination livre d'or">
+        {% if page_obj.has_previous %}
+          <a class="button button--secondary button--compact" href="?page={{ page_obj.previous_page_number }}{% if selected_agent %}&agent={{ selected_agent }}{% endif %}">Précédent</a>
+        {% endif %}
+        <span>Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="button button--secondary button--compact" href="?page={{ page_obj.next_page_number }}{% if selected_agent %}&agent={{ selected_agent }}{% endif %}">Suivant</a>
+        {% endif %}
+      </nav>
+    {% endif %}
+  {% elif selected_agent %}
+    <div class="empty-state">
+      <h2>Aucun message pour cet agent.</h2>
+      <p><a href="{% url 'events:guestbook_messages' event.pk %}">Voir tous les agents</a></p>
     </div>
   {% else %}
     <div class="empty-state">

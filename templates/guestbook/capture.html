@@ -16,7 +16,7 @@
 
       <div class="guestbook-tally" aria-live="polite">
         <strong>{{ sent_count }}</strong>
-        <span>message{{ sent_count|pluralize }} enregistré{{ sent_count|pluralize }} pour cette mission</span>
+        <span>message{{ sent_count|pluralize }} enregistré{{ sent_count|pluralize }} pour cet événement</span>
       </div>
       {% if recent_messages %}
         <ul class="guestbook-recent">
@@ -24,6 +24,9 @@
             <li>
               <span class="guestbook-recent__check" aria-hidden="true">&#10003;</span>
               <span class="guestbook-recent__who">{{ message.guest_name|default:"Sans nom" }}</span>
+              {% if message.recorded_by %}
+                <span class="guestbook-recent__by">par {{ message.recorded_by.get_short_name|default:message.recorded_by.username }}</span>
+              {% endif %}
               <time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"H:i" }}</time>
             </li>
           {% endfor %}

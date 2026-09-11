@@ -197,7 +197,9 @@ class OrganizerProfile(models.Model):
 class AgentProfile(models.Model):
     """Marque un compte comme agent Memora : employe qui anime le livre d'or
     video a l'entree d'un evenement. Distinct d'un organisateur : pas d'evenements
-    a lui, juste des missions affectees via l'admin (voir Event.guestbook_agent).
+    a lui, juste des missions affectees via l'admin (voir guestbook.GuestBookAssignment).
+    Plusieurs agents peuvent etre affectes au meme evenement, chacun avec son
+    propre compte et son propre service.
     """
 
     user = models.OneToOneField(

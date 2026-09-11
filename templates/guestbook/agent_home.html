@@ -14,26 +14,26 @@
     </div>
   </div>
 
-  {% if missions %}
+  {% if assignments %}
     <div class="dashboard-ops-grid reveal-group">
-      {% for event in missions %}
+      {% for assignment in assignments %}
         <article class="detail-panel">
-          <h3>{{ event.title }}</h3>
+          <h3>{{ assignment.event.title }}</h3>
           <dl class="detail-list">
             <div>
               <dt>Date</dt>
-              <dd>{{ event.event_date }}</dd>
+              <dd>{{ assignment.event.event_date }}</dd>
             </div>
             <div>
               <dt>Messages</dt>
-              <dd>{{ event.message_count }}</dd>
+              <dd>{{ assignment.message_count }}</dd>
             </div>
             <div>
               <dt>Statut</dt>
               <dd>
-                {% if event.guestbook_ended_at %}
+                {% if assignment.ended_at %}
                   <span class="status-pill">Terminée</span>
-                {% elif event.guestbook_started_at %}
+                {% elif assignment.started_at %}
                   <span class="status-pill status-pill--active">En cours</span>
                 {% else %}
                   <span class="status-pill">À démarrer</span>
@@ -41,8 +41,8 @@
               </dd>
             </div>
           </dl>
-          <a class="button button--primary" href="{% url 'guestbook:capture' event.pk %}">
-            {% if event.guestbook_ended_at %}Revoir{% elif event.guestbook_started_at %}Continuer{% else %}Démarrer le livre d'or{% endif %}
+          <a class="button button--primary" href="{% url 'guestbook:capture' assignment.event.pk %}">
+            {% if assignment.ended_at %}Revoir{% elif assignment.started_at %}Continuer{% else %}Démarrer le livre d'or{% endif %}
           </a>
         </article>
       {% endfor %}

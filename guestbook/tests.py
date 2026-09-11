@@ -11,7 +11,7 @@ from django.utils import timezone
 from accounts.models import AgentProfile
 from events.models import Event, EventType
 
-from .models import GuestBookMessage, GuestBookMovie
+from .models import GuestBookAssignment, GuestBookMessage, GuestBookMovie
 from .services import queue_abandoned_guestbook_movies
 
 
@@ -28,8 +28,8 @@ class GuestbookViewTests(TestCase):
             title="Mariage Livre d'Or",
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
-            guestbook_agent=self.agent,
         )
+        self.assignment = GuestBookAssignment.objects.create(event=self.event, agent=self.agent)
 
     def capture_url(self):
         return reverse("guestbook:capture", kwargs={"pk": self.event.pk})
@@ -58,13 +58,13 @@ class GuestbookViewTests(TestCase):
 
     def test_visiting_capture_screen_starts_the_shift_automatically(self):
         self.client.login(username="agent1", password="secret")
-        self.assertIsNone(self.event.guestbook_started_at)
+        self.assertIsNone(self.assignment.started_at)
 
         response = self.client.get(self.capture_url())
 
         self.assertEqual(response.status_code, 200)
-        self.event.refresh_from_db()
-        self.assertIsNotNone(self.event.guestbook_started_at)
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.started_at)
 
     @patch("guestbook.forms._probe_video_duration", return_value=18)
     def test_agent_records_a_message(self, _probe_video_duration):
@@ -105,12 +105,42 @@ class GuestbookViewTests(TestCase):
         response = self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
 
         self.assertRedirects(response, reverse("guestbook:agent_home"))
-        self.event.refresh_from_db()
-        self.assertIsNotNone(self.event.guestbook_ended_at)
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.ended_at)
         self.assertFalse(self.event.guestbook_is_open)
 
         closed_response = self.client.get(self.capture_url())
         self.assertContains(closed_response, "Service terminé")
+
+    def test_two_agents_can_work_the_same_event_independently(self):
+        second_assignment = GuestBookAssignment.objects.create(
+            event=self.event, agent=self.other_agent
+        )
+
+        self.client.login(username="agent1", password="secret")
+        self.client.get(self.capture_url())
+        self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
+
+        self.client.login(username="agent2", password="secret")
+        response = self.client.get(self.capture_url())
+
+        # Le service de l'agent 1 est termine, mais l'agent 2 peut toujours
+        # enregistrer : chaque agent a son propre service, sur son propre compte.
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "guestbook/capture.html")
+        self.assertTemplateNotUsed(response, "guestbook/shift_closed.html")
+        second_assignment.refresh_from_db()
+        self.assertIsNone(second_assignment.ended_at)
+        self.assertTrue(self.event.guestbook_is_open)
+
+    def test_agent_home_only_lists_own_assignments(self):
+        GuestBookAssignment.objects.create(event=self.event, agent=self.other_agent)
+
+        self.client.login(username="agent2", password="secret")
+        response = self.client.get(reverse("guestbook:agent_home"))
+
+        self.assertEqual(len(response.context["assignments"]), 1)
+        self.assertEqual(response.context["assignments"][0].agent, self.other_agent)
 
     def test_capture_screen_shows_recorded_count_and_recent(self):
         GuestBookMessage.objects.create(
@@ -166,6 +196,59 @@ class GuestbookViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_guestbook_messages_history_is_paginated(self):
+        for index in range(30):
+            GuestBookMessage.objects.create(
+                event=self.event,
+                media_file=f"events/mariage/livre-dor/m{index}.mp4",
+                original_filename=f"m{index}.mp4",
+                file_size=10,
+                recorded_by=self.agent,
+            )
+        self.client.login(username="organizer", password="secret")
+
+        response = self.client.get(reverse("events:guestbook_messages", kwargs={"pk": self.event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["is_paginated"])
+        self.assertEqual(len(response.context["page_obj"]), 24)
+        self.assertEqual(response.context["total_message_count"], 30)
+
+        second_page = self.client.get(
+            reverse("events:guestbook_messages", kwargs={"pk": self.event.pk}), {"page": 2}
+        )
+        self.assertEqual(len(second_page.context["page_obj"]), 6)
+
+    def test_guestbook_messages_can_be_filtered_by_agent(self):
+        GuestBookAssignment.objects.create(event=self.event, agent=self.other_agent)
+        GuestBookMessage.objects.create(
+            event=self.event,
+            guest_name="Cote agent 1",
+            media_file="events/mariage/livre-dor/a.mp4",
+            original_filename="a.mp4",
+            file_size=10,
+            recorded_by=self.agent,
+        )
+        GuestBookMessage.objects.create(
+            event=self.event,
+            guest_name="Cote agent 2",
+            media_file="events/mariage/livre-dor/b.mp4",
+            original_filename="b.mp4",
+            file_size=10,
+            recorded_by=self.other_agent,
+        )
+        self.client.login(username="organizer", password="secret")
+
+        response = self.client.get(
+            reverse("events:guestbook_messages", kwargs={"pk": self.event.pk}),
+            {"agent": self.other_agent.pk},
+        )
+
+        self.assertContains(response, "Cote agent 2")
+        self.assertNotContains(response, "Cote agent 1")
+        # Le compteur global, lui, ne suit pas le filtre.
+        self.assertEqual(response.context["total_message_count"], 2)
+
 
 class GuestBookMontageTests(TestCase):
     def setUp(self):
@@ -177,8 +260,8 @@ class GuestBookMontageTests(TestCase):
             title="Mariage Montage",
             event_type=EventType.objects.get(code="wedding"),
             event_date=date(2026, 7, 8),
-            guestbook_agent=self.agent,
         )
+        self.assignment = GuestBookAssignment.objects.create(event=self.event, agent=self.agent)
 
     def _add_message(self, name="La famille Dupont"):
         return GuestBookMessage.objects.create(
@@ -239,8 +322,8 @@ class GuestBookMontageTests(TestCase):
     def test_abandoned_shift_is_picked_up(self):
         self._add_message()
         old = timezone.now() - timedelta(hours=48)
-        Event.objects.filter(pk=self.event.pk).update(
-            guestbook_started_at=old, guestbook_ended_at=None
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
+            started_at=old, ended_at=None
         )
 
         queued = queue_abandoned_guestbook_movies()
@@ -249,6 +332,23 @@ class GuestBookMontageTests(TestCase):
         self.assertEqual(
             GuestBookMovie.objects.get(event=self.event).trigger, "auto_abandon"
         )
+        self.assignment.refresh_from_db()
+        # Le service abandonne est cloture d'office : il ne redeclenche pas a
+        # chaque passage du cron, et l'agent voit son service comme termine.
+        self.assertIsNotNone(self.assignment.ended_at)
+
+    def test_abandoned_shift_of_one_agent_does_not_reflag_forever(self):
+        self._add_message()
+        old = timezone.now() - timedelta(hours=48)
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
+            started_at=old, ended_at=None
+        )
+
+        first_pass = queue_abandoned_guestbook_movies()
+        second_pass = queue_abandoned_guestbook_movies()
+
+        self.assertEqual(first_pass, 1)
+        self.assertEqual(second_pass, 0)
 
     def test_process_guestbook_movie_completes(self):
         self._add_message("Les voisins")
