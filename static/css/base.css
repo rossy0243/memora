@@ -11,6 +11,13 @@
   --color-surface-soft: #f7efeb;
   --color-sage: #dfe7dd;
   --color-champagne: #d8b46a;
+  /* Fraunces + Plus Jakarta Sans remplacent Playfair Display + Inter : le
+     pairing precedent est devenu le choix par defaut de tout ce qui sort
+     d'un generateur. Cormorant Garamond (deja utilisee dans le monogramme)
+     sert d'accent, avec parcimonie. */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-accent: "Cormorant Garamond", Georgia, serif;
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --shadow-soft: 0 18px 50px rgba(36, 31, 34, 0.16);
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -30,7 +37,7 @@ body {
   min-height: 100%;
   margin: 0;
   color: var(--color-ink);
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   line-height: 1.5;
   background: var(--color-canvas);
 }
@@ -71,7 +78,7 @@ a {
   gap: 10px;
   min-height: 44px;
   color: #fff;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 1.55rem;
   font-weight: 700;
   text-decoration: none;
@@ -355,7 +362,7 @@ p {
 
 h1 {
   margin-bottom: 12px;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(3.6rem, 16vw, 7.2rem);
   font-weight: 700;
   line-height: 0.94;
@@ -364,7 +371,7 @@ h1 {
 
 h2 {
   margin-bottom: 16px;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2rem, 8vw, 4rem);
   line-height: 1.04;
   letter-spacing: 0;
@@ -484,7 +491,7 @@ h2 {
   max-width: 640px;
   margin-bottom: 18px;
   color: var(--color-ink);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(1.85rem, 7vw, 2.35rem);
   line-height: 1.08;
 }
@@ -615,7 +622,7 @@ h2 {
 
 .pricing-card strong {
   color: #fff;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(3rem, 13vw, 4.8rem);
   line-height: 0.95;
 }
@@ -681,7 +688,7 @@ h2 {
    salles de reception) : c'est lui qui ouvre la carte, avant le nom. */
 .plan-card__guests {
   color: #fff;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(1.3rem, 4.5vw, 1.7rem);
   line-height: 1.05;
 }
@@ -696,7 +703,7 @@ h2 {
 
 .plan-card__price {
   color: #fff;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2.1rem, 7vw, 2.9rem);
   line-height: 1;
 }
@@ -745,7 +752,8 @@ h2 {
 .plan-card__tagline {
   margin: 10px 0 0;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 0.88rem;
+  font-family: var(--font-accent);
+  font-size: 1.02rem;
   font-style: italic;
 }
 
@@ -908,7 +916,7 @@ h2 {
   gap: 12px;
   width: max-content;
   color: #fff;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 2rem;
   font-weight: 700;
   line-height: 1;
@@ -1529,7 +1537,7 @@ h2 {
 
 .event-card h2 {
   margin: 0;
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 1.2rem;
   line-height: 1.2;
 }
@@ -2211,7 +2219,7 @@ h2 {
 
 .stat-card strong {
   color: var(--color-ink);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 2.6rem;
   line-height: 1;
 }
@@ -4044,7 +4052,7 @@ body.capture-review-open {
 
 .program-hero h1 {
   margin: 6px 0 14px;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2.4rem, 9vw, 4rem);
   line-height: 1.02;
 }
@@ -4115,7 +4123,7 @@ body.capture-review-open {
 .tier-card__amount {
   margin-top: 6px;
   color: var(--color-ink);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2.4rem, 10vw, 3.2rem);
   line-height: 1;
 }
@@ -4196,7 +4204,7 @@ body.capture-review-open {
 
 .legal-page__head h1 {
   margin: 6px 0 10px;
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: clamp(2rem, 7vw, 3rem);
   line-height: 1.05;
 }
@@ -4344,14 +4352,15 @@ body.capture-review-open {
 
 .plan-choice__price {
   color: var(--color-ink);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 1.25rem;
   white-space: nowrap;
 }
 
 .plan-choice__tagline {
   color: var(--color-muted, #6b6b6b);
-  font-size: 0.85rem;
+  font-family: var(--font-accent);
+  font-size: 1rem;
   font-style: italic;
 }
 

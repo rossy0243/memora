@@ -1,7 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">Memora</title>
-  <desc id="desc">Monogramme minimaliste Memora</desc>
   <rect width="64" height="64" rx="18" fill="#241f22"/>
-  <path d="M18 43V22c0-3.3 3.9-5 6.2-2.7L32 27l7.8-7.7C42.1 17 46 18.7 46 22v21" fill="none" stroke="#f4d9d5" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M24 44h16" fill="none" stroke="#d8b46a" stroke-width="4.5" stroke-linecap="round"/>
+  <g transform="translate(-4.5,-4.6) scale(0.366)" fill="#f4d9d5" stroke="#f4d9d5" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M46,62 C44.5,86 43.2,112 43,138 L49,138 C51,112 54.5,90 57,71 L95,133 L101,141 L139,70 C141,92 144.8,116 146,138 L159,138 C159.2,112 157.8,86 156,62 L133,62 L105,121 L71,62 Z"/>
+    <rect x="41" y="59.5" width="31" height="3.5"/>
+    <rect x="131" y="59.5" width="30" height="3.5"/>
+    <rect x="36.5" y="135" width="20" height="3.5"/>
+    <rect x="142" y="135" width="21" height="3.5"/>
+  </g>
 </svg>
