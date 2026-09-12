@@ -674,6 +674,15 @@ h2 {
   text-transform: uppercase;
 }
 
+/* Le nombre d'invites est ce que l'organisateur cherche en premier (comme les
+   salles de reception) : c'est lui qui ouvre la carte, avant le nom. */
+.plan-card__guests {
+  color: #fff;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.3rem, 4.5vw, 1.7rem);
+  line-height: 1.05;
+}
+
 .plan-card__name {
   color: var(--color-champagne);
   font-size: 0.82rem;
@@ -4308,8 +4317,16 @@ body.capture-review-open {
   justify-content: space-between;
 }
 
+.plan-choice__guests {
+  font-size: 1.05rem;
+}
+
 .plan-choice__name {
-  font-size: 1.02rem;
+  color: var(--color-muted, #6b6b6b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .plan-choice__price {
@@ -4317,11 +4334,6 @@ body.capture-review-open {
   font-family: "Playfair Display", Georgia, serif;
   font-size: 1.25rem;
   white-space: nowrap;
-}
-
-.plan-choice__meta {
-  color: var(--color-muted, #6b6b6b);
-  font-size: 0.9rem;
 }
 
 .plan-choice__tagline {

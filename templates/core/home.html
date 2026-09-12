@@ -75,7 +75,7 @@
       <h2>Tout Memora, à la taille de votre événement.</h2>
       <p>Payez une fois, pour l'événement : collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique. Aucun abonnement, aucune option cachée.</p>
       {% if memora_event_plans %}
-      <p class="pricing-band__note">Le nombre d'invités n'est jamais bloqué&nbsp;: <strong>tous vos invités peuvent participer</strong>, quelle que soit la formule. Elle détermine simplement le nombre de souvenirs inclus.</p>
+      <p class="pricing-band__note">Choisissez selon le nombre d'invités attendus&nbsp;: <strong>tous vos invités peuvent participer</strong>, quelle que soit la formule choisie.</p>
       {% endif %}
     </div>
     {% if memora_event_plans %}
@@ -83,13 +83,13 @@
       {% for plan in memora_event_plans %}
       <article class="plan-card{% if plan.is_default %} plan-card--featured{% endif %}">
         {% if plan.is_default %}<span class="plan-card__flag">Le plus choisi</span>{% endif %}
+        <strong class="plan-card__guests">{{ plan.guests_label }}</strong>
         <span class="plan-card__name">{{ plan.label }}</span>
         <strong class="plan-card__price">{{ plan.formatted_price }}</strong>
         <span class="plan-card__unit">par événement</span>
         <ul class="plan-card__features">
-          <li>{{ plan.guests_label }}</li>
-          <li>{{ plan.upload_quota }} souvenirs inclus</li>
           <li>Film souvenir + teaser vertical</li>
+          <li>Caméra Memora, sans application invité</li>
         </ul>
         {% if plan.tagline %}<p class="plan-card__tagline">{{ plan.tagline }}</p>{% endif %}
         <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{% url 'events:create' %}">Choisir {{ plan.label }}</a>

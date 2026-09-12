@@ -49,10 +49,13 @@ class HomePageTests(TestCase):
 
         self.assertContains(response, "Intime")
         self.assertContains(response, "Prestige")
-        self.assertContains(response, "49 USD")
-        self.assertContains(response, "199 USD")
+        self.assertContains(response, "59 USD")
+        self.assertContains(response, "249 USD")
         self.assertContains(response, "Jusqu&#x27;à 50 invités")
-        self.assertContains(response, "300 souvenirs inclus")
+        # Le quota technique ne s'affiche plus sur les cartes de formule : seul
+        # le nombre d'invites y est montre, mis en avant (la FAQ plus bas
+        # explique encore le mecanisme en mots, sans chiffre par formule).
+        self.assertNotContains(response, "300 souvenirs inclus")
         # La promesse qui evite l'angoisse du « et si j'ai plus d'invites ? ».
         # Texte statique du template : l'apostrophe n'y est pas echappee.
         self.assertContains(response, "n'est jamais bloqué")
@@ -171,10 +174,10 @@ class LegalPagesTests(TestCase):
 
         self.assertContains(response, "Tarifs et formules")
         for label, price, quota in (
-            ("Intime", "49 USD", "300 souvenirs inclus"),
-            ("Classique", "79 USD", "800 souvenirs inclus"),
-            ("Grand jour", "129 USD", "1500 souvenirs inclus"),
-            ("Prestige", "199 USD", "3000 souvenirs inclus"),
+            ("Intime", "59 USD", "300 souvenirs inclus"),
+            ("Classique", "89 USD", "800 souvenirs inclus"),
+            ("Grand jour", "149 USD", "1500 souvenirs inclus"),
+            ("Prestige", "249 USD", "3000 souvenirs inclus"),
         ):
             self.assertContains(response, label)
             self.assertContains(response, price)

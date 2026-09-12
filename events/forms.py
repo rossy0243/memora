@@ -27,7 +27,7 @@ class EventPlanChoiceField(forms.ModelChoiceField):
     """Affiche la formule telle qu'un organisateur la lit : nom, invites, prix."""
 
     def label_from_instance(self, plan):
-        return f"{plan.label} — {plan.guests_label} — {plan.formatted_price}"
+        return f"{plan.guests_label} — {plan.label} — {plan.formatted_price}"
 
 
 class EventForm(forms.ModelForm):
@@ -51,8 +51,8 @@ class EventForm(forms.ModelForm):
         widget=forms.RadioSelect,
         label="Formule",
         help_text=(
-            "Choisissez selon le nombre d'invités attendus. Le nombre d'invités n'est jamais "
-            "bloqué : la formule fixe le nombre de souvenirs inclus."
+            "Choisissez selon le nombre d'invités attendus. Il n'est jamais bloqué : "
+            "tous vos invités peuvent participer, quelle que soit la formule choisie."
         ),
     )
 

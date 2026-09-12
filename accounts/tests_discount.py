@@ -25,7 +25,12 @@ class FirstEventDiscountTests(TestCase):
         self.event_type, _ = EventType.objects.get_or_create(
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
-        self.plan = EventPlan.objects.get(code="classique")  # 79 USD
+        self.plan = EventPlan.objects.get(code="classique")
+        # Fige le prix de la formule a 79 USD : ce test fait tourner beaucoup
+        # de calculs sur ce montant precis, independamment du tarif catalogue
+        # reellement en vigueur (modifiable en admin a tout moment).
+        self.plan.price_amount = 7900
+        self.plan.save(update_fields=["price_amount"])
         config = SiteConfiguration.current()
         config.first_event_discount_percent = Decimal("15")
         config.commission_mode = "percent"
@@ -197,6 +202,9 @@ class PromoCodeFormTests(TestCase):
             code="wedding", defaults={"label": "Mariage", "sort_order": 1}
         )
         self.plan = EventPlan.objects.get(code="classique")
+        # Meme raison qu'au-dessus : fige a 79 USD pour des calculs stables.
+        self.plan.price_amount = 7900
+        self.plan.save(update_fields=["price_amount"])
         config = SiteConfiguration.current()
         config.first_event_discount_percent = Decimal("15")
         config.save()

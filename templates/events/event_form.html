@@ -69,7 +69,7 @@
       <div class="form-section__heading">
         <p class="section__label">Formule</p>
         <h2>À la taille de votre événement</h2>
-        <p class="form-section__note">Tous vos invités peuvent participer, quelle que soit la formule&nbsp;: elle fixe le nombre de souvenirs inclus, pas le nombre de personnes.</p>
+        <p class="form-section__note">Choisissez selon le nombre d'invités attendus&nbsp;: tous vos invités peuvent participer, quelle que soit la formule choisie.</p>
       </div>
 
       <div class="plan-choice" role="radiogroup" aria-label="Formule">
@@ -78,10 +78,10 @@
           {{ radio.tag }}
           <span class="plan-choice__body">
             <span class="plan-choice__head">
-              <strong class="plan-choice__name">{{ plan.label }}</strong>
+              <strong class="plan-choice__guests">{{ plan.guests_label }}</strong>
               <span class="plan-choice__price">{{ plan.formatted_price }}</span>
             </span>
-            <span class="plan-choice__meta">{{ plan.guests_label }} · {{ plan.upload_quota }} souvenirs inclus</span>
+            <span class="plan-choice__name">{{ plan.label }}</span>
             {% if plan.tagline %}<span class="plan-choice__tagline">{{ plan.tagline }}</span>{% endif %}
           </span>
         </label>
