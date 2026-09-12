@@ -5,7 +5,6 @@ import {
   OffthreadVideo,
   interpolate,
   staticFile,
-  useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
@@ -13,7 +12,8 @@ import { fade } from "@remotion/transitions/fade";
 import { GuestBookProps } from "./types";
 import { TitleCard } from "./TitleCard";
 import { NameCard } from "./NameCard";
-import { gradeFilter, vignette } from "./grade";
+import { gradeFilter, splitToneOverlay, vignette } from "./grade";
+import { FilmGrain } from "./FilmGrain";
 
 function resolveSrc(src: string): string {
   return /^https?:\/\//.test(src) ? src : staticFile(src);
@@ -28,14 +28,14 @@ const GuestBookClip: React.FC<{
   src: string;
   durationInFrames: number;
   grade: GuestBookProps["grade"];
-}> = ({ src, durationInFrames, grade }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  transitionDurationInFrames: number;
+}> = ({ src, durationInFrames, grade, transitionDurationInFrames }) => {
   const resolved = resolveSrc(src);
 
+  // Rampe alignee sur la transition visuelle (voir Clip.tsx : meme raisonnement).
   const fadeFrames = Math.max(
     1,
-    Math.min(Math.round(fps * 0.2), Math.floor(durationInFrames / 2))
+    Math.min(transitionDurationInFrames, Math.floor(durationInFrames / 2))
   );
   const voiceVolumeAt = (localFrame: number): number =>
     interpolate(
@@ -78,6 +78,7 @@ const GuestBookClip: React.FC<{
         />
       </AbsoluteFill>
 
+      <AbsoluteFill style={{ background: splitToneOverlay(grade), mixBlendMode: "soft-light" }} />
       <AbsoluteFill style={{ background: vignette }} />
     </AbsoluteFill>
   );
@@ -168,6 +169,7 @@ export const GuestBookMontage: React.FC<GuestBookProps> = (props) => {
               src={message.src}
               durationInFrames={message.durationInFrames}
               grade={grade}
+              transitionDurationInFrames={transitionDurationInFrames}
             />
           </TransitionSeries.Sequence>,
         ])}
@@ -189,6 +191,8 @@ export const GuestBookMontage: React.FC<GuestBookProps> = (props) => {
           volume={musicVolumeAt}
         />
       ) : null}
+
+      <FilmGrain />
     </AbsoluteFill>
   );
 };

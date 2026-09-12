@@ -4,7 +4,7 @@ import { continueRender, delayRender, staticFile } from "remotion";
 // dependance reseau au rendu. Elles couvrent le latin etendu : les accents
 // francais (é, è, ê, à, ç, î, ô, û…) s'affichent correctement, contrairement
 // aux polices systeme absentes du Chrome headless de rendu (bug du tofu « □ »).
-export const TITLE_FONT = "Playfair Display"; // serif haute-contraste, cartons
+export const TITLE_FONT = "Fraunces"; // serif chaleureux et grave, cartons — remplace Playfair Display (rebrand)
 export const ACCENT_FONT = "Cormorant Garamond"; // serif delicat, sous-titres
 
 let injected = false;
@@ -19,7 +19,7 @@ export function ensureFonts(): void {
   style.textContent = `
     @font-face {
       font-family: "${TITLE_FONT}";
-      src: url("${staticFile("fonts/PlayfairDisplay-VF.ttf")}") format("truetype");
+      src: url("${staticFile("fonts/Fraunces-VF.ttf")}") format("truetype");
       font-weight: 400 900;
       font-style: normal;
       font-display: block;

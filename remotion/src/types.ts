@@ -42,6 +42,9 @@ export interface FilmProps {
   // voix des invites (keepAudio). Alignes sur les reglages du pipeline FFmpeg.
   musicVolume: number;
   duckedMusicVolume: number;
+  // Bandeaux cinema (2.35:1) : reserves au heros, l'effet "salle de cinema".
+  // Absent (undefined) = pas de bandeaux, comme avant.
+  cinematicBars?: boolean;
 }
 
 // --- Montage du livre d'or ---------------------------------------------------
@@ -118,4 +121,5 @@ export const defaultFilmProps: FilmProps = {
   pace: "balanced",
   musicVolume: 0.85,
   duckedMusicVolume: 0.25,
+  cinematicBars: false,
 };

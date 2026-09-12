@@ -9,7 +9,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { FilmClip, FilmProps } from "./types";
-import { gradeFilter, vignette } from "./grade";
+import { gradeFilter, splitToneOverlay, vignette } from "./grade";
 import { ACCENT_FONT, ensureFonts } from "./fonts";
 
 // Resout un chemin : URL absolue telle quelle, sinon fichier statique du bundle.
@@ -104,7 +104,12 @@ export const Clip: React.FC<{
   grade: FilmProps["grade"];
   pace: FilmProps["pace"];
   chapterLabel?: string;
-}> = ({ clip, grade, pace, chapterLabel }) => {
+  // Duree de la transition visuelle (cross-dissolve) entre plans. Le fondu
+  // audio de la voix des invites s'aligne dessus : sans ca, l'image se
+  // fondait en douceur pendant que le son sautait net d'un plan a l'autre
+  // (calage sur un fixe ~0.2s independant du rythme choisi).
+  transitionDurationInFrames?: number;
+}> = ({ clip, grade, pace, chapterLabel, transitionDurationInFrames }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -117,14 +122,15 @@ export const Clip: React.FC<{
 
   // La musique a deja un fondu enchaine (MemoraFilm) ; sans le meme traitement ici,
   // la voix de l'invite entrait et sortait plein volume d'un coup — l'image fond en
-  // douceur mais le son sautait net d'un plan a l'autre. Meme rampe (~200ms) que le
-  // ducking musical, pour que l'oreille suive l'oeil.
+  // douceur mais le son sautait net d'un plan a l'autre. La rampe audio suit desormais
+  // la meme duree que la transition visuelle (cross-dissolve), pour que l'oreille et
+  // l'oeil se fondent au meme rythme quel que soit le pace choisi.
   // Fonction (et non nombre precalcule) : comme pour musicVolumeAt cote MemoraFilm,
   // c'est ce qui permet a Remotion d'echantillonner le volume a chaque frame audio
   // plutot que de figer un seul gain constant pour tout le plan.
   const voiceFadeFrames = Math.max(
     1,
-    Math.min(Math.round(fps * 0.2), Math.floor(clip.durationInFrames / 2))
+    Math.min(transitionDurationInFrames ?? Math.round(fps * 0.2), Math.floor(clip.durationInFrames / 2))
   );
   const voiceVolumeAt = (localFrame: number): number => {
     if (!clip.keepAudio) {
@@ -201,7 +207,10 @@ export const Clip: React.FC<{
         })}
       </AbsoluteFill>
 
-      {/* Vignette douce par-dessus. */}
+      {/* Split-tone (ombres/lumieres) puis vignette, dans cet ordre : le
+          soft-light doit voir l'image complete avant que la vignette assombrisse
+          les bords. */}
+      <AbsoluteFill style={{ background: splitToneOverlay(grade), mixBlendMode: "soft-light" }} />
       <AbsoluteFill style={{ background: vignette }} />
 
       {/* Lower-third du moment, uniquement sur le premier plan du chapitre. */}

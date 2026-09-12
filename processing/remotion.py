@@ -9,6 +9,7 @@ capot et le pipeline de secours. Ce module :
 """
 import json
 import logging
+import random
 import shutil
 import subprocess
 import tempfile
@@ -47,6 +48,16 @@ _PACE_BY_DELIVERABLE = {
     "full": "gentle",
 }
 
+# Duree de la transition (cross-dissolve) par rythme, en secondes. Un fondu
+# fixe (l'ancien `fps/2`) rendait le teaser mou et l'integrale trop nerveuse
+# pour son intention "on respire" — le fondu doit suivre le meme rythme que
+# le Ken Burns (voir KEN_BURNS cote TSX).
+_TRANSITION_SECONDS_BY_PACE = {
+    "punchy": 10 / 30,
+    "balanced": 15 / 30,
+    "gentle": 22 / 30,
+}
+
 def _clip_keeps_audio(upload):
     """Vrai si le plan garde son audio : toute video. Le son des invites EST
     l'emotion — meme regle que le pipeline ffmpeg, qui mixe l'audio de tous les
@@ -59,12 +70,24 @@ def _seconds_to_frames(seconds, fps):
     return max(int(round(seconds * fps)), 1)
 
 
+def _jittered_photo_seconds(base_seconds, seed):
+    """Varie legerement la duree d'une photo, de facon deterministe (seed = pk de
+    l'upload) : rejouer le rendu produit exactement le meme montage. Sans ca,
+    chaque photo tenait *exactement* la meme duree — un motif mecanique qui se
+    voit a l'oeil sur un film de plusieurs dizaines de plans. Une vraie monteuse
+    varie le tempo ; +/-  jusqu'a 20% imite ca sans jamais assez pour desynchroniser
+    le calage sur le tempo (snap_duration_to_beat corrige apres coup)."""
+    rng = random.Random(seed or 0)
+    factor = rng.uniform(0.85, 1.2)
+    return max(base_seconds * factor, 0.1)
+
+
 def _clip_seconds(upload, beat_interval):
     """Duree d'un plan, calee sur le tempo — meme logique que le pipeline ffmpeg."""
     from .services import snap_duration_to_beat
 
     if upload.media_type == GuestUpload.MediaType.IMAGE:
-        base = settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
+        base = _jittered_photo_seconds(settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS, upload.pk)
         return snap_duration_to_beat(base, beat_interval)
 
     base = settings.MEMORA_MOVIE_VIDEO_MAX_SECONDS
@@ -77,7 +100,9 @@ def _clip_seconds(upload, beat_interval):
     return snapped
 
 
-def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", allow_guest_audio=False):
+def build_film_props(
+    event, uploads, soundtrack, *, fps=None, pace="balanced", allow_guest_audio=False, deliverable=None
+):
     """Construit le dict FilmProps (aligne avec remotion/src/types.ts).
 
     Les `src` sont des noms de fichiers relatifs au dossier d'assets materialise ;
@@ -120,6 +145,8 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", a
         audio_src = f"music{audio_ext}"
         audio_offset = float(soundtrack.first_beat_offset or 0.0)
 
+    resolved_pace = pace if pace in ("punchy", "balanced", "gentle") else "balanced"
+
     return {
         "clips": clips,
         "audioSrc": audio_src,
@@ -129,11 +156,17 @@ def build_film_props(event, uploads, soundtrack, *, fps=None, pace="balanced", a
         "outroTitle": settings.MEMORA_MOVIE_OUTRO_TITLE or "Merci",
         "introDurationInFrames": _seconds_to_frames(settings.MEMORA_MOVIE_INTRO_CARD_SECONDS, fps),
         "outroDurationInFrames": _seconds_to_frames(settings.MEMORA_MOVIE_OUTRO_CARD_SECONDS, fps),
-        "transitionDurationInFrames": max(int(round(fps / 2)), 1),
+        "transitionDurationInFrames": _seconds_to_frames(
+            _TRANSITION_SECONDS_BY_PACE.get(resolved_pace, 0.5), fps
+        ),
         "grade": _GRADE_BY_MOOD.get(getattr(soundtrack, "mood", ""), "romantic"),
-        "pace": pace if pace in ("punchy", "balanced", "gentle") else "balanced",
+        "pace": resolved_pace,
         "musicVolume": float(getattr(settings, "MEMORA_REMOTION_MUSIC_VOLUME", 0.85)),
         "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.10)),
+        # Bandeaux cinema (2.35:1) : reserves au heros, l'effet "salle de cinema"
+        # sur le livrable qu'on regarde ensemble, pas sur l'integrale (archive)
+        # ni le teaser (deja vertical plein cadre).
+        "cinematicBars": deliverable == "hero",
     }
 
 
@@ -223,6 +256,7 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
         soundtrack,
         pace=pace,
         allow_guest_audio=deliverable in settings.MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES,
+        deliverable=deliverable,
     )
 
     with tempfile.TemporaryDirectory(prefix="memora_remotion_") as work_dir:
