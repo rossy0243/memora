@@ -321,6 +321,9 @@ a {
   z-index: -2;
   object-fit: cover;
   object-position: 58% center;
+  /* Flou leger : ambiance plutot que portrait net des personnes photographiees. */
+  filter: blur(3px);
+  transform: scale(1.03);
 }
 
 .hero__shade {

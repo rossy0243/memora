@@ -4,7 +4,7 @@
 {% block title %}Memora - Collecte photo et vidéo par QR Code pour événements{% endblock %}
 {% block meta_description %}Memora permet aux invités de capturer photos et vidéos depuis leur téléphone, sans application, puis prépare automatiquement un film souvenir premium de votre événement.{% endblock %}
 {% block og_title %}Memora - Le film souvenir créé avec les moments de vos invités{% endblock %}
-{% block og_description %}Scannez, capturez, choisissez le moment, envoyez. Memora collecte les souvenirs de vos invités et prépare le film final automatiquement.{% endblock %}
+{% block og_description %}Scannez, capturez, envoyez. Memora collecte les souvenirs de vos invités et prépare le film final automatiquement.{% endblock %}
 {% block twitter_title %}Memora - Souvenirs d'événement par QR Code{% endblock %}
 {% block twitter_description %}Collecte photo et vidéo sans application invitée, avec film souvenir automatique après l'événement.{% endblock %}
 
@@ -36,7 +36,6 @@
     <ol class="steps reveal-group">
       <li>Scanner</li>
       <li>Capturer avec la caméra Memora</li>
-      <li>Choisir le moment</li>
       <li>Envoyer</li>
     </ol>
   </div>
@@ -73,7 +72,7 @@
     <div class="reveal">
       <p class="section__label">{% if memora_event_plans %}Nos formules{% else %}Offre unique{% endif %}</p>
       <h2>Tout Memora, à la taille de votre événement.</h2>
-      <p>Payez une fois, pour l'événement : collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique. Aucun abonnement, aucune option cachée.</p>
+      <p>Payez une fois, pour l'événement : collecte invitée, caméra Memora, toutes les photos et vidéos à télécharger, et film souvenir automatique. Aucun abonnement, aucune option cachée.</p>
       {% if memora_event_plans %}
       <p class="pricing-band__note">Choisissez selon le nombre d'invités attendus&nbsp;: <strong>tous vos invités peuvent participer</strong>, quelle que soit la formule choisie.</p>
       {% endif %}
@@ -138,8 +137,8 @@
           <span>Les invités prennent une photo ou filment directement depuis leur téléphone, sans créer de compte.</span>
         </div>
         <div>
-          <strong>Moments classés</strong>
-          <span>Cérémonie, cocktail, discours, piste de danse ou moment drôle : chaque souvenir arrive au bon endroit.</span>
+          <strong>Vous gardez la main</strong>
+          <span>Retirez un souvenir en un clic si besoin&nbsp;: les médias écartés n'entrent jamais dans le film ni dans le téléchargement final.</span>
         </div>
         <div>
           <strong>Film prêt à revivre</strong>
@@ -157,9 +156,8 @@
         <div class="phone-preview__body">
           <span class="phone-preview__label">Mariage de Camille &amp; Noé</span>
           <strong>Ajouter un souvenir</strong>
-          <span>Cérémonie</span>
-          <span class="is-active">Piste de danse</span>
-          <span>Moment drôle</span>
+          <span class="is-active">Photo</span>
+          <span>Vidéo</span>
         </div>
       </div>
     </div>
@@ -190,7 +188,7 @@
       </details>
       <details class="faq__item">
         <summary>Comment un invité envoie-t-il un souvenir&nbsp;?</summary>
-        <p>En quatre gestes&nbsp;: scanner le QR Code, capturer avec la caméra Memora, choisir le moment (cérémonie, cocktail, discours, piste de danse...), puis envoyer. Le souvenir arrive classé au bon endroit.</p>
+        <p>En trois gestes&nbsp;: scanner le QR Code de l'événement, capturer directement avec la caméra Memora, puis envoyer. Aucune application à installer, aucun compte à créer.</p>
       </details>
       <details class="faq__item">
         <summary>Comment garder une galerie propre, sans abus&nbsp;?</summary>
@@ -198,18 +196,22 @@
       </details>
       <details class="faq__item">
         <summary>Est-ce que je récupère toutes les photos et vidéos&nbsp;?</summary>
-        <p>Oui. En plus du film souvenir, vous téléchargez l'ensemble des médias de vos invités dans une archive ZIP.</p>
+        <p>Oui. En plus du film souvenir, vous téléchargez en une fois toutes les photos et vidéos envoyées par vos invités.</p>
       </details>
       <details class="faq__item">
         <summary>Quand le film souvenir est-il prêt&nbsp;?</summary>
         <p>Après l'événement, Memora analyse les médias reçus, sélectionne les meilleurs moments et assemble automatiquement le film final, prêt à regarder, télécharger et partager.</p>
       </details>
       <details class="faq__item">
+        <summary>Où vont nos photos et vidéos après l'événement&nbsp;?</summary>
+        <p>Le film souvenir, le teaser et le livre d'or restent disponibles au téléchargement pendant plusieurs mois. Les photos et vidéos brutes envoyées par vos invités, elles, restent téléchargeables 7 jours après la date de l'événement, puis sont supprimées de nos serveurs&nbsp;: pensez à récupérer votre téléchargement avant cette échéance.</p>
+      </details>
+      <details class="faq__item">
         <summary>Combien ça coûte&nbsp;?</summary>
         {% if memora_event_plans %}
-        <p>Vous payez une fois, par événement, selon la formule choisie&nbsp;: de {{ memora_plan_price_range.min }} à {{ memora_plan_price_range.max }}. Collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique sont inclus dans toutes les formules.</p>
+        <p>Vous payez une fois, par événement, selon la formule choisie&nbsp;: de {{ memora_plan_price_range.min }} à {{ memora_plan_price_range.max }}. Collecte invitée, caméra Memora, téléchargement de tous les souvenirs et film souvenir automatique sont inclus dans toutes les formules.</p>
         {% else %}
-        <p>Une seule offre&nbsp;: {{ memora_event_price }} par événement, sans option cachée. Collecte invitée, caméra Memora, téléchargement ZIP et film souvenir automatique inclus.</p>
+        <p>Une seule offre&nbsp;: {{ memora_event_price }} par événement, sans option cachée. Collecte invitée, caméra Memora, téléchargement de tous les souvenirs et film souvenir automatique inclus.</p>
         {% endif %}
       </details>
       {% if memora_event_plans %}
