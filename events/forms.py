@@ -4,6 +4,7 @@ from pathlib import Path
 from django import forms
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
@@ -187,7 +188,14 @@ class EventForm(forms.ModelForm):
         self._user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         self.fields["event_type"].queryset = EventType.objects.filter(is_active=True)
-        plans = EventPlan.objects.filter(is_active=True)
+        # Les formules "sur devis" (Prestige) ne se choisissent pas seul : elles
+        # sont attachees manuellement en admin apres discussion du tarif. Une
+        # formule deja attachee (evenement existant) reste visible a l'edition,
+        # meme si elle est passee sur devis depuis.
+        plan_filter = Q(is_active=True, requires_quote=False)
+        if self.instance and self.instance.plan_id:
+            plan_filter |= Q(pk=self.instance.plan_id)
+        plans = EventPlan.objects.filter(plan_filter)
         self.fields["plan"].queryset = plans
         if not self.initial.get("plan") and not (self.instance and self.instance.plan_id):
             default_plan = EventPlan.default_plan()

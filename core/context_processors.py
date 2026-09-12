@@ -37,10 +37,16 @@ def _active_event_plans():
 
 
 def _plan_price_range(plans):
-    """Fourchette de prix affichable (« de 49 USD à 199 USD »)."""
-    if not plans:
+    """Fourchette de prix affichable (« de 49 USD à 199 USD »).
+
+    Les formules sur devis (Prestige) n'ont pas de prix catalogue reel : les
+    exclure ici, sinon la fourchette publique annoncerait un plafond qui n'est
+    pas celui du parcours de creation en libre-service.
+    """
+    priced_plans = [plan for plan in plans if not plan.requires_quote]
+    if not priced_plans:
         return {"min": "", "max": ""}
-    by_price = sorted(plans, key=lambda plan: plan.effective_price_amount)
+    by_price = sorted(priced_plans, key=lambda plan: plan.effective_price_amount)
     return {
         "min": by_price[0].formatted_price,
         "max": by_price[-1].formatted_price,
@@ -80,6 +86,9 @@ def site_metadata(request):
         "memora_first_event_discount_percent": site_configuration.first_event_discount_percent,
         "memora_referral_duration_days": site_configuration.referral_duration_days,
         "memora_minimum_payout": site_configuration.formatted_minimum_payout,
+        "memora_has_support_contact": site_configuration.has_support_contact,
+        "memora_support_email": site_configuration.effective_support_email,
+        "memora_whatsapp_link": site_configuration.whatsapp_link,
         "memora_session_idle_minutes": int(
             getattr(settings, "MEMORA_SESSION_IDLE_TIMEOUT_SECONDS", 0) / 60
         ),

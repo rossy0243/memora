@@ -86,6 +86,29 @@ class EventPlan(models.Model):
         default=0,
         help_text="Prix en centimes. Exemple : 7900 pour 79 USD. 0 = prix global du site.",
     )
+    requires_quote = models.BooleanField(
+        default=False,
+        help_text=(
+            "Prix sur devis : masque le prix (affiche « Sur devis ») et retire cette "
+            "formule du formulaire de creation en libre-service. A creer/attacher "
+            "manuellement depuis l'admin apres discussion du tarif avec le client."
+        ),
+    )
+    includes_guestbook = models.BooleanField(
+        default=False,
+        help_text=(
+            "Cette formule inclut le livre d'or video (agent(s) Memora a l'entree). "
+            "Affichage uniquement : l'assignation reelle d'un agent reste manuelle "
+            "en admin, sans blocage technique lie a la formule."
+        ),
+    )
+    guestbook_agents_included = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Nombre d'agents Memora inclus, pour l'affichage (ex. 1 pour Grand jour, "
+            "plus pour Prestige). Sans effet si « inclut le livre d'or » est decoche."
+        ),
+    )
     sort_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(
@@ -126,6 +149,15 @@ class EventPlan(models.Model):
         if not self.max_guests:
             return "Invités illimités"
         return f"Jusqu'à {self.max_guests} invités"
+
+    @property
+    def guestbook_feature_label(self):
+        """Phrase d'affichage pour le livre d'or, vide si non inclus."""
+        if not self.includes_guestbook:
+            return ""
+        if self.guestbook_agents_included > 1:
+            return "Livre d'or vidéo, plusieurs agents Memora inclus"
+        return "Livre d'or vidéo, agent Memora inclus"
 
     @classmethod
     def default_plan(cls):

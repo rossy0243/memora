@@ -79,15 +79,27 @@
           <span class="plan-choice__body">
             <span class="plan-choice__head">
               <strong class="plan-choice__guests">{{ plan.guests_label }}</strong>
-              <span class="plan-choice__price">{{ plan.formatted_price }}</span>
+              {% if plan.requires_quote %}
+                <span class="plan-choice__price">Sur devis</span>
+              {% else %}
+                <span class="plan-choice__price">{{ plan.formatted_price }}</span>
+              {% endif %}
             </span>
             <span class="plan-choice__name">{{ plan.label }}</span>
+            {% if plan.guestbook_feature_label %}<span class="plan-choice__feature">{{ plan.guestbook_feature_label }}</span>{% endif %}
             {% if plan.tagline %}<span class="plan-choice__tagline">{{ plan.tagline }}</span>{% endif %}
           </span>
         </label>
         {% endfor %}
       </div>
       {{ form.plan.errors }}
+
+      {% if memora_has_support_contact %}
+      <p class="plan-choice__contact-note">
+        Un événement hors norme (très grand nombre d'invités, plusieurs agents Memora) ?
+        <a href="{% if memora_whatsapp_link %}{{ memora_whatsapp_link }}{% else %}mailto:{{ memora_support_email }}?subject=Devis%20Prestige{% endif %}"{% if memora_whatsapp_link %} target="_blank" rel="noopener"{% endif %}>Contactez-nous pour un devis Prestige</a>.
+      </p>
+      {% endif %}
 
       {% if form.promo_code %}
       <label class="promo-field">

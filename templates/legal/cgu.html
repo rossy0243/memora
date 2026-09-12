@@ -69,7 +69,11 @@
     <p>Les prestations payantes sont facturées à l'événement, selon la formule choisie par l'Organisateur au moment de la commande. Les formules proposées et leur contenu sont les suivants&nbsp;:</p>
     <ul>
       {% for plan in memora_event_plans %}
-      <li><strong>{{ plan.label }}</strong>&nbsp;: {{ plan.formatted_price }} par événement, {{ plan.guests_label|lower }}, {{ plan.upload_quota }} souvenirs inclus.</li>
+      <li>
+        <strong>{{ plan.label }}</strong>&nbsp;:
+        {% if plan.requires_quote %}tarif sur devis{% else %}{{ plan.formatted_price }} par événement{% endif %},
+        {{ plan.guests_label|lower }}, {{ plan.upload_quota }} souvenirs inclus{% if plan.guestbook_feature_label %}, {{ plan.guestbook_feature_label }}{% endif %}.
+      </li>
       {% endfor %}
     </ul>
     <p>Le nombre d'invités indiqué est une donnée indicative&nbsp;: l'accès des Invités à l'événement n'est pas limité en nombre de personnes. La limite effective porte sur le nombre de souvenirs (photos et vidéos) déposés, tel qu'indiqué pour chaque formule, et fait l'objet d'une tolérance de {{ memora_upload_grace_percent }}&nbsp;% avant blocage des dépôts supplémentaires. L'Organisateur peut à tout moment souscrire une formule supérieure pour poursuivre la collecte.</p>

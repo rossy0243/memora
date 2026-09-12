@@ -85,14 +85,33 @@
         {% if plan.is_default %}<span class="plan-card__flag">Le plus choisi</span>{% endif %}
         <strong class="plan-card__guests">{{ plan.guests_label }}</strong>
         <span class="plan-card__name">{{ plan.label }}</span>
-        <strong class="plan-card__price">{{ plan.formatted_price }}</strong>
-        <span class="plan-card__unit">par événement</span>
+        {% if plan.requires_quote %}
+          <strong class="plan-card__price plan-card__price--quote">Sur devis</strong>
+          <span class="plan-card__unit">tarif personnalisé</span>
+        {% else %}
+          <strong class="plan-card__price">{{ plan.formatted_price }}</strong>
+          <span class="plan-card__unit">par événement</span>
+        {% endif %}
         <ul class="plan-card__features">
           <li>Film souvenir + teaser vertical</li>
           <li>Caméra Memora, sans application invité</li>
+          {% if plan.guestbook_feature_label %}<li>{{ plan.guestbook_feature_label }}</li>{% endif %}
         </ul>
+        {% if not plan.includes_guestbook %}
+          <p class="plan-card__upsell">Livre d'or vidéo disponible à partir de Grand jour.</p>
+        {% endif %}
         {% if plan.tagline %}<p class="plan-card__tagline">{{ plan.tagline }}</p>{% endif %}
-        <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{% url 'events:create' %}">Choisir {{ plan.label }}</a>
+        {% if plan.requires_quote %}
+          {% if memora_whatsapp_link %}
+            <a class="button button--secondary" href="{{ memora_whatsapp_link }}" target="_blank" rel="noopener">Nous contacter</a>
+          {% elif memora_support_email %}
+            <a class="button button--secondary" href="mailto:{{ memora_support_email }}?subject=Devis%20{{ plan.label|urlencode }}">Nous contacter</a>
+          {% else %}
+            <p class="plan-card__tagline">Contactez Memora pour un devis.</p>
+          {% endif %}
+        {% else %}
+          <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{% url 'events:create' %}">Choisir {{ plan.label }}</a>
+        {% endif %}
       </article>
       {% endfor %}
     </div>

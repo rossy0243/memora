@@ -50,12 +50,20 @@ class HomePageTests(TestCase):
         self.assertContains(response, "Intime")
         self.assertContains(response, "Prestige")
         self.assertContains(response, "59 USD")
-        self.assertContains(response, "249 USD")
+        # Prestige est passe sur devis : plus de prix catalogue sur la carte
+        # publique, un CTA de contact a la place.
+        self.assertContains(response, "Sur devis")
+        self.assertNotContains(response, "249 USD")
         self.assertContains(response, "Jusqu&#x27;à 50 invités")
         # Le quota technique ne s'affiche plus sur les cartes de formule : seul
         # le nombre d'invites y est montre, mis en avant (la FAQ plus bas
         # explique encore le mecanisme en mots, sans chiffre par formule).
         self.assertNotContains(response, "300 souvenirs inclus")
+        # Livre d'or : inclus a partir de Grand jour, relance sur les autres.
+        self.assertContains(response, "Livre d&#x27;or vidéo, agent Memora inclus")
+        self.assertContains(response, "Livre d&#x27;or vidéo, plusieurs agents Memora inclus")
+        # Texte statique du template : l'apostrophe n'y est pas echappee.
+        self.assertContains(response, "Livre d'or vidéo disponible à partir de Grand jour.")
         # La promesse qui evite l'angoisse du « et si j'ai plus d'invites ? ».
         # Texte statique du template : l'apostrophe n'y est pas echappee.
         self.assertContains(response, "n'est jamais bloqué")
@@ -177,11 +185,16 @@ class LegalPagesTests(TestCase):
             ("Intime", "59 USD", "300 souvenirs inclus"),
             ("Classique", "89 USD", "800 souvenirs inclus"),
             ("Grand jour", "149 USD", "1500 souvenirs inclus"),
-            ("Prestige", "249 USD", "3000 souvenirs inclus"),
+            # Prestige est passe sur devis : plus de prix catalogue affiche.
+            ("Prestige", "tarif sur devis", "3000 souvenirs inclus"),
         ):
             self.assertContains(response, label)
             self.assertContains(response, price)
             self.assertContains(response, quota)
+        # Le livre d'or, inclus a partir de Grand jour, doit apparaitre dans le
+        # detail contractuel de la formule.
+        self.assertContains(response, "agent Memora inclus")
+        self.assertContains(response, "plusieurs agents Memora inclus")
         # L'engagement contractuel qui accompagne la tarification par formule.
         # Texte statique du template : les apostrophes n'y sont pas echappees.
         self.assertContains(response, "n'est pas limité")

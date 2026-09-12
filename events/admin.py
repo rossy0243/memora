@@ -17,12 +17,14 @@ class EventPlanAdmin(admin.ModelAdmin):
         "guests_label",
         "upload_quota",
         "formatted_price",
+        "requires_quote",
+        "includes_guestbook",
         "sort_order",
         "is_default",
         "is_active",
     )
     list_editable = ("upload_quota", "sort_order", "is_default", "is_active")
-    list_filter = ("is_active",)
+    list_filter = ("is_active", "requires_quote", "includes_guestbook")
     search_fields = ("label", "code")
     prepopulated_fields = {"code": ("label",)}
     fieldsets = (
@@ -30,12 +32,26 @@ class EventPlanAdmin(admin.ModelAdmin):
         (
             "Tarif et limites",
             {
-                "fields": ("price_amount", "max_guests", "upload_quota"),
+                "fields": ("price_amount", "requires_quote", "max_guests", "upload_quota"),
                 "description": (
                     "Le nombre d'invités est une étiquette commerciale. La limite réellement "
                     "appliquée est le quota de souvenirs : un invité n'est jamais bloqué "
                     "parce qu'il arriverait « en trop ». La marge de tolérance au-delà du "
-                    "quota se règle dans la configuration Memora."
+                    "quota se règle dans la configuration Memora. « Sur devis » masque le "
+                    "prix côté public et retire la formule du parcours de création en "
+                    "libre-service (à attacher manuellement à l'événement une fois créé)."
+                ),
+            },
+        ),
+        (
+            "Livre d'or",
+            {
+                "fields": ("includes_guestbook", "guestbook_agents_included"),
+                "description": (
+                    "Affichage uniquement : ces champs pilotent la promesse commerciale "
+                    "montrée à l'organisateur (carte tarifs, choix de formule). "
+                    "L'assignation réelle d'un agent reste manuelle et n'est pas bloquée "
+                    "techniquement par cette limite."
                 ),
             },
         ),

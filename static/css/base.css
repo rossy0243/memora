@@ -698,9 +698,19 @@ h2 {
   line-height: 1;
 }
 
+.plan-card__price--quote {
+  font-size: clamp(1.5rem, 5.5vw, 1.9rem);
+}
+
 .plan-card__unit {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.9rem;
+}
+
+.plan-card__upsell {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
 }
 
 .plan-card__features {
@@ -4340,6 +4350,18 @@ body.capture-review-open {
   color: var(--color-muted, #6b6b6b);
   font-size: 0.85rem;
   font-style: italic;
+}
+
+.plan-choice__feature {
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.plan-choice__contact-note {
+  margin-top: 10px;
+  color: var(--color-muted, #6b6b6b);
+  font-size: 0.88rem;
 }
 
 /* Code promo et remise de bienvenue */
