@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" role="img" aria-labelledby="title desc">
+  <title id="title">Memora</title>
+  <desc id="desc">Monogramme dans un anneau pointillé, a cote du wordmark Memora et de la tagline Souvenirs de mariage, sur fond clair.</desc>
+  <defs>
+    <path id="mono" d="M46,62 C44.5,86 43.2,112 43,138 L49,138 C51,112 54.5,90 57,71 L95,133 L101,141 L139,70 C141,92 144.8,116 146,138 L159,138 C159.2,112 157.8,86 156,62 L133,62 L105,121 L71,62 Z"/>
+  </defs>
+  <rect x="0" y="0" width="680" height="300" fill="#fffaf7"/>
+  <g transform="translate(85.2,70) scale(0.8)">
+    <ellipse cx="101" cy="100" rx="80" ry="82" fill="none" stroke="#241f22" stroke-width="2.2" stroke-dasharray="241.45 13" stroke-dashoffset="-6.5"/>
+    <path d="M181,95.5 L185.2,100 L181,104.5 L176.8,100 Z" fill="#d8b46a"/>
+    <path d="M21,95.5 L25.2,100 L21,104.5 L16.8,100 Z" fill="#d8b46a"/>
+    <use href="#mono" fill="#241f22"/>
+    <rect x="38.5" y="59" width="36" height="3" fill="#241f22"/>
+    <rect x="129.5" y="59" width="34" height="3" fill="#241f22"/>
+    <rect x="34" y="135.5" width="24" height="3" fill="#241f22"/>
+    <rect x="140" y="135.5" width="25" height="3" fill="#241f22"/>
+  </g>
+  <line x1="276" y1="106" x2="276" y2="196" stroke="#9f4f5f" stroke-width="1" opacity="0.3"/>
+  <text x="316" y="157" font-family="'Fraunces',Georgia,serif" font-size="48" font-weight="500" letter-spacing="9.5" fill="#241f22">MEMORA</text>
+  <text x="318" y="187" font-family="'Cormorant Garamond',Georgia,serif" font-style="italic" font-size="14" letter-spacing="3.5" fill="#7f3948">Souvenirs de mariage</text>
+</svg>
