@@ -820,7 +820,7 @@ h2 {
 .phone-preview__media {
   min-height: 128px;
   border-radius: 20px 20px var(--radius-lg) var(--radius-lg);
-  background-image: url("/static/img/memora-hero.png");
+  background-image: url("/static/img/memora-hero.jpg");
   background-size: cover;
   background-position: 70% center;
 }

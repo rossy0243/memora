@@ -60,7 +60,7 @@ def site_metadata(request):
 
     path = request.path if request else "/"
     canonical_url = urljoin(f"{site_url}/", path.lstrip("/")) if site_url else path
-    default_og_image = urljoin(f"{site_url}/", static("img/memora-hero.png").lstrip("/")) if site_url else static("img/memora-hero.png")
+    default_og_image = urljoin(f"{site_url}/", static("img/memora-hero.jpg").lstrip("/")) if site_url else static("img/memora-hero.jpg")
 
     site_configuration = SiteConfiguration.current()
     event_plans = _active_event_plans()
