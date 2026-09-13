@@ -13,6 +13,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from django.conf import settings
@@ -345,10 +346,16 @@ def _normalize_clip_audio(path, ffmpeg_binary):
         normalized_path.unlink(missing_ok=True)
 
 
-def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable):
+def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
     """Rend un livrable (hero / full / teaser) via Remotion. Renvoie le chemin du MP4.
 
     Leve une exception si Node/Remotion echoue : l'appelant decide du fallback.
+
+    `progress_callback(fraction)`, si fourni, est appele periodiquement pendant le
+    rendu avec l'avancement reel (0.0 a 1.0, voir render.mjs/onProgress) — permet
+    de remonter une progression qui bouge vraiment cote organisateur, plutot qu'un
+    pourcentage fige pendant toute la duree (potentiellement plusieurs minutes) du
+    rendu Chrome headless.
     """
     composition = COMPOSITIONS.get(deliverable)
     if not composition:
@@ -396,6 +403,7 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
 
         props_path = Path(work_dir) / "props.json"
         props_path.write_text(json.dumps(props), encoding="utf-8")
+        progress_path = Path(work_dir) / "progress.json"
 
         command = [
             node_binary,
@@ -404,6 +412,7 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
             f"--props={props_path}",
             f"--output={output_path}",
             f"--public-dir={assets_dir}",
+            f"--progress-file={progress_path}",
         ]
         logger.info(
             "Remotion render started event=%s deliverable=%s clips=%s",
@@ -411,17 +420,43 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
             deliverable,
             len(uploads),
         )
-        result = subprocess.run(
+
+        timeout = settings.MEMORA_REMOTION_TIMEOUT_SECONDS
+        started_at = time.monotonic()
+        last_reported = None
+        process = subprocess.Popen(
             command,
             cwd=str(remotion_dir),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=settings.MEMORA_REMOTION_TIMEOUT_SECONDS,
         )
-        if result.returncode != 0:
+        # Boucle de sondage plutot qu'un simple `run(..., timeout=...)` : c'est ce
+        # qui laisse la main entre deux attentes pour lire le fichier de progression
+        # et appeler `progress_callback`, tout en gardant le meme comportement de
+        # timeout global (le process est tue si `timeout` est depasse).
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=2)
+                break
+            except subprocess.TimeoutExpired:
+                if progress_callback and progress_path.exists():
+                    try:
+                        fraction = json.loads(progress_path.read_text(encoding="utf-8")).get("progress")
+                    except (OSError, ValueError):
+                        fraction = None
+                    if fraction is not None and fraction != last_reported:
+                        last_reported = fraction
+                        progress_callback(fraction)
+                if time.monotonic() - started_at > timeout:
+                    process.kill()
+                    process.communicate()
+                    raise RuntimeError(f"Rendu Remotion : delai depasse ({timeout}s).")
+
+        if process.returncode != 0:
             raise RuntimeError(
-                f"Rendu Remotion echoue (code {result.returncode}) : "
-                f"{(result.stderr or result.stdout or '').strip()[:500]}"
+                f"Rendu Remotion echoue (code {process.returncode}) : "
+                f"{(stderr or stdout or '').strip()[:500]}"
             )
 
     logger.info("Remotion render completed event=%s deliverable=%s", event.pk, deliverable)

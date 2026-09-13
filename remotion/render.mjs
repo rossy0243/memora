@@ -16,7 +16,7 @@
  */
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { cpSync, existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +37,10 @@ async function main() {
   const propsPath = args.props;
   const output = args.output;
   const publicDir = args["public-dir"] || path.join(__dirname, "public");
+  // Optionnel : Django y lit la progression pendant que ce process tourne, pour
+  // afficher un pourcentage qui avance vraiment plutot que fige le temps du rendu
+  // (voir processing.remotion.render_movie_with_remotion).
+  const progressFile = args["progress-file"];
 
   if (!composition || !propsPath || !output) {
     throw new Error("Usage: --composition=<id> --props=<json> --output=<mp4> [--public-dir=<dir>]");
@@ -88,6 +92,25 @@ async function main() {
     chromiumOptions,
   });
 
+  // Ecrit la progression (0-1) dans un fichier que Django relit periodiquement,
+  // au lieu d'un pourcentage fige pendant tout le rendu. Throttle a 1% pres pour
+  // ne pas ecrire un fichier a chaque frame (renderMedia appelle onProgress tres
+  // souvent). Ecriture best-effort : une erreur ici ne doit jamais faire echouer
+  // le rendu lui-meme.
+  let lastWrittenPercent = -1;
+  const onProgress = progressFile
+    ? ({ progress }) => {
+        const percent = Math.round(progress * 100);
+        if (percent === lastWrittenPercent) return;
+        lastWrittenPercent = percent;
+        try {
+          writeFileSync(progressFile, JSON.stringify({ progress }));
+        } catch {
+          // best-effort, voir commentaire ci-dessus
+        }
+      }
+    : undefined;
+
   await renderMedia({
     composition: comp,
     serveUrl,
@@ -101,6 +124,7 @@ async function main() {
     // L'option n'est passee que si la cle existe : aucun impact tant que la
     // licence gratuite s'applique.
     ...(licenseKey ? { licenseKey } : {}),
+    ...(onProgress ? { onProgress } : {}),
     // Deterministe, verbeux minimal : le worker Python journalise deja.
     logLevel: "error",
   });

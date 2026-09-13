@@ -43,10 +43,10 @@
     <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
       <div class="movie-progress__meta">
         <span>{{ latest_movie.progress_message|default:"Memora prépare automatiquement la vidéo souvenir." }}</span>
-        <strong>{{ latest_movie.progress_percent|default:0 }}%</strong>
+        <strong>{{ latest_movie.progress_percent|default:0|floatformat:1 }}%</strong>
       </div>
       <div class="movie-progress__bar" aria-hidden="true">
-        <span style="width: {{ latest_movie.progress_percent|default:0 }}%"></span>
+        <span style="width: {{ latest_movie.progress_percent|default:0|floatformat:1 }}%"></span>
       </div>
     </div>
     <ol class="movie-steps">

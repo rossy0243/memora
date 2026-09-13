@@ -154,7 +154,14 @@ class GeneratedMovie(models.Model):
     music_mood = models.CharField(max_length=80, blank=True)
     music_track = models.CharField(max_length=255, blank=True)
     edit_decision_data = models.JSONField(default=dict, blank=True)
-    progress_percent = models.PositiveSmallIntegerField(default=0)
+    progress_percent = models.FloatField(
+        default=0,
+        help_text=(
+            "Avancement 0-100, a la decimale pres pendant le rendu Remotion "
+            "(voir processing.remotion.render_movie_with_remotion) : un chiffre "
+            "qui bouge vraiment rassure plus qu'un entier fige plusieurs minutes."
+        ),
+    )
     progress_message = models.CharField(max_length=160, blank=True)
     generated_at = models.DateTimeField(blank=True, null=True)
     organizer_notified_at = models.DateTimeField(blank=True, null=True)

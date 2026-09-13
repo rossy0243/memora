@@ -928,7 +928,7 @@ def _event_dashboard_url(event):
 
 
 def _update_movie_progress(movie, percent, message):
-    movie.progress_percent = max(0, min(int(percent), 100))
+    movie.progress_percent = max(0.0, min(round(float(percent), 1), 100.0))
     movie.progress_message = message[:160]
     movie.save(update_fields=["progress_percent", "progress_message", "updated_at"])
 
@@ -1369,8 +1369,23 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
 
     _update_movie_progress(movie, 30, "Montage cinématique premium en cours.")
     hero_path = temp_path / f"memora_{_clean_name(event.title)}_remotion.mp4"
+    # Le rendu Chrome headless peut prendre plusieurs minutes ; sans ce callback,
+    # la barre de progression organisateur restait figee a 30% tout ce temps,
+    # illisible (bloque ? tres lent ?). Fenetre 30-70% reservee a ce seul rendu.
+    hero_progress_window = (30, 70)
+
+    def _report_hero_progress(fraction):
+        span = hero_progress_window[1] - hero_progress_window[0]
+        _update_movie_progress(
+            movie,
+            hero_progress_window[0] + fraction * span,
+            "Montage cinématique premium en cours.",
+        )
+
     try:
-        render_movie_with_remotion(event, uploads, soundtrack, hero_path, deliverable="hero")
+        render_movie_with_remotion(
+            event, uploads, soundtrack, hero_path, deliverable="hero", progress_callback=_report_hero_progress
+        )
     except Exception as exc:
         remotion_data["deliverables"]["hero"] = {"ok": False, "error": str(exc)}
         remotion_data["fallback"] = "ffmpeg"

@@ -940,7 +940,9 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Film en préparation")
-        self.assertContains(response, "42%")
+        # A la decimale pres (locale fr : virgule) depuis que progress_percent
+        # bouge vraiment pendant le rendu Remotion, plutot qu'un entier fige.
+        self.assertContains(response, "42,0%")
         self.assertContains(response, "Sélection des meilleurs souvenirs.")
 
     def test_other_organizer_cannot_view_ready_movie_page(self):
@@ -1062,7 +1064,7 @@ class EventViewTests(TestCase):
         response = self.client.get(reverse("events:movie_status", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "68%")
+        self.assertContains(response, "68,0%")
         self.assertContains(response, "Assemblage des clips sélectionnés.")
 
     @patch("events.views.create_event_movie_job")

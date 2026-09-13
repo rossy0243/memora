@@ -1868,6 +1868,11 @@ h2 {
   background:
     linear-gradient(135deg, rgba(164, 93, 106, 0.18), rgba(223, 231, 221, 0.72)),
     var(--color-surface-soft);
+  /* Sans photo de couverture, ce bloc n'est qu'un rectangle vide : sur mobile ou
+     il tombe sous le texte (au lieu d'a cote, comme au format bureau), il ne
+     fait qu'allonger la page pour rien. On ne le reserve qu'au bureau, ou il
+     equilibre visuellement la mise en page a deux colonnes. */
+  display: none;
 }
 
 .live-dashboard__quick {
@@ -1899,6 +1904,9 @@ h2 {
 
 .quick-actions {
   display: grid;
+  /* 2 par 2 des le mobile : 4 boutons empiles en pleine largeur (QR, imprimer,
+     tester...) allongent la page pour rien sur un ecran qui a la place. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2218,7 +2226,10 @@ h2 {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  /* Un chiffre + un libelle par carte : meme sur un petit telephone, empiler ces
+     4 cartes en pleine largeur gaspille l'ecran (chacune ne dit qu'un nombre).
+     2 colonnes des le mobile, 4 a partir du breakpoint desktop plus bas. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -3477,6 +3488,10 @@ body.capture-review-open {
   .live-dashboard__hero {
     grid-template-columns: minmax(0, 1fr) minmax(260px, 34%);
     padding: 28px;
+  }
+
+  .live-dashboard__cover--empty {
+    display: block;
   }
 
   .live-dashboard__quick {

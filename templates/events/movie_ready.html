@@ -112,10 +112,10 @@
         <div class="movie-progress">
           <div class="movie-progress__meta">
             <span>Progression</span>
-            <strong>{{ latest_movie.progress_percent|default:0 }}%</strong>
+            <strong>{{ latest_movie.progress_percent|default:0|floatformat:1 }}%</strong>
           </div>
           <div class="movie-progress__bar" aria-hidden="true">
-            <span style="width: {{ latest_movie.progress_percent|default:0 }}%"></span>
+            <span style="width: {{ latest_movie.progress_percent|default:0|floatformat:1 }}%"></span>
           </div>
         </div>
       {% else %}

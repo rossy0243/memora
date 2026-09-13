@@ -4,6 +4,7 @@ from itertools import count
 import json
 from pathlib import Path
 import shutil
+import subprocess
 from types import SimpleNamespace
 import tempfile
 from unittest.mock import patch
@@ -539,7 +540,7 @@ class MovieGenerationServiceTests(TestCase):
     def test_generate_event_movie_uses_remotion_when_flagged(self, render_remotion, run_ffmpeg, _which):
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -596,7 +597,7 @@ class MovieGenerationServiceTests(TestCase):
     def test_full_deliverable_is_skipped_by_default(self, render_remotion, run_ffmpeg, _which):
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -623,7 +624,7 @@ class MovieGenerationServiceTests(TestCase):
     ):
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -1563,26 +1564,30 @@ class RemotionEdlTests(TestCase):
         self.assertGreater(allowed["musicVolume"], allowed["duckedMusicVolume"])
 
     @override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"hero", "full", "teaser"})
-    @patch("processing.remotion.subprocess.run")
+    @patch("processing.remotion.subprocess.Popen")
     @patch("processing.remotion._normalize_clip_audio")
     @patch("processing.remotion._materialize_upload")
     @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
-    def test_teaser_render_keeps_guest_audio(self, _which, _materialize, _normalize, subprocess_run):
+    def test_teaser_render_keeps_guest_audio(self, _which, _materialize, _normalize, popen):
         """Le teaser doit sortir le son des videos : c'est un reglage par livrable."""
         from processing.remotion import render_movie_with_remotion
 
         captured = {}
 
-        def read_props(command, **kwargs):
+        def fake_popen(command, **kwargs):
             # props.json vit dans un dossier temporaire efface au retour : on le
             # lit pendant l'appel.
             props_arg = next(arg for arg in command if arg.startswith("--props="))
             captured["props"] = json.loads(
                 Path(props_arg.split("=", 1)[1]).read_text(encoding="utf-8")
             )
-            return SimpleNamespace(returncode=0, stdout="OK", stderr="")
+            return SimpleNamespace(
+                returncode=0,
+                communicate=lambda timeout=None: ("OK", ""),
+                kill=lambda: None,
+            )
 
-        subprocess_run.side_effect = read_props
+        popen.side_effect = fake_popen
         uploads = [self._upload(GuestUpload.MediaType.VIDEO, "v.mp4", seconds=6)]
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1596,11 +1601,18 @@ class RemotionEdlTests(TestCase):
 
         self.assertTrue(captured["props"]["clips"][0]["keepAudio"])
 
-    @patch("processing.remotion.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="OK", stderr=""))
+    @patch(
+        "processing.remotion.subprocess.Popen",
+        return_value=SimpleNamespace(
+            returncode=0,
+            communicate=lambda timeout=None: ("OK", ""),
+            kill=lambda: None,
+        ),
+    )
     @patch("processing.remotion._normalize_clip_audio")
     @patch("processing.remotion._materialize_upload")
     @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
-    def test_only_video_clips_with_audio_get_normalized(self, _which, _materialize, normalize, _run):
+    def test_only_video_clips_with_audio_get_normalized(self, _which, _materialize, normalize, _popen):
         """Une image ou une video muette n'ont pas de piste a normaliser."""
         from processing.remotion import render_movie_with_remotion
 
@@ -1635,6 +1647,92 @@ class RemotionEdlTests(TestCase):
                 )
 
         self.assertEqual(normalize.call_count, 2)
+
+    @patch("processing.remotion._normalize_clip_audio")
+    @patch("processing.remotion._materialize_upload")
+    @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
+    def test_progress_callback_reads_the_progress_file(self, _which, _materialize, _normalize):
+        """render.mjs ecrit sa progression dans --progress-file : Django doit la
+        relire et la remonter, plutot qu'un pourcentage fige pendant tout le rendu."""
+        from processing.remotion import render_movie_with_remotion
+
+        reported = []
+
+        def fake_communicate(timeout=None):
+            # Simule render.mjs qui avance : au premier sondage, ecrit sa
+            # progression dans le fichier avant que le "process" ne se termine.
+            progress_path = next(
+                Path(arg.split("=", 1)[1])
+                for arg in fake_popen.last_command
+                if arg.startswith("--progress-file=")
+            )
+            progress_path.write_text(json.dumps({"progress": 0.5}), encoding="utf-8")
+            raise subprocess.TimeoutExpired(cmd="node", timeout=timeout)
+
+        call_count = {"n": 0}
+
+        def fake_communicate_then_finish(timeout=None):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return fake_communicate(timeout=timeout)
+            return "OK", ""
+
+        def fake_popen(command, **kwargs):
+            fake_popen.last_command = command
+            return SimpleNamespace(
+                returncode=0,
+                communicate=fake_communicate_then_finish,
+                kill=lambda: None,
+            )
+
+        with patch("processing.remotion.subprocess.Popen", side_effect=fake_popen):
+            with tempfile.TemporaryDirectory() as tmp:
+                render_movie_with_remotion(
+                    self._event(),
+                    [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+                    self._soundtrack(has_track=False),
+                    Path(tmp) / "out.mp4",
+                    deliverable="hero",
+                    progress_callback=reported.append,
+                )
+
+        self.assertEqual(reported, [0.5])
+
+    @patch("processing.remotion._normalize_clip_audio")
+    @patch("processing.remotion._materialize_upload")
+    @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
+    @override_settings(MEMORA_REMOTION_TIMEOUT_SECONDS=0)
+    def test_render_is_killed_past_the_configured_timeout(self, _which, _materialize, _normalize):
+        from processing.remotion import render_movie_with_remotion
+
+        killed = {"called": False}
+
+        def fake_communicate(timeout=None):
+            # Comme un vrai Popen : ne leve TimeoutExpired que pendant le sondage
+            # (timeout donne) ; l'appel final apres kill() (sans timeout) reussit.
+            if timeout is not None:
+                raise subprocess.TimeoutExpired(cmd="node", timeout=timeout)
+            return "", ""
+
+        def fake_popen(command, **kwargs):
+            return SimpleNamespace(
+                returncode=1,
+                communicate=fake_communicate,
+                kill=lambda: killed.__setitem__("called", True),
+            )
+
+        with patch("processing.remotion.subprocess.Popen", side_effect=fake_popen):
+            with tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaises(RuntimeError):
+                    render_movie_with_remotion(
+                        self._event(),
+                        [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+                        self._soundtrack(has_track=False),
+                        Path(tmp) / "out.mp4",
+                        deliverable="hero",
+                    )
+
+        self.assertTrue(killed["called"])
 
     def test_json_serialisable(self):
         import json
