@@ -15,7 +15,7 @@
 
   <section>
     <h2>1. Responsable du traitement</h2>
-    <p>Le responsable du traitement des données personnelles réalisé dans le cadre du service {{ site_name }} (le «&nbsp;Service&nbsp;») est {{ legal_entity }}{% if legal_address %}, {{ legal_address }}{% endif %}. Pour toute question relative à vos données&nbsp;: {{ legal_email|default:"à renseigner" }}.</p>
+    <p>Le responsable du traitement des données personnelles réalisé dans le cadre du service {{ site_name }} (le «&nbsp;Service&nbsp;») est {{ legal_entity }}{% if legal_address %}, {{ legal_address }}{% endif %}. Pour toute question relative à vos données&nbsp;: {% firstof legal_email memora_support_email "notre contact" %}.</p>
   </section>
 
   <section>
@@ -25,6 +25,7 @@
       <li><strong>Contenus (Invités)&nbsp;:</strong> photos et vidéos déposées, catégorie du souvenir et métadonnées techniques (date d'envoi, type et taille du média). Aucun compte n'est requis pour les Invités.</li>
       <li><strong>Données de paiement&nbsp;:</strong> les informations de paiement sont traitées directement par notre prestataire {{ payment_provider_name|default:"de paiement" }}. {{ legal_entity }} ne stocke pas les numéros de carte bancaire.</li>
       <li><strong>Données de rémunération (Ambassadeurs)&nbsp;:</strong> code de parrainage, rattachement à un parrain et date de début d'affiliation, historique des commissions, et — lorsque vous demandez un versement — le <strong>moyen de versement choisi et les coordonnées que vous saisissez</strong> (numéro Mobile Money, coordonnées bancaires ou autre). Ces coordonnées ne sont utilisées que pour exécuter le versement demandé.</li>
+      <li><strong>Vérification d'identité (candidature Ambassadeur)&nbsp;:</strong> si vous candidatez au statut Ambassadeur, le numéro de votre pièce d'identité et une photo de celle-ci. Ce document n'est jamais accessible publiquement&nbsp;; son accès est strictement limité aux personnes chargées de l'examiner et les liens de consultation sont temporaires. Une analyse automatique (métadonnées, cohérence de compression de l'image) peut signaler des anomalies pour aider cet examen ; elle ne prend jamais seule la décision d'accorder ou de refuser le statut.</li>
       <li><strong>Données techniques&nbsp;:</strong> données de connexion et journaux nécessaires au fonctionnement, à la sécurité et à la prévention des abus.</li>
     </ul>
   </section>
@@ -65,6 +66,7 @@
       <li><strong>Données de compte&nbsp;:</strong> conservées tant que le compte est actif, puis pendant les délais légaux applicables.</li>
       <li><strong>Données de facturation&nbsp;:</strong> conservées conformément aux obligations comptables et fiscales.</li>
       <li><strong>Données du programme Ambassadeur&nbsp;:</strong> historique des commissions et des demandes de versement, conservé conformément aux obligations comptables. Les coordonnées de versement sont conservées le temps nécessaire au traitement des demandes et à leur justification.</li>
+      <li><strong>Documents de vérification d'identité&nbsp;:</strong> conservés le temps de l'examen de la candidature, puis pendant la durée du statut Ambassadeur en cas d'octroi. En cas de refus, le document peut être supprimé sur simple demande à l'adresse ci-dessous.</li>
       <li><strong>Journaux techniques&nbsp;:</strong> conservés pendant une durée limitée à des fins de sécurité.</li>
     </ul>
   </section>
@@ -89,7 +91,7 @@
 
   <section>
     <h2>9. Vos droits</h2>
-    <p>Conformément à la réglementation applicable en matière de protection des données, vous disposez des droits suivants&nbsp;: accès, rectification, effacement, limitation, opposition, portabilité, et retrait du consentement à tout moment (sans effet rétroactif). Pour les exercer, contactez&nbsp;: {{ legal_email|default:"à renseigner" }}.</p>
+    <p>Conformément à la réglementation applicable en matière de protection des données, vous disposez des droits suivants&nbsp;: accès, rectification, effacement, limitation, opposition, portabilité, et retrait du consentement à tout moment (sans effet rétroactif). Pour les exercer, contactez&nbsp;: {% firstof legal_email memora_support_email "notre contact" %}.</p>
     <p>Un Invité souhaitant retirer un souvenir déposé peut en faire la demande auprès de l'Organisateur de l'événement ou à l'adresse ci-dessus. Vous pouvez également introduire une réclamation auprès de {{ data_protection_authority }}.</p>
   </section>
 
@@ -110,7 +112,7 @@
 
   <section>
     <h2>13. Contact</h2>
-    <p>Pour toute question relative à vos données personnelles&nbsp;: {{ legal_email|default:"à renseigner" }}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
+    <p>Pour toute question relative à vos données personnelles&nbsp;: {% firstof legal_email memora_support_email "notre contact" %}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
   </section>
 </article>
 {% endblock %}

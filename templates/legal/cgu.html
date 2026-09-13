@@ -22,12 +22,12 @@
     <h2>2. Mentions légales</h2>
     <ul>
       <li><strong>Éditeur&nbsp;:</strong> {{ legal_entity }}</li>
-      <li><strong>Adresse&nbsp;:</strong> {{ legal_address|default:"à renseigner" }}</li>
-      <li><strong>Immatriculation&nbsp;:</strong> {{ legal_registration_number|default:"à renseigner" }}</li>
-      <li><strong>Capital social&nbsp;:</strong> {{ legal_share_capital|default:"à renseigner" }}</li>
-      <li><strong>Directeur de la publication&nbsp;:</strong> {{ legal_publication_director|default:"à renseigner" }}</li>
-      <li><strong>Contact&nbsp;:</strong> {{ legal_email|default:"à renseigner" }}</li>
-      <li><strong>Hébergement&nbsp;:</strong> {{ hosting_provider|default:"à renseigner" }}</li>
+      {% if legal_address %}<li><strong>Adresse&nbsp;:</strong> {{ legal_address }}</li>{% endif %}
+      {% if legal_registration_number %}<li><strong>Immatriculation&nbsp;:</strong> {{ legal_registration_number }}</li>{% endif %}
+      {% if legal_share_capital %}<li><strong>Capital social&nbsp;:</strong> {{ legal_share_capital }}</li>{% endif %}
+      {% if legal_publication_director %}<li><strong>Directeur de la publication&nbsp;:</strong> {{ legal_publication_director }}</li>{% endif %}
+      {% if legal_email %}<li><strong>Contact&nbsp;:</strong> {{ legal_email }}</li>{% endif %}
+      {% if hosting_provider %}<li><strong>Hébergement&nbsp;:</strong> {{ hosting_provider }}</li>{% endif %}
     </ul>
   </section>
 
@@ -85,7 +85,7 @@
 
   <section>
     <h2>9. Commande et modalités de paiement</h2>
-    <p>La commande est validée lors du règlement du prix. Le paiement s'effectue en ligne, le cas échéant via notre prestataire de paiement {{ payment_provider_name|default:"partenaire" }}, selon les moyens de paiement proposés. {{ legal_entity }} ne conserve pas les données de carte bancaire, traitées de manière sécurisée par le prestataire de paiement. L'événement est activé après confirmation du paiement.</p>
+    <p>La commande est validée lors du règlement du prix. Le paiement s'effectue selon les moyens proposés au moment de la commande, notamment par carte bancaire, Mobile Money ou virement bancaire{% if payment_provider_name %}, le cas échéant via notre prestataire de paiement {{ payment_provider_name }}{% endif %}. {{ legal_entity }} ne conserve pas les données de carte bancaire ou de Mobile Money, traitées de manière sécurisée par le prestataire de paiement ou vérifiées manuellement avant activation. L'événement est activé après confirmation du paiement.</p>
   </section>
 
   <section>
@@ -96,12 +96,13 @@
   <section>
     <h2>11. Droit de rétractation et remboursement</h2>
     <p>Conformément à la réglementation applicable, le consommateur dispose en principe d'un délai de rétractation de {{ refund_window_days }} jours à compter de la commande. Toutefois, s'agissant d'un contenu ou d'un service numérique fourni immédiatement, l'Organisateur peut être invité à renoncer expressément à ce droit lorsque l'exécution du Service commence avant la fin du délai (par exemple, dès l'activation de l'événement).</p>
-    <p>En dehors de ce cadre, une demande de remboursement peut être adressée à {{ legal_email|default:"notre contact" }}. Un remboursement pourra notamment être accordé en cas d'indisponibilité du Service imputable à {{ legal_entity }} empêchant l'utilisation de la prestation commandée. Les demandes sont examinées au cas par cas dans un délai raisonnable.</p>
+    <p>En dehors de ce cadre, une demande de remboursement peut être adressée à {% firstof legal_email memora_support_email "notre contact" %}. Un remboursement pourra notamment être accordé en cas d'indisponibilité du Service imputable à {{ legal_entity }} empêchant l'utilisation de la prestation commandée. Les demandes sont examinées au cas par cas dans un délai raisonnable.</p>
   </section>
 
   <section>
     <h2>12. Programme Ambassadeur et rémunération des Organisateurs</h2>
     <p>{{ site_name }} propose un programme de commissions réservé aux Organisateurs auxquels le statut d'<strong>Ambassadeur</strong> a été accordé par {{ legal_entity }}. Ce statut est discrétionnaire&nbsp;: il peut être accordé, refusé ou retiré à tout moment. Un Organisateur qui n'est pas Ambassadeur ne perçoit aucune commission. Le retrait du statut ne remet pas en cause les commissions déjà acquises.</p>
+    <p>L'attribution du statut Ambassadeur est subordonnée à une vérification d'identité&nbsp;: l'Organisateur candidat communique le numéro d'une pièce d'identité et en transmet une photo lisible. Ce document sert exclusivement à cette vérification et n'est jamais rendu public&nbsp;; son traitement est décrit dans la <a href="{% url 'core:privacy' %}">Politique de confidentialité</a>. Cette exigence ne s'applique qu'à la candidature au statut Ambassadeur, jamais à la création d'un compte Organisateur simple.</p>
     <p>Le programme comprend une commission sur les propres événements payés de l'Ambassadeur, selon un palier fonction du nombre d'événements payés, ainsi qu'une commission de parrainage sur les événements payés des Organisateurs qu'il a amenés. Les taux ou montants, paliers et conditions figurent sur la page dédiée du Service et peuvent évoluer&nbsp;; le taux applicable est celui en vigueur à la date de l'événement payé concerné. Lorsque la commission est exprimée en pourcentage, elle s'entend du <strong>prix effectivement payé</strong> pour l'événement, c'est-à-dire après application de toute remise, hors taxes le cas échéant.</p>
 
     <h3>12.1 Durée de l'affiliation</h3>
@@ -167,7 +168,7 @@
 
   <section>
     <h2>21. Réclamations et médiation de la consommation</h2>
-    <p>Toute réclamation peut être adressée à {{ legal_email|default:"notre contact" }}. Conformément à la réglementation, le consommateur peut, en cas de litige non résolu, recourir gratuitement à un médiateur de la consommation. Les coordonnées du médiateur compétent sont communiquées sur demande.</p>
+    <p>Toute réclamation peut être adressée à {% firstof legal_email memora_support_email "notre contact" %}. Conformément à la réglementation, le consommateur peut, en cas de litige non résolu, recourir gratuitement à un médiateur de la consommation. Les coordonnées du médiateur compétent sont communiquées sur demande.</p>
   </section>
 
   <section>
@@ -187,7 +188,7 @@
 
   <section>
     <h2>25. Contact</h2>
-    <p>Pour toute question relative aux présentes CGU&nbsp;: {{ legal_email|default:"à renseigner" }}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
+    <p>Pour toute question relative aux présentes CGU&nbsp;: {% firstof legal_email memora_support_email "notre contact" %}{% if legal_address %} — {{ legal_address }}{% endif %}.</p>
   </section>
 </article>
 {% endblock %}
