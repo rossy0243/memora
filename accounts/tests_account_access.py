@@ -1,15 +1,20 @@
 """Unicite e-mail / nom d'utilisateur, et recuperation de mot de passe."""
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
+from accounts.models import OrganizerProfile
 from core.models import SiteConfiguration
 
 SIGNUP_BASE = {
     "password1": "a-strong-test-password-42",
     "password2": "a-strong-test-password-42",
+    "accept_terms": "on",
 }
 
 
@@ -143,3 +148,103 @@ class PasswordHelpTests(TestCase):
     def test_page_is_not_indexed(self):
         response = self.client.get(reverse("accounts:password_help"))
         self.assertContains(response, "noindex")
+
+    def test_page_links_to_the_email_reset_flow(self):
+        response = self.client.get(reverse("accounts:password_help"))
+        self.assertContains(response, reverse("accounts:password_reset"))
+
+
+class SignupTermsAcceptanceTests(TestCase):
+    """La case CGU est obligatoire, et sa date d'acceptation est tracee."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_signup_without_accepting_terms_is_rejected(self):
+        response = self.client.post(
+            reverse("accounts:signup"),
+            {**SIGNUP_BASE, "username": "sans-cgu", "email": "sanscgu@memora.test", "accept_terms": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Vous devez accepter les CGU")
+        self.assertFalse(get_user_model().objects.filter(username="sans-cgu").exists())
+
+    def test_signup_records_terms_acceptance_timestamp(self):
+        response = self.client.post(
+            reverse("accounts:signup"),
+            {**SIGNUP_BASE, "username": "avec-cgu", "email": "aveccgu@memora.test"},
+        )
+
+        self.assertRedirects(response, reverse("dashboard:home"))
+        user = get_user_model().objects.get(username="avec-cgu")
+        self.assertIsNotNone(OrganizerProfile.for_user(user).terms_accepted_at)
+
+    def test_signup_page_links_to_cgu_and_privacy(self):
+        response = self.client.get(reverse("accounts:signup"))
+
+        self.assertContains(response, reverse("core:terms"))
+        self.assertContains(response, reverse("core:privacy"))
+
+
+class PasswordResetFlowTests(TestCase):
+    """Lien de reinitialisation par e-mail, en plus du contact humain existant."""
+
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user(
+            username="oublieux", email="oublieux@memora.test", password="ancien-mot-de-passe-42"
+        )
+
+    def test_requesting_a_reset_sends_an_email_with_a_working_link(self):
+        from django.core import mail
+
+        response = self.client.post(
+            reverse("accounts:password_reset"), {"email": "oublieux@memora.test"}
+        )
+
+        self.assertRedirects(response, reverse("accounts:password_reset_done"))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("oublieux@memora.test", mail.outbox[0].to)
+        self.assertIn(reverse("accounts:password_reset"), mail.outbox[0].body)
+
+    def test_unknown_email_does_not_error_or_reveal_account_existence(self):
+        from django.core import mail
+
+        response = self.client.post(
+            reverse("accounts:password_reset"), {"email": "inconnu@memora.test"}
+        )
+
+        self.assertRedirects(response, reverse("accounts:password_reset_done"))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_valid_link_allows_setting_a_new_password(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+
+        confirm_url = reverse("accounts:password_reset_confirm", kwargs={"uidb64": uid, "token": token})
+        session = self.client.session
+        response = self.client.get(confirm_url, follow=True)
+        # Django echange le token de l'URL contre un token de session au premier
+        # GET, pour eviter qu'il ne se retrouve dans les logs/referrers ensuite.
+        set_password_url = response.redirect_chain[-1][0]
+
+        response = self.client.post(
+            set_password_url,
+            {"new_password1": "un-nouveau-mot-de-passe-42", "new_password2": "un-nouveau-mot-de-passe-42"},
+        )
+
+        self.assertRedirects(response, reverse("accounts:password_reset_complete"))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("un-nouveau-mot-de-passe-42"))
+
+    def test_invalid_token_shows_an_error_with_a_way_forward(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        confirm_url = reverse(
+            "accounts:password_reset_confirm", kwargs={"uidb64": uid, "token": "bogus-token"}
+        )
+
+        response = self.client.get(confirm_url)
+
+        self.assertContains(response, "invalide")
+        self.assertContains(response, reverse("accounts:password_help"))

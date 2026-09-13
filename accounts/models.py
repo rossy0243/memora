@@ -5,6 +5,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .storage import identity_document_storage
+
 REFERRAL_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
@@ -58,6 +60,11 @@ class OrganizerProfile(models.Model):
         ),
     )
     tier_updated_at = models.DateTimeField(null=True, blank=True)
+    terms_accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date d'acceptation des CGU a l'inscription. Preuve de consentement, ne pas modifier.",
+    )
     first_event_discount_used_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -192,6 +199,105 @@ class OrganizerProfile(models.Model):
     def for_user(cls, user):
         profile, _ = cls.objects.get_or_create(user=user)
         return profile
+
+
+def identity_document_upload_path(instance, filename):
+    """Nom de fichier aleatoire (pas le nom d'origine) : evite qu'un scan de
+    piece d'identite se retrouve indexe ou devinable via son nom de fichier."""
+    import uuid
+    from pathlib import Path
+
+    extension = Path(filename).suffix.lower()
+    return f"identity/{instance.organizer_id}/{uuid.uuid4().hex}{extension}"
+
+
+class AmbassadorApplication(models.Model):
+    """Candidature au statut Ambassadeur : numero de piece d'identite + scan.
+
+    Volontairement separe de l'inscription (qui reste simple, sans piece
+    d'identite) : seuls les organisateurs qui visent le statut Ambassadeur
+    passent par ici, depuis leur tableau de bord. `tamper_risk_score` et
+    `tamper_flags` sont des indices heuristiques (voir accounts.identity_check)
+    qui aident l'administrateur a prioriser son examen — ils ne remplacent pas
+    une decision humaine et ne bloquent jamais automatiquement une candidature.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuvée"
+        REJECTED = "rejected", "Refusée"
+
+    organizer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ambassador_applications",
+    )
+    id_document_number = models.CharField(
+        max_length=60,
+        help_text="Numéro de la pièce d'identité (carte d'identité, passeport...).",
+    )
+    id_document_file = models.FileField(
+        upload_to=identity_document_upload_path,
+        storage=identity_document_storage,
+        help_text="Photo scannée ou photographiée de la pièce d'identité.",
+    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    tamper_risk_score = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Indice heuristique 0-100 (métadonnées + analyse de recompression). "
+            "N'est pas une preuve de fraude : sert à prioriser l'examen humain."
+        ),
+    )
+    tamper_flags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Anomalies détectées automatiquement à la soumission, pour information.",
+    )
+    admin_note = models.CharField(max_length=300, blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "candidature ambassadeur"
+        verbose_name_plural = "candidatures ambassadeur"
+        ordering = ["-submitted_at"]
+
+    def __str__(self):
+        return f"{self.organizer.username} — {self.get_status_display()}"
+
+    @property
+    def risk_level(self):
+        from .identity_check import risk_level_label
+
+        return risk_level_label(self.tamper_risk_score)
+
+    def approve(self, reviewer=None, note=""):
+        self.status = self.Status.APPROVED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = reviewer
+        if note:
+            self.admin_note = note
+        self.save(update_fields=["status", "reviewed_at", "reviewed_by", "admin_note"])
+
+        profile = OrganizerProfile.for_user(self.organizer)
+        profile.grant_ambassador()
+        profile.save(update_fields=["is_ambassador", "became_ambassador_at", "updated_at"])
+
+    def reject(self, reviewer=None, note=""):
+        self.status = self.Status.REJECTED
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = reviewer
+        if note:
+            self.admin_note = note
+        self.save(update_fields=["status", "reviewed_at", "reviewed_by", "admin_note"])
 
 
 class AgentProfile(models.Model):

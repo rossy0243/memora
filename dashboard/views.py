@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from accounts.models import OrganizerProfile, PayoutRequest
+from accounts.models import AmbassadorApplication, OrganizerProfile, PayoutRequest
 from accounts.services import (
     commission_summary_for_user,
     monthly_earnings_for_user,
@@ -29,13 +29,23 @@ def dashboard_home(request):
     # Le programme est reserve aux ambassadeurs designes par Memora : un organisateur
     # simple ne doit voir aucune promesse de gains.
     earnings_panel = None
+    ambassador_application = None
     if profile.is_ambassador:
         earnings_panel = _build_earnings_panel(request, profile)
+    else:
+        ambassador_application = (
+            AmbassadorApplication.objects.filter(organizer=request.user).order_by("-submitted_at").first()
+        )
 
     return render(
         request,
         "dashboard/home.html",
-        {"events": events, "today": today, "earnings_panel": earnings_panel},
+        {
+            "events": events,
+            "today": today,
+            "earnings_panel": earnings_panel,
+            "ambassador_application": ambassador_application,
+        },
     )
 
 

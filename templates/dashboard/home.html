@@ -126,6 +126,24 @@
         </div>
       {% endif %}
     </article>
+  {% else %}
+    <article class="form-card reveal">
+      {% if ambassador_application and ambassador_application.status == "pending" %}
+        <p class="section__label">Programme Ambassadeur</p>
+        <h2>Candidature en cours d'examen</h2>
+        <p>Envoyée le {{ ambassador_application.submitted_at|date:"d/m/Y" }}. Memora vous répond sous quelques jours.</p>
+      {% elif ambassador_application and ambassador_application.status == "rejected" %}
+        <p class="section__label">Programme Ambassadeur</p>
+        <h2>Candidature non retenue</h2>
+        <p>{{ ambassador_application.admin_note|default:"Vous pouvez soumettre une nouvelle candidature." }}</p>
+        <a class="button button--secondary" href="{% url 'accounts:become_ambassador' %}">Soumettre une nouvelle candidature</a>
+      {% else %}
+        <p class="section__label">Programme Ambassadeur</p>
+        <h2>Gagnez une commission sur vos événements</h2>
+        <p>Memora accorde le statut d'ambassadeur aux organisateurs actifs. <a href="{% url 'core:ambassador_program' %}">En savoir plus</a>.</p>
+        <a class="button button--primary" href="{% url 'accounts:become_ambassador' %}">Devenir ambassadeur</a>
+      {% endif %}
+    </article>
   {% endif %}
 
   {% if events %}

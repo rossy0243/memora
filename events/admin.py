@@ -6,7 +6,7 @@ from core.models import SiteConfiguration
 from guestbook.models import GuestBookAssignment
 
 from .models import Event, EventPlan, EventType
-from .services import delete_event, purge_event_media
+from .services import delete_event, purge_event_media, send_payment_receipt_email
 
 
 @admin.register(EventPlan)
@@ -202,11 +202,17 @@ class EventAdmin(admin.ModelAdmin):
     @admin.action(description="Marquer les evenements selectionnes comme payes")
     def mark_events_paid(self, request, queryset):
         updated = 0
+        receipts_sent = 0
         for event in queryset:
             event.mark_paid(provider="manual-admin")
             event.save(update_fields=["payment_status", "paid_at", "payment_provider", "payment_reference", "updated_at"])
             updated += 1
-        self.message_user(request, f"{updated} evenement(s) marque(s) comme paye(s).")
+            if send_payment_receipt_email(event):
+                receipts_sent += 1
+        self.message_user(
+            request,
+            f"{updated} evenement(s) marque(s) comme paye(s), {receipts_sent} recu(s) envoye(s) par e-mail.",
+        )
 
     @admin.action(description="Purger les fichiers R2 (garder l'evenement)")
     def purge_r2_files(self, request, queryset):

@@ -14,13 +14,20 @@
       {% csrf_token %}
       {{ form.non_field_errors }}
       {% for field in form %}
+        {% if field.name != "accept_terms" %}
         <label>
           {{ field.label }}
           {{ field }}
           {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
           {{ field.errors }}
         </label>
+        {% endif %}
       {% endfor %}
+      <label class="form-check">
+        {{ form.accept_terms }}
+        <span>J'ai lu et j'accepte les <a href="{% url 'core:terms' %}" target="_blank" rel="noopener">CGU</a> et la <a href="{% url 'core:privacy' %}" target="_blank" rel="noopener">politique de confidentialité</a>.</span>
+      </label>
+      {{ form.accept_terms.errors }}
       <button class="button button--primary" type="submit">Commencer</button>
     </form>
     <p class="form-note">Déjà inscrit ? <a href="{% url 'accounts:login' %}">Se connecter</a></p>

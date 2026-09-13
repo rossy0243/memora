@@ -67,6 +67,7 @@ class OrganizerSignupTests(TestCase):
                 "email": "organizer@example.com",
                 "password1": "a-strong-test-password-42",
                 "password2": "a-strong-test-password-42",
+                "accept_terms": "on",
             },
         )
 
@@ -86,6 +87,7 @@ class OrganizerSignupTests(TestCase):
                 "password1": "a-strong-test-password-42",
                 "password2": "a-strong-test-password-42",
                 "referral_code": code.lower(),
+                "accept_terms": "on",
             },
         )
 

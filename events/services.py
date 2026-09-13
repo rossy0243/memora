@@ -1,9 +1,72 @@
+import logging
 from io import BytesIO
 
 import qrcode
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db.models import Count
 from django.db.models.functions import TruncHour
+from django.urls import reverse
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
+
+
+def _event_dashboard_url(event):
+    path = reverse("events:detail", kwargs={"pk": event.pk})
+    base_url = settings.MEMORA_PUBLIC_BASE_URL.rstrip("/")
+    if not base_url:
+        return path
+    return f"{base_url}{path}"
+
+
+def send_payment_receipt_email(event):
+    """Envoie un recu de paiement a l'organisateur apres confirmation en admin.
+
+    Idempotent (receipt_sent_at) : relancer l'action admin sur un evenement deja
+    marque paye ne renvoie pas un second recu. Echec silencieux (log) plutot que
+    faire echouer l'action admin — meme raisonnement que notify_generated_movie_ready
+    cote traitement des films.
+    """
+    if event.receipt_sent_at or not event.organizer.email or not event.is_paid:
+        return False
+
+    dashboard_url = _event_dashboard_url(event)
+    lines = [
+        "Bonjour,",
+        "",
+        f"Nous confirmons la réception de votre paiement pour l'événement « {event.title} ».",
+        "",
+        f"Montant réglé : {event.formatted_price}",
+    ]
+    if event.payment_reference:
+        lines.append(f"Référence : {event.payment_reference}")
+    lines += [
+        f"Date : {(event.paid_at or timezone.now()):%d/%m/%Y}",
+        "",
+        f"Votre événement est désormais actif, vous pouvez le retrouver ici :\n{dashboard_url}",
+        "",
+        "Merci de votre confiance.",
+        "",
+        "L'équipe Memora",
+    ]
+
+    try:
+        send_mail(
+            subject=f"Reçu de paiement Memora - {event.title}",
+            message="\n".join(lines),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[event.organizer.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception("Payment receipt email failed event=%s", event.pk)
+        return False
+
+    event.receipt_sent_at = timezone.now()
+    event.save(update_fields=["receipt_sent_at", "updated_at"])
+    logger.info("Payment receipt email sent event=%s", event.pk)
+    return True
 
 
 def build_event_qr_code_png(public_url):

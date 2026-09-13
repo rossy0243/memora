@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Devenir ambassadeur - {{ site_name }}{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block body_class %}app-page{% endblock %}
+{% block header_class %}site-header--solid{% endblock %}
+
+{% block content %}
+<section class="app-shell app-shell--narrow">
+  <div class="page-heading reveal">
+    <div>
+      <p class="section__label">Programme Ambassadeur</p>
+      <h1>Devenir ambassadeur</h1>
+      <p class="page-heading__meta">Cette étape n'est demandée qu'aux organisateurs qui visent le statut Ambassadeur — jamais à l'inscription.</p>
+    </div>
+  </div>
+
+  <article class="form-card reveal">
+    {% if application and application.status == "pending" %}
+      <h2>Candidature en cours d'examen</h2>
+      <p>Envoyée le {{ application.submitted_at|date:"d/m/Y" }}. Memora vous répond sous quelques jours.</p>
+      <p class="form-card__footer"><a href="{% url 'dashboard:home' %}">Retour au tableau de bord</a></p>
+    {% else %}
+      {% if application and application.status == "rejected" %}
+        <p class="support-note">Votre précédente candidature n'a pas été retenue{% if application.admin_note %} : {{ application.admin_note }}{% endif %}. Vous pouvez en soumettre une nouvelle.</p>
+      {% endif %}
+      <p>Indiquez le numéro de votre pièce d'identité et joignez-en une photo scannée, lisible et non recadrée. Ce document sert uniquement à vérifier votre identité avant l'attribution du statut Ambassadeur ; il n'est jamais partagé publiquement.</p>
+      <form method="post" enctype="multipart/form-data" class="form-stack">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+          <label>
+            {{ field.label }}
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+        <button class="button button--primary" type="submit">Envoyer ma candidature</button>
+      </form>
+      <p class="form-note">Vos données sont traitées conformément à notre <a href="{% url 'core:privacy' %}">politique de confidentialité</a>.</p>
+    {% endif %}
+  </article>
+</section>
+{% endblock %}

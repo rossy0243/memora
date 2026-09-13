@@ -1597,3 +1597,100 @@ class PurgeEventMediaTests(TestCase):
         self.assertFalse(Event.objects.filter(pk=self.event.pk).exists())
         self.assertFalse(GeneratedMovie.objects.filter(pk=movie_pk).exists())
         self.assertFalse(GuestUpload.objects.filter(pk=upload_pk).exists())
+
+
+class PaymentReceiptEmailTests(TestCase):
+    """Recu de paiement envoye a l'organisateur apres confirmation en admin."""
+
+    def setUp(self):
+        cache.clear()
+        self.organizer = get_user_model().objects.create_user(
+            username="orga-recu", email="orga-recu@example.com", password="secret"
+        )
+        self.event_type, _ = EventType.objects.get_or_create(
+            code="wedding", defaults={"label": "Mariage", "sort_order": 1}
+        )
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Recu",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 12),
+            price_amount=7900,
+            price_currency="USD",
+        )
+
+    def test_sends_receipt_after_payment_confirmed(self):
+        from django.core import mail
+
+        from events.services import send_payment_receipt_email
+
+        self.event.mark_paid(reference="ref-001", provider="manual-admin")
+        self.event.save()
+
+        sent = send_payment_receipt_email(self.event)
+
+        self.assertTrue(sent)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.organizer.email, mail.outbox[0].to)
+        self.assertIn("Mariage Recu", mail.outbox[0].subject)
+        self.assertIn("ref-001", mail.outbox[0].body)
+        self.event.refresh_from_db()
+        self.assertIsNotNone(self.event.receipt_sent_at)
+
+    def test_does_not_send_twice(self):
+        from django.core import mail
+
+        from events.services import send_payment_receipt_email
+
+        self.event.mark_paid()
+        self.event.save()
+        send_payment_receipt_email(self.event)
+
+        sent_again = send_payment_receipt_email(self.event)
+
+        self.assertFalse(sent_again)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_skips_unpaid_event(self):
+        from events.services import send_payment_receipt_email
+
+        sent = send_payment_receipt_email(self.event)
+
+        self.assertFalse(sent)
+
+    def test_skips_organizer_without_email(self):
+        from events.services import send_payment_receipt_email
+
+        self.organizer.email = ""
+        self.organizer.save()
+        self.event.mark_paid()
+        self.event.save()
+
+        sent = send_payment_receipt_email(self.event)
+
+        self.assertFalse(sent)
+
+    def test_admin_action_marks_paid_and_sends_receipt(self):
+        from django.core import mail
+
+        response = self._run_mark_paid_action()
+
+        self.assertEqual(response.status_code, 302)
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.is_paid)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIsNotNone(self.event.receipt_sent_at)
+
+    def _run_mark_paid_action(self):
+        admin_user = get_user_model().objects.create_superuser(
+            username="admin-recu", email="admin@example.com", password="secret"
+        )
+        self.client.force_login(admin_user)
+        return self.client.post(
+            reverse("admin:events_event_changelist"),
+            {
+                "action": "mark_events_paid",
+                "_selected_action": [str(self.event.pk)],
+            },
+            follow=False,
+        )

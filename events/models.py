@@ -272,6 +272,11 @@ class Event(models.Model):
     paid_at = models.DateTimeField(blank=True, null=True)
     payment_reference = models.CharField(max_length=120, blank=True)
     payment_provider = models.CharField(max_length=40, blank=True, default="manual")
+    receipt_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Date d'envoi du recu de paiement a l'organisateur. Vide = pas encore envoye.",
+    )
     is_active = models.BooleanField(default=True)
     media_retention_days = models.PositiveIntegerField(default=7)
     created_at = models.DateTimeField(auto_now_add=True)

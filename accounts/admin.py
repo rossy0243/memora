@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.utils import timezone
+from django.utils.html import format_html, format_html_join
 
-from .models import AgentProfile, CommissionLedger, OrganizerProfile, PayoutRequest
+from .models import AgentProfile, AmbassadorApplication, CommissionLedger, OrganizerProfile, PayoutRequest
 
 
 @admin.register(AgentProfile)
@@ -198,3 +199,108 @@ class PayoutRequestAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         # Une demande naît du tableau de bord de l'ambassadeur, jamais de l'admin.
         return False
+
+
+@admin.register(AmbassadorApplication)
+class AmbassadorApplicationAdmin(admin.ModelAdmin):
+    list_display = (
+        "organizer",
+        "id_document_number",
+        "status",
+        "risk_badge",
+        "submitted_at",
+        "reviewed_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("organizer__username", "organizer__email", "id_document_number")
+    readonly_fields = (
+        "organizer",
+        "id_document_number",
+        "document_preview",
+        "status",
+        "tamper_risk_score",
+        "flags_display",
+        "reviewed_by",
+        "submitted_at",
+        "reviewed_at",
+    )
+    fieldsets = (
+        (
+            "Candidature",
+            {"fields": ("organizer", "id_document_number", "document_preview", "submitted_at")},
+        ),
+        (
+            "Analyse automatique",
+            {
+                "description": (
+                    "Indice heuristique (métadonnées + analyse de recompression) : aide à "
+                    "prioriser l'examen, ne remplace pas une vérification humaine."
+                ),
+                "fields": ("tamper_risk_score", "flags_display"),
+            },
+        ),
+        (
+            "Décision",
+            {
+                "description": (
+                    "Utilisez les actions ci-dessous pour approuver ou refuser : elles "
+                    "enregistrent aussi qui a décidé et quand."
+                ),
+                "fields": ("status", "admin_note", "reviewed_by", "reviewed_at"),
+            },
+        ),
+    )
+    actions = ("approve_applications", "reject_applications", "delete_documents")
+
+    def has_add_permission(self, request):
+        # Une candidature naît du tableau de bord de l'organisateur, jamais de l'admin.
+        return False
+
+    @admin.display(description="Risque")
+    def risk_badge(self, obj):
+        return f"{obj.risk_level} ({obj.tamper_risk_score})"
+
+    @admin.display(description="Pièce jointe")
+    def document_preview(self, obj):
+        if not obj.id_document_file:
+            return "—"
+        return format_html(
+            '<a href="{}" target="_blank" rel="noopener">Ouvrir le document (lien valable 5 minutes)</a>',
+            obj.id_document_file.url,
+        )
+
+    @admin.display(description="Anomalies détectées")
+    def flags_display(self, obj):
+        if not obj.tamper_flags:
+            return "Aucune anomalie détectée automatiquement."
+        items = format_html_join("", "<li>{}</li>", ((flag,) for flag in obj.tamper_flags))
+        return format_html("<ul>{}</ul>", items)
+
+    @admin.action(description="Approuver — accorde le statut Ambassadeur")
+    def approve_applications(self, request, queryset):
+        approved = 0
+        for application in queryset.exclude(status=AmbassadorApplication.Status.APPROVED):
+            application.approve(reviewer=request.user)
+            approved += 1
+        self.message_user(request, f"{approved} candidature(s) approuvée(s) — statut Ambassadeur accordé.")
+
+    @admin.action(description="Refuser")
+    def reject_applications(self, request, queryset):
+        rejected = 0
+        for application in queryset.exclude(status=AmbassadorApplication.Status.REJECTED):
+            application.reject(reviewer=request.user)
+            rejected += 1
+        self.message_user(request, f"{rejected} candidature(s) refusée(s).")
+
+    @admin.action(description="Supprimer le document (candidatures refusées uniquement)")
+    def delete_documents(self, request, queryset):
+        """Efface le fichier sensible tout en gardant la trace de la decision
+        (numero, statut, historique) — voir la politique de confidentialite."""
+        deleted = 0
+        for application in queryset.filter(status=AmbassadorApplication.Status.REJECTED).exclude(
+            id_document_file=""
+        ):
+            application.id_document_file.delete(save=False)
+            application.save(update_fields=["id_document_file"])
+            deleted += 1
+        self.message_user(request, f"{deleted} document(s) supprimé(s).")

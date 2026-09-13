@@ -1,7 +1,14 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import (
+    PasswordResetCompleteView,
+    PasswordResetConfirmView,
+    PasswordResetDoneView,
+    PasswordResetView,
+    LoginView,
+)
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
@@ -10,8 +17,8 @@ from django.views.decorators.http import require_POST
 from core.models import SiteConfiguration
 
 from .export import account_export_filename, iter_account_export_zip_chunks
-from .forms import OrganizerSignupForm
-from .models import OrganizerProfile, PayoutRequest
+from .forms import AmbassadorApplicationForm, OrganizerSignupForm
+from .models import AmbassadorApplication, OrganizerProfile, PayoutRequest
 from .services import request_payout
 
 
@@ -98,10 +105,11 @@ def export_my_data(request):
 def password_help(request):
     """Page « mot de passe oublié ».
 
-    Memora n'envoie pas de lien de réinitialisation automatique : la remise à
-    zéro passe par un contact humain (e-mail ou WhatsApp), dont les coordonnées
-    sont réglées en admin. On évite ainsi de promettre un e-mail que la
-    configuration d'envoi ne garantit pas encore.
+    Point d'entree unique de la recuperation de compte : propose le lien de
+    reinitialisation par e-mail (accounts:password_reset), et garde le contact
+    humain (e-mail ou WhatsApp regle en admin) en secours — utile tant qu'aucun
+    service d'envoi reel n'est configure, ou si l'organisateur n'a plus acces a
+    sa boite mail.
     """
     configuration = SiteConfiguration.current()
     return render(
@@ -113,4 +121,70 @@ def password_help(request):
             "whatsapp_display": configuration.support_whatsapp,
             "has_support_contact": configuration.has_support_contact,
         },
+    )
+
+
+class OrganizerPasswordResetView(PasswordResetView):
+    template_name = "accounts/password_reset_form.html"
+    email_template_name = "accounts/password_reset_email.txt"
+    subject_template_name = "accounts/password_reset_subject.txt"
+    from_email = settings.DEFAULT_FROM_EMAIL
+    success_url = reverse_lazy("accounts:password_reset_done")
+
+
+class OrganizerPasswordResetDoneView(PasswordResetDoneView):
+    template_name = "accounts/password_reset_done.html"
+
+
+class OrganizerPasswordResetConfirmView(PasswordResetConfirmView):
+    template_name = "accounts/password_reset_confirm.html"
+    success_url = reverse_lazy("accounts:password_reset_complete")
+
+
+class OrganizerPasswordResetCompleteView(PasswordResetCompleteView):
+    template_name = "accounts/password_reset_complete.html"
+
+
+@login_required
+def become_ambassador(request):
+    """Candidature au statut Ambassadeur : numero de piece d'identite + scan.
+
+    Volontairement absent de l'inscription (qui doit rester simple) : ce n'est
+    demande qu'aux organisateurs qui visent le statut Ambassadeur. Le fichier
+    est analyse (metadonnees, traces de retouche) a la soumission ; la decision
+    d'octroi reste toujours humaine (voir AmbassadorApplication.approve).
+    """
+    profile = OrganizerProfile.for_user(request.user)
+    if profile.is_ambassador:
+        messages.info(request, "Vous êtes déjà ambassadeur Memora.")
+        return redirect("dashboard:home")
+
+    latest_application = (
+        AmbassadorApplication.objects.filter(organizer=request.user).order_by("-submitted_at").first()
+    )
+    if latest_application and latest_application.status == AmbassadorApplication.Status.PENDING:
+        return render(
+            request,
+            "accounts/become_ambassador.html",
+            {"application": latest_application},
+        )
+
+    if request.method == "POST":
+        form = AmbassadorApplicationForm(request.POST, request.FILES)
+        if form.is_valid():
+            application = form.save(commit=False)
+            application.organizer = request.user
+            application.save()
+            messages.success(
+                request,
+                "Votre candidature a bien été envoyée. Memora l'examine sous quelques jours.",
+            )
+            return redirect("dashboard:home")
+    else:
+        form = AmbassadorApplicationForm()
+
+    return render(
+        request,
+        "accounts/become_ambassador.html",
+        {"form": form, "application": latest_application},
     )
