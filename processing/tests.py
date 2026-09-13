@@ -2004,6 +2004,81 @@ class MusicLibraryTests(TestCase):
         track = self._track(MusicTrack.Mood.JOYFUL, "rythme", bpm=120.0)
         self.assertAlmostEqual(track.beat_interval, 0.5, places=3)
 
+    def test_custom_event_music_wins_over_db_library(self):
+        """Un choix explicite de l'organisateur ne doit jamais etre court-circuite
+        par une piste de bibliotheque, meme mieux notee pour le mood."""
+        from processing.soundtrack import choose_movie_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "romance-admin")
+        event = self._make_event()
+        event.custom_music_file = SimpleUploadedFile("notre-chanson.wav", b"fake-wav-bytes")
+        event.custom_music_bpm = 95.0
+        event.custom_music_first_beat_offset = 0.4
+        event.save()
+
+        choice = choose_movie_soundtrack(event, [])
+
+        self.assertEqual(choice.custom_event_id, event.pk)
+        self.assertIsNone(choice.track_id)
+        # Le storage peut suffixer le nom de fichier en cas de collision locale ;
+        # seul le prefixe est stable d'une execution a l'autre.
+        self.assertTrue(choice.track_name.startswith("notre-chanson"))
+        self.assertEqual(choice.bpm, 95.0)
+        self.assertEqual(choice.first_beat_offset, 0.4)
+        self.assertEqual(choice.track_extension, ".wav")
+        self.assertTrue(choice.has_track)
+
+    def test_custom_event_music_wins_over_manual_team_pick(self):
+        from processing.soundtrack import choose_movie_soundtrack
+
+        event = self._make_event()
+        event.selected_music_track = self._track(MusicTrack.Mood.ROMANTIC, "pick-equipe")
+        event.custom_music_file = SimpleUploadedFile("perso.mp3", b"fake-mp3-bytes")
+        event.save()
+
+        choice = choose_movie_soundtrack(event, [])
+
+        self.assertEqual(choice.custom_event_id, event.pk)
+        self.assertIsNone(choice.track_id)
+
+    def test_materialize_copies_custom_event_music(self):
+        from processing.soundtrack import choose_movie_soundtrack, materialize_soundtrack
+
+        event = self._make_event()
+        event.custom_music_file = SimpleUploadedFile("copie-perso.mp3", b"octets-organisateur")
+        event.save()
+        choice = choose_movie_soundtrack(event, [])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path, cleanup = materialize_soundtrack(choice, Path(temp_dir))
+            self.assertIsNotNone(path)
+            self.assertTrue(cleanup)
+            self.assertEqual(path.read_bytes(), b"octets-organisateur")
+
+    def test_build_film_props_names_audio_file_with_real_extension(self):
+        """Sans track_extension, un fichier .wav se retrouvait copie sous un nom
+        "music.mp3" trompeur — voir processing.remotion.build_film_props."""
+        from processing.remotion import build_film_props
+        from processing.soundtrack import choose_movie_soundtrack
+
+        event = self._make_event()
+        event.custom_music_file = SimpleUploadedFile("piste.wav", b"fake-wav-bytes")
+        event.save()
+        soundtrack = choose_movie_soundtrack(event, [])
+
+        upload = SimpleNamespace(
+            pk=1,
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="p.jpg",
+            media_file=SimpleNamespace(name="p.jpg"),
+            duration=None,
+            category=SimpleNamespace(code="ceremony", label="Cérémonie"),
+            analysis=SimpleNamespace(tags=[], movie_score=None, brightness=None),
+        )
+        props = build_film_props(event, [upload], soundtrack, fps=30)
+
+        self.assertEqual(props["audioSrc"], "music.wav")
+
 
 class GeneratedMovieAdminActionTests(TestCase):
     def setUp(self):

@@ -150,6 +150,20 @@
 
     <section class="form-section">
       <div class="form-section__heading">
+        <p class="section__label">Film souvenir</p>
+        <h2>Musique</h2>
+      </div>
+
+      <label>
+        <span>{{ form.custom_music_file.label }}</span>
+        {{ form.custom_music_file }}
+        <small>{{ form.custom_music_file.help_text }}</small>
+        {{ form.custom_music_file.errors }}
+      </label>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section__heading">
         <p class="section__label">Accès invité</p>
         <h2>Sécurité après le scan</h2>
       </div>

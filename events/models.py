@@ -19,6 +19,10 @@ def event_qr_code_upload_path(instance, filename):
     return f"events/{instance.slug or 'pending'}/qr/{filename}"
 
 
+def event_custom_music_upload_path(instance, filename):
+    return f"events/{instance.slug or 'pending'}/music/{filename}"
+
+
 class EventType(models.Model):
     code = models.SlugField(max_length=40, unique=True)
     label = models.CharField(max_length=80)
@@ -232,6 +236,25 @@ class Event(models.Model):
             "plus de moment."
         ),
     )
+    custom_music_file = models.FileField(
+        upload_to=event_custom_music_upload_path,
+        blank=True,
+        null=True,
+        help_text=(
+            "Musique fournie par l'organisateur lui-meme : prioritaire sur tout choix "
+            "automatique ou manuel. L'organisateur est seul responsable des droits sur "
+            "ce fichier (voir CGU, section Contenus)."
+        ),
+    )
+    custom_music_bpm = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Tempo mesure automatiquement a l'upload. Sert au calage des coupes.",
+    )
+    custom_music_first_beat_offset = models.FloatField(
+        default=0.0,
+        help_text="Decalage du premier temps fort, en secondes.",
+    )
     guest_access_code = models.CharField(
         max_length=24,
         blank=True,
@@ -378,6 +401,47 @@ class Event(models.Model):
 
     def check_guest_access_code(self, code):
         return self._normalize_guest_access_code(code) == self.guest_access_code
+
+    def measure_custom_music_tempo(self, save=True):
+        """Mesure le tempo de la musique personnalisee (best-effort), meme logique
+        que MusicTrack.measure_and_store_tempo : un tempo non mesure ne bloque rien,
+        le montage retombe simplement sans calage sur le rythme."""
+        from processing.tempo import measure_tempo
+
+        if not self.custom_music_file:
+            return False
+        try:
+            local_path = self._materialize_custom_music_to_temp()
+        except Exception:
+            return False
+        try:
+            bpm, offset = measure_tempo(local_path)
+        except Exception:
+            return False
+        finally:
+            local_path.unlink(missing_ok=True)
+
+        self.custom_music_bpm = bpm
+        self.custom_music_first_beat_offset = offset
+        if save:
+            self.save(update_fields=["custom_music_bpm", "custom_music_first_beat_offset", "updated_at"])
+        return True
+
+    def _materialize_custom_music_to_temp(self):
+        """Copie le fichier (local ou R2) vers un fichier temporaire lisible par ffmpeg."""
+        import tempfile
+        from pathlib import Path
+
+        suffix = Path(self.custom_music_file.name).suffix or ".audio"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            self.custom_music_file.open("rb")
+            try:
+                for chunk in self.custom_music_file.chunks():
+                    temporary.write(chunk)
+            finally:
+                self.custom_music_file.close()
+        return temporary_path
 
     def save(self, *args, **kwargs):
         if not self.slug:

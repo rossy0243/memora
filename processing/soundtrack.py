@@ -33,6 +33,13 @@ class SoundtrackChoice:
     # Piste issue de la bibliotheque admin (MusicTrack). Prioritaire sur track_path.
     track_id: int | None = None
     track_display_name: str = ""
+    # Musique fournie par l'organisateur (Event.custom_music_file). Prioritaire
+    # sur tout le reste — voir choose_movie_soundtrack.
+    custom_event_id: int | None = None
+    # Extension reelle du fichier (track_id/custom_event_id) : sans elle,
+    # build_film_props nommerait toujours le fichier materialise "music.mp3"
+    # meme pour une piste .wav/.m4a, ce qui casse la lecture cote Remotion.
+    track_extension: str = ""
 
     @property
     def track_name(self):
@@ -42,7 +49,7 @@ class SoundtrackChoice:
 
     @property
     def has_track(self):
-        return bool(self.track_id or self.track_path)
+        return bool(self.track_id or self.track_path or self.custom_event_id)
 
     @property
     def beat_interval(self):
@@ -76,6 +83,23 @@ def find_db_track_for_mood(mood, event):
 
 
 def choose_movie_soundtrack(event, uploads):
+    # Priorite absolue : musique fournie par l'organisateur lui-meme. Un choix
+    # explicite ne doit jamais etre court-circuite par une selection manuelle
+    # d'equipe ou une ambiance devinee automatiquement — voir aussi CGU
+    # (l'organisateur est seul responsable des droits sur ce fichier).
+    custom_music = getattr(event, "custom_music_file", None)
+    if custom_music:
+        return SoundtrackChoice(
+            mood=choose_music_mood(event, uploads),
+            track_path=None,
+            reason="Musique personnalisée fournie par l'organisateur",
+            bpm=getattr(event, "custom_music_bpm", None) or 0.0,
+            first_beat_offset=getattr(event, "custom_music_first_beat_offset", None) or 0.0,
+            custom_event_id=event.pk,
+            track_display_name=Path(custom_music.name).stem,
+            track_extension=Path(custom_music.name).suffix or ".mp3",
+        )
+
     # Choix manuel prioritaire : l'ambiance automatique par categorie ne peut
     # plus vraiment varier depuis que l'invite ne choisit plus de moment (tout
     # vaut "Autre"). Un humain (equipe Memora, organisateur un jour) tranche.
@@ -89,6 +113,7 @@ def choose_movie_soundtrack(event, uploads):
             first_beat_offset=manual_track.first_beat_offset or 0.0,
             track_id=manual_track.pk,
             track_display_name=manual_track.title,
+            track_extension=Path(manual_track.audio_file.name).suffix or ".mp3" if manual_track.audio_file else "",
         )
 
     mood = choose_music_mood(event, uploads)
@@ -103,6 +128,7 @@ def choose_movie_soundtrack(event, uploads):
             first_beat_offset=db_track.first_beat_offset or 0.0,
             track_id=db_track.pk,
             track_display_name=db_track.title,
+            track_extension=Path(db_track.audio_file.name).suffix or ".mp3" if db_track.audio_file else "",
         )
 
     # Repli : pistes livrees en dur dans assets/music/.
@@ -123,11 +149,29 @@ def choose_movie_soundtrack(event, uploads):
 def materialize_soundtrack(soundtrack, directory):
     """Renvoie (chemin_local, a_supprimer) pour la piste, prete pour ffmpeg.
 
+    - Musique personnalisee de l'organisateur (R2/local) : copiee -> a supprimer.
     - Piste admin (R2/local) : copiee dans un fichier temporaire -> a supprimer.
     - Piste du dossier assets : chemin direct -> ne pas supprimer.
     - Aucune piste : (None, False).
     """
     import tempfile
+
+    if soundtrack.custom_event_id:
+        from events.models import Event
+
+        event = Event.objects.filter(pk=soundtrack.custom_event_id).first()
+        if not event or not event.custom_music_file:
+            return None, False
+        suffix = Path(event.custom_music_file.name).suffix or ".audio"
+        with tempfile.NamedTemporaryFile(suffix=suffix, dir=directory, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            event.custom_music_file.open("rb")
+            try:
+                for chunk in event.custom_music_file.chunks():
+                    temporary.write(chunk)
+            finally:
+                event.custom_music_file.close()
+        return temporary_path, True
 
     if soundtrack.track_id:
         from .models import MusicTrack

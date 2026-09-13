@@ -8,6 +8,8 @@ from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
+from core.video import VideoDurationUnavailable, probe_video_duration
+from processing.soundtrack import SUPPORTED_AUDIO_EXTENSIONS
 from uploads.models import MomentTemplate
 from uploads.services import (
     get_available_moment_templates,
@@ -160,6 +162,7 @@ class EventForm(forms.ModelForm):
             "event_date",
             "cover_image",
             "welcome_message",
+            "custom_music_file",
             "guest_access_code",
         )
         widgets = {
@@ -173,6 +176,7 @@ class EventForm(forms.ModelForm):
             "event_date": "Date de l'événement",
             "cover_image": "Image de couverture",
             "welcome_message": "Message d'accueil",
+            "custom_music_file": "Votre propre musique (optionnel)",
             "guest_access_code": "Code invité (optionnel)",
         }
         help_texts = {
@@ -181,6 +185,11 @@ class EventForm(forms.ModelForm):
             "event_type": "Les moments proposés aux invités s'adaptent au type choisi.",
             "event_date": "Les médias seront conservés 7 jours après cette date.",
             "welcome_message": "Une phrase courte suffit. Elle apparaît sur la page invitée.",
+            "custom_music_file": (
+                "Remplace la musique choisie automatiquement pour votre film souvenir. "
+                "Vous devez disposer des droits sur ce morceau (acheté, libre de droits "
+                "ou sous licence adaptée) : voir nos CGU."
+            ),
             "guest_access_code": "À utiliser seulement si vous voulez ajouter une sécurité après le QR code.",
         }
 
@@ -223,6 +232,16 @@ class EventForm(forms.ModelForm):
             {
                 "accept": ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp",
             }
+        )
+        self.fields["custom_music_file"].required = False
+        max_music_minutes = settings.MEMORA_MAX_CUSTOM_MUSIC_DURATION_SECONDS // 60
+        max_music_mb = settings.MEMORA_MAX_CUSTOM_MUSIC_SIZE // (1024 * 1024)
+        self.fields["custom_music_file"].help_text += (
+            f" Formats MP3, WAV, M4A, AAC, FLAC ou OGG. {max_music_mb} Mo et "
+            f"{max_music_minutes} minutes maximum."
+        )
+        self.fields["custom_music_file"].widget.attrs.update(
+            {"accept": ",".join(SUPPORTED_AUDIO_EXTENSIONS)},
         )
         self.fields["event_type"].empty_label = "Choisir un type"
         other_event_type = EventType.objects.filter(code="other", is_active=True).first()
@@ -301,6 +320,10 @@ class EventForm(forms.ModelForm):
                 user=instance.organizer,
                 count_all_usage=is_new,
             )
+            if "custom_music_file" in self.changed_data and instance.custom_music_file:
+                # Best-effort : sans tempo mesure, le montage retombe simplement
+                # sans calage sur le rythme (voir processing.soundtrack).
+                instance.measure_custom_music_tempo()
         return instance
 
     def _add_existing_custom_moment_choices(self):
@@ -373,3 +396,29 @@ class EventForm(forms.ModelForm):
             output.read(),
             content_type="image/jpeg",
         )
+
+    def clean_custom_music_file(self):
+        music_file = self.cleaned_data.get("custom_music_file")
+        if not music_file:
+            return music_file
+
+        extension = Path(music_file.name).suffix.lower()
+        if extension not in SUPPORTED_AUDIO_EXTENSIONS:
+            raise forms.ValidationError(
+                "Ce format audio n'est pas accepté. Utilisez MP3, WAV, M4A, AAC, FLAC ou OGG."
+            )
+
+        if music_file.size > settings.MEMORA_MAX_CUSTOM_MUSIC_SIZE:
+            max_mb = settings.MEMORA_MAX_CUSTOM_MUSIC_SIZE // (1024 * 1024)
+            raise forms.ValidationError(f"Ce fichier est trop lourd. {max_mb} Mo maximum.")
+
+        try:
+            duration = probe_video_duration(music_file, settings.MEMORA_FFPROBE_BINARY)
+        except VideoDurationUnavailable:
+            raise forms.ValidationError("Ce fichier audio ne peut pas être lu.")
+
+        if duration > settings.MEMORA_MAX_CUSTOM_MUSIC_DURATION_SECONDS:
+            max_minutes = settings.MEMORA_MAX_CUSTOM_MUSIC_DURATION_SECONDS // 60
+            raise forms.ValidationError(f"Ce morceau est trop long. {max_minutes} minutes maximum.")
+
+        return music_file

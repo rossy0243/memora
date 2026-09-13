@@ -230,7 +230,10 @@ def build_film_props(
     audio_src = None
     audio_offset = 0.0
     if soundtrack and soundtrack.has_track:
-        audio_ext = ".mp3"
+        # track_extension (piste DB / musique personnalisee) reflete le VRAI
+        # format du fichier : sans elle, un .wav/.m4a se retrouvait copie sous un
+        # nom "music.mp3" trompeur, et le Content-Type servi a Remotion avec.
+        audio_ext = getattr(soundtrack, "track_extension", "") or ".mp3"
         if soundtrack.track_path:
             audio_ext = Path(soundtrack.track_path).suffix or ".mp3"
         audio_src = f"music{audio_ext}"
