@@ -140,6 +140,14 @@ class GuestBookMovie(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+    progress_percent = models.FloatField(
+        default=0,
+        help_text=(
+            "Avancement 0-100, a la decimale pres pendant le rendu Remotion "
+            "(voir processing.guestbook_montage.render_guestbook_montage)."
+        ),
+    )
+    progress_message = models.CharField(max_length=160, blank=True)
     final_file = models.FileField(
         upload_to=guestbook_movie_upload_path,
         blank=True,

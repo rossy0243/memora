@@ -349,6 +349,49 @@ def _normalize_clip_audio(path, ffmpeg_binary):
         normalized_path.unlink(missing_ok=True)
 
 
+def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progress_callback=None, failure_label="Rendu Remotion"):
+    """Lance `node render.mjs` et attend la fin, en sondant la progression.
+
+    Boucle de sondage plutot qu'un simple `run(..., timeout=...)` : c'est ce
+    qui laisse la main entre deux attentes pour lire le fichier de progression
+    et appeler `progress_callback`, tout en gardant le meme comportement de
+    timeout global (le process est tue si `timeout` est depasse). Partage par
+    tous les rendus Remotion (film souvenir et montage du livre d'or).
+    """
+    started_at = time.monotonic()
+    last_reported = None
+    process = subprocess.Popen(
+        command,
+        cwd=str(cwd),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    while True:
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+            break
+        except subprocess.TimeoutExpired:
+            if progress_callback and progress_path and progress_path.exists():
+                try:
+                    fraction = json.loads(progress_path.read_text(encoding="utf-8")).get("progress")
+                except (OSError, ValueError):
+                    fraction = None
+                if fraction is not None and fraction != last_reported:
+                    last_reported = fraction
+                    progress_callback(fraction)
+            if time.monotonic() - started_at > timeout:
+                process.kill()
+                process.communicate()
+                raise RuntimeError(f"{failure_label} : delai depasse ({timeout}s).")
+
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"{failure_label} echoue (code {process.returncode}) : "
+            f"{(stderr or stdout or '').strip()[:500]}"
+        )
+
+
 def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
     """Rend un livrable (hero / full / teaser) via Remotion. Renvoie le chemin du MP4.
 
@@ -424,43 +467,14 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
             len(uploads),
         )
 
-        timeout = settings.MEMORA_REMOTION_TIMEOUT_SECONDS
-        started_at = time.monotonic()
-        last_reported = None
-        process = subprocess.Popen(
+        run_remotion_subprocess(
             command,
-            cwd=str(remotion_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+            cwd=remotion_dir,
+            timeout=settings.MEMORA_REMOTION_TIMEOUT_SECONDS,
+            progress_path=progress_path,
+            progress_callback=progress_callback,
+            failure_label="Rendu Remotion",
         )
-        # Boucle de sondage plutot qu'un simple `run(..., timeout=...)` : c'est ce
-        # qui laisse la main entre deux attentes pour lire le fichier de progression
-        # et appeler `progress_callback`, tout en gardant le meme comportement de
-        # timeout global (le process est tue si `timeout` est depasse).
-        while True:
-            try:
-                stdout, stderr = process.communicate(timeout=2)
-                break
-            except subprocess.TimeoutExpired:
-                if progress_callback and progress_path.exists():
-                    try:
-                        fraction = json.loads(progress_path.read_text(encoding="utf-8")).get("progress")
-                    except (OSError, ValueError):
-                        fraction = None
-                    if fraction is not None and fraction != last_reported:
-                        last_reported = fraction
-                        progress_callback(fraction)
-                if time.monotonic() - started_at > timeout:
-                    process.kill()
-                    process.communicate()
-                    raise RuntimeError(f"Rendu Remotion : delai depasse ({timeout}s).")
-
-        if process.returncode != 0:
-            raise RuntimeError(
-                f"Rendu Remotion echoue (code {process.returncode}) : "
-                f"{(stderr or stdout or '').strip()[:500]}"
-            )
 
     logger.info("Remotion render completed event=%s deliverable=%s", event.pk, deliverable)
     return Path(output_path)

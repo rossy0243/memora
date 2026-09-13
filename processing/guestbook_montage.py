@@ -8,7 +8,6 @@ mais la musique n'est qu'un lit discret, encore baisse pendant chaque message.
 import json
 import logging
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 
@@ -16,7 +15,7 @@ from django.conf import settings
 from django.core.files import File
 from django.utils import timezone
 
-from .remotion import _materialize_upload, _normalize_clip_audio
+from .remotion import _materialize_upload, _normalize_clip_audio, run_remotion_subprocess
 from .soundtrack import choose_movie_soundtrack, materialize_soundtrack
 
 logger = logging.getLogger(__name__)
@@ -28,6 +27,12 @@ _GRADE_BY_MOOD = {
     "elegant_warm": "warm",
     "joyful_party": "neutral",
 }
+
+
+def _update_guestbook_progress(movie, percent, message):
+    movie.progress_percent = max(0.0, min(round(float(percent), 1), 100.0))
+    movie.progress_message = message[:160]
+    movie.save(update_fields=["progress_percent", "progress_message", "updated_at"])
 
 
 def _seconds_to_frames(seconds, fps):
@@ -89,10 +94,15 @@ def build_guestbook_props(event, messages, soundtrack, *, fps=None):
     }
 
 
-def render_guestbook_montage(event, messages, output_path):
+def render_guestbook_montage(event, messages, output_path, progress_callback=None):
     """Rend le montage du livre d'or via Remotion. Renvoie le chemin du MP4.
 
     Leve une exception si Node/Remotion echoue : l'appelant gere l'echec.
+
+    `progress_callback(fraction)`, si fourni, est appele periodiquement pendant
+    le rendu avec l'avancement reel (0.0 a 1.0) : le livre d'or peut monter
+    beaucoup de messages bout a bout, un rendu qui dure sans que rien ne bouge
+    cote organisateur est indistinguable d'un blocage.
     """
     messages = list(messages)
     if not messages:
@@ -130,6 +140,7 @@ def render_guestbook_montage(event, messages, output_path):
 
         props_path = Path(work_dir) / "props.json"
         props_path.write_text(json.dumps(props), encoding="utf-8")
+        progress_path = Path(work_dir) / "progress.json"
 
         command = [
             node_binary,
@@ -138,24 +149,21 @@ def render_guestbook_montage(event, messages, output_path):
             f"--props={props_path}",
             f"--output={output_path}",
             f"--public-dir={assets_dir}",
+            f"--progress-file={progress_path}",
         ]
         logger.info(
             "Guestbook montage render started event=%s messages=%s",
             event.pk,
             len(messages),
         )
-        result = subprocess.run(
+        run_remotion_subprocess(
             command,
-            cwd=str(remotion_dir),
-            capture_output=True,
-            text=True,
+            cwd=remotion_dir,
             timeout=settings.MEMORA_REMOTION_TIMEOUT_SECONDS,
+            progress_path=progress_path,
+            progress_callback=progress_callback,
+            failure_label="Rendu Remotion du livre d'or",
         )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Rendu Remotion du livre d'or echoue (code {result.returncode}) : "
-                f"{(result.stderr or result.stdout or '').strip()[:500]}"
-            )
 
     logger.info("Guestbook montage render completed event=%s", event.pk)
     return Path(output_path)
@@ -190,12 +198,27 @@ def process_guestbook_movie(movie):
     movie.started_at = timezone.now()
     movie.error_message = ""
     movie.save(update_fields=["status", "started_at", "error_message", "updated_at"])
+    _update_guestbook_progress(movie, 5, "Préparation du montage.")
+
+    # Le rendu Chrome headless peut prendre plusieurs minutes avec beaucoup de
+    # messages ; sans ce callback, la progression restait figee tout ce temps,
+    # illisible (bloque ? tres lent ?). Fenetre 10-90% reservee au rendu.
+    render_progress_window = (10, 90)
+
+    def _report_render_progress(fraction):
+        span = render_progress_window[1] - render_progress_window[0]
+        _update_guestbook_progress(
+            movie,
+            render_progress_window[0] + fraction * span,
+            "Montage du livre d'or en cours.",
+        )
 
     try:
         with tempfile.TemporaryDirectory(prefix="memora_guestbook_out_") as out_dir:
             output_path = Path(out_dir) / f"livre-dor-{event.slug or event.pk}.mp4"
-            render_guestbook_montage(event, messages, output_path)
+            render_guestbook_montage(event, messages, output_path, progress_callback=_report_render_progress)
 
+            _update_guestbook_progress(movie, 95, "Enregistrement du montage final.")
             duration_seconds = sum(_message_seconds(message) for message in messages)
             with open(output_path, "rb") as rendered:
                 movie.final_file.save(output_path.name, File(rendered), save=False)

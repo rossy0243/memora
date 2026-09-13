@@ -217,9 +217,26 @@ def guestbook_messages(request, pk):
             "is_paginated": page_obj.has_other_pages(),
             "recording_agents": recording_agents,
             "selected_agent": selected_agent,
-            "total_message_count": event.guestbook_messages.count(),
-            "guestbook_movie": getattr(event, "guestbook_movie", None),
+            **get_guestbook_movie_panel_context(event),
         },
+    )
+
+
+def get_guestbook_movie_panel_context(event):
+    return {
+        "guestbook_movie": getattr(event, "guestbook_movie", None),
+        "total_message_count": event.guestbook_messages.count(),
+        "guestbook_movie_status_url": reverse("events:guestbook_movie_status", kwargs={"pk": event.pk}),
+    }
+
+
+@login_required
+def guestbook_movie_status_panel(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    return render(
+        request,
+        "events/partials/guestbook_movie_panel.html",
+        {"event": event, **get_guestbook_movie_panel_context(event)},
     )
 
 

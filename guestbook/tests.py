@@ -355,7 +355,7 @@ class GuestBookMontageTests(TestCase):
         self._add_message("Tata Jeanne")
         movie = GuestBookMovie.objects.create(event=self.event)
 
-        def fake_render(event, messages, output_path):
+        def fake_render(event, messages, output_path, progress_callback=None):
             Path(output_path).write_bytes(b"fake-mp4-bytes")
             return Path(output_path)
 
@@ -370,6 +370,35 @@ class GuestBookMontageTests(TestCase):
         self.assertEqual(movie.status, GuestBookMovie.Status.COMPLETED)
         self.assertTrue(movie.final_file)
         self.assertEqual(movie.message_count, 2)
+
+    def test_process_guestbook_movie_reports_progress_during_render(self):
+        """Sans ceci, l'organisateur voit un montage 'en preparation' sans savoir
+        s'il avance vraiment ou s'il est bloque (cas remonte en production)."""
+        self._add_message("Les voisins")
+        movie = GuestBookMovie.objects.create(event=self.event)
+        observed = []
+
+        def fake_render(event, messages, output_path, progress_callback=None):
+            if progress_callback:
+                progress_callback(0.5)
+                # Verifie que la progression est bien persistee en base pendant
+                # le rendu (pas seulement gardee en memoire) : c'est ce que la
+                # page /livre-dor/ interroge en sondant toutes les 5 secondes.
+                observed.append(GuestBookMovie.objects.get(pk=movie.pk).progress_percent)
+            Path(output_path).write_bytes(b"fake-mp4-bytes")
+            return Path(output_path)
+
+        with patch(
+            "processing.guestbook_montage.render_guestbook_montage", side_effect=fake_render
+        ), patch("processing.guestbook_montage.shutil.which", return_value="/usr/bin/ffmpeg"):
+            from processing.guestbook_montage import process_guestbook_movie
+
+            process_guestbook_movie(movie)
+
+        self.assertEqual(observed, [50.0])
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GuestBookMovie.Status.COMPLETED)
+        self.assertEqual(movie.progress_percent, 95.0)
 
     def test_build_guestbook_props_interleaves_name_cards(self):
         self._add_message("Les voisins")

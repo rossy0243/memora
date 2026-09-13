@@ -1067,6 +1067,73 @@ class EventViewTests(TestCase):
         self.assertContains(response, "68,0%")
         self.assertContains(response, "Assemblage des clips sélectionnés.")
 
+    def test_guestbook_page_shows_montage_progress_while_processing(self):
+        from guestbook.models import GuestBookMovie
+
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Livre Or En Cours",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GuestBookMovie.objects.create(
+            event=event,
+            status=GuestBookMovie.Status.PROCESSING,
+            progress_percent=37,
+            progress_message="Montage du livre d'or en cours.",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:guestbook_messages", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "37,0%")
+        # Apostrophe echappee en HTML (d&#x27;or) : on verifie le texte autour.
+        self.assertContains(response, "Montage du livre d")
+        self.assertContains(response, "or en cours.")
+        self.assertContains(response, reverse("events:guestbook_movie_status", kwargs={"pk": event.pk}))
+
+    def test_owner_can_poll_guestbook_movie_status_panel(self):
+        from guestbook.models import GuestBookMovie
+
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Livre Or Statut",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GuestBookMovie.objects.create(
+            event=event,
+            status=GuestBookMovie.Status.PROCESSING,
+            progress_percent=52,
+            progress_message="Montage du livre d'or en cours.",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:guestbook_movie_status", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "52,0%")
+        # Apostrophe echappee en HTML (d&#x27;or) : on verifie le texte autour.
+        self.assertContains(response, "Montage du livre d")
+        self.assertContains(response, "or en cours.")
+
+    def test_other_organizer_cannot_poll_guestbook_movie_status_panel(self):
+        from guestbook.models import GuestBookMovie
+
+        event = Event.objects.create(
+            organizer=self.other_user,
+            title="Reception Livre Or Privee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GuestBookMovie.objects.create(event=event, status=GuestBookMovie.Status.PROCESSING)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:guestbook_movie_status", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
     @patch("events.views.create_event_movie_job")
     def test_owner_can_generate_event_movie(self, create_event_movie_job):
         event = Event.objects.create(
