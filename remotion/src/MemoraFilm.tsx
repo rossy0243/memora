@@ -12,6 +12,7 @@ import { FilmProps } from "./types";
 import { Clip } from "./Clip";
 import { TitleCard } from "./TitleCard";
 import { FilmGrain } from "./FilmGrain";
+import { Watermark } from "./Watermark";
 import { mainClips as resolveMainClips, usesColdOpen } from "./timeline";
 
 function resolveSrc(src: string): string {
@@ -41,6 +42,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     musicVolume,
     duckedMusicVolume,
     cinematicBars,
+    watermark,
   } = props;
   const { fps, width, height } = useVideoConfig();
 
@@ -172,6 +174,8 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
       ) : null}
 
       <FilmGrain />
+
+      {watermark ? <Watermark /> : null}
 
       {cinematicBars && barHeight > 0 ? (
         <>

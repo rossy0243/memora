@@ -7,35 +7,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import { ACCENT_FONT, TITLE_FONT, ensureFonts } from "./fonts";
-
-// Sceau discret du carton de fin : le monogramme grave de la marque, repris
-// tel quel du logo (meme trace, meme anneau pointille) plutot qu'invente pour
-// la video. Une signature de studio, pas juste un mot "Merci".
-const Seal: React.FC<{ size: number; opacity: number }> = ({ size, opacity }) => (
-  <svg width={size} height={size} viewBox="0 0 202 202" style={{ opacity, display: "block" }}>
-    <ellipse
-      cx="101"
-      cy="101"
-      rx="80"
-      ry="82"
-      fill="none"
-      stroke="#d8b46a"
-      strokeWidth="2.4"
-      strokeDasharray="241.45 13"
-      strokeDashoffset="-6.5"
-    />
-    <path d="M181,96.5 L185.2,101 L181,105.5 L176.8,101 Z" fill="#f4d9d5" />
-    <path d="M21,96.5 L25.2,101 L21,105.5 L16.8,101 Z" fill="#f4d9d5" />
-    <path
-      d="M46,63 C44.5,87 43.2,113 43,139 L49,139 C51,113 54.5,91 57,72 L95,134 L101,142 L139,71 C141,93 144.8,117 146,139 L159,139 C159.2,113 157.8,87 156,63 L133,63 L105,122 L71,63 Z"
-      fill="#f4d9d5"
-    />
-    <rect x="38.5" y="60" width="36" height="3" fill="#f4d9d5" />
-    <rect x="129.5" y="60" width="34" height="3" fill="#f4d9d5" />
-    <rect x="34" y="136.5" width="24" height="3" fill="#f4d9d5" />
-    <rect x="140" y="136.5" width="25" height="3" fill="#f4d9d5" />
-  </svg>
-);
+import { Monogram } from "./Monogram";
 
 // Carton anime : le titre se revele en douceur, un filet dore se trace de part et
 // d'autre du sous-titre. C'est ce qui fait qu'un film "commence" au lieu de
@@ -134,7 +106,7 @@ export const TitleCard: React.FC<{
         />
       ) : null}
       {showSeal ? (
-        <Seal size={minSide * 0.1} opacity={sealOpacity * 0.92} />
+        <Monogram size={minSide * 0.1} opacity={sealOpacity * 0.92} />
       ) : null}
       <div
         style={{

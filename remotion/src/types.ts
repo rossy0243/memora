@@ -45,6 +45,9 @@ export interface FilmProps {
   // Bandeaux cinema (2.35:1) : reserves au heros, l'effet "salle de cinema".
   // Absent (undefined) = pas de bandeaux, comme avant.
   cinematicBars?: boolean;
+  // Watermark permanent (coin bas-droit) : reserve au teaser, le format que les
+  // invites partagent — la marque doit y rester visible du debut a la fin.
+  watermark?: boolean;
 }
 
 // --- Montage du livre d'or ---------------------------------------------------
@@ -122,4 +125,5 @@ export const defaultFilmProps: FilmProps = {
   musicVolume: 0.85,
   duckedMusicVolume: 0.25,
   cinematicBars: false,
+  watermark: false,
 };

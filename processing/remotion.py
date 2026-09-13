@@ -167,6 +167,11 @@ def build_film_props(
         # sur le livrable qu'on regarde ensemble, pas sur l'integrale (archive)
         # ni le teaser (deja vertical plein cadre).
         "cinematicBars": deliverable == "hero",
+        # Watermark permanent : uniquement le teaser, le format que les invites
+        # partagent (WhatsApp, stories...) — c'est la ou la marque doit rester
+        # visible du debut a la fin, pas seulement sur le sceau du carton final
+        # que peu de monde regarde jusqu'au bout sur les reseaux.
+        "watermark": deliverable == "teaser",
     }
 
 
