@@ -1451,15 +1451,24 @@ class RemotionClipAudioNormalizationTests(TestCase):
 class RemotionEdlTests(TestCase):
     """Le builder EDL doit produire un FilmProps aligne avec remotion/src/types.ts."""
 
-    def _upload(self, kind, filename, seconds=None, voice=False):
+    def _upload(
+        self,
+        kind,
+        filename,
+        seconds=None,
+        voice=False,
+        category_code="ceremony",
+        movie_score=None,
+        brightness=None,
+    ):
         return SimpleNamespace(
             pk=id(filename) % 100000,
             media_type=kind,
             original_filename=filename,
             media_file=SimpleNamespace(name=filename),
             duration=timedelta(seconds=seconds) if seconds else None,
-            category=SimpleNamespace(code="ceremony", label="Cérémonie"),
-            analysis=SimpleNamespace(tags=["voix"] if voice else []),
+            category=SimpleNamespace(code=category_code, label="Cérémonie"),
+            analysis=SimpleNamespace(tags=["voix"] if voice else [], movie_score=movie_score, brightness=brightness),
         )
 
     def _event(self):
@@ -1673,6 +1682,154 @@ class RemotionEdlTests(TestCase):
             fps=30,
         )
         self.assertEqual(joyful["grade"], "neutral")
+
+    def test_cold_open_prefers_the_best_scored_clip(self):
+        """L'ouverture a froid doit pointer sur le plan le mieux note, pas le
+        premier chronologique — voir processing.remotion._select_cold_open_index."""
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "moyen.jpg", movie_score=40),
+            self._upload(GuestUpload.MediaType.IMAGE, "excellent.jpg", movie_score=92),
+            self._upload(GuestUpload.MediaType.IMAGE, "faible.jpg", movie_score=10),
+        ]
+
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+
+        self.assertEqual(props["coldOpenClipIndex"], 1)
+
+    def test_cold_open_falls_back_to_first_without_any_score(self):
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "a.jpg"),
+            self._upload(GuestUpload.MediaType.IMAGE, "b.jpg"),
+        ]
+
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+
+        self.assertEqual(props["coldOpenClipIndex"], 0)
+
+    def test_brightness_correction_nudges_towards_target_exposure(self):
+        """Une photo mesuree trop sombre est corrigee vers le haut, une trop
+        cramee vers le bas — toujours bornee, jamais un filtre qui se voit."""
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "sombre.jpg", brightness=20),
+            self._upload(GuestUpload.MediaType.IMAGE, "cramee.jpg", brightness=95),
+            self._upload(GuestUpload.MediaType.IMAGE, "neutre.jpg", brightness=55),
+        ]
+
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
+
+        dark_correction, bright_correction, neutral_correction = (
+            clip["brightnessCorrection"] for clip in props["clips"]
+        )
+        self.assertGreater(dark_correction, 1.0)
+        self.assertLess(bright_correction, 1.0)
+        self.assertEqual(neutral_correction, 1.0)
+        self.assertGreaterEqual(dark_correction, 0.85)
+        self.assertLessEqual(bright_correction, 1.25)
+
+    def test_brightness_correction_defaults_to_neutral_without_analysis(self):
+        from processing.remotion import build_film_props
+
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(),
+            fps=30,
+        )
+
+        self.assertEqual(props["clips"][0]["brightnessCorrection"], 1.0)
+
+    def test_welcome_message_included_for_hero_but_not_teaser(self):
+        event = self._event()
+        event.welcome_message = "  Merci à tous !  "
+        from processing.remotion import build_film_props
+
+        uploads = [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")]
+
+        hero_props = build_film_props(event, uploads, self._soundtrack(), fps=30, deliverable="hero")
+        teaser_props = build_film_props(event, uploads, self._soundtrack(), fps=30, deliverable="teaser")
+
+        self.assertEqual(hero_props["welcomeMessage"], "Merci à tous !")
+        self.assertEqual(teaser_props["welcomeMessage"], "")
+
+    def test_welcome_message_empty_when_event_has_none(self):
+        from processing.remotion import build_film_props
+
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(),
+            fps=30,
+            deliverable="hero",
+        )
+
+        self.assertEqual(props["welcomeMessage"], "")
+
+    def test_stats_absent_for_test_event_without_guest_uploads_relation(self):
+        """`_event` est un SimpleNamespace sans relation `guest_uploads` : le
+        carton recap doit etre saute proprement, jamais planter le rendu."""
+        from processing.remotion import build_film_props
+
+        props = build_film_props(
+            self._event(),
+            [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")],
+            self._soundtrack(),
+            fps=30,
+            deliverable="hero",
+        )
+
+        self.assertIsNone(props["stats"])
+
+    def test_highlight_clips_selected_only_from_festive_categories(self):
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "ceremonie.jpg", category_code="ceremony", movie_score=99),
+            self._upload(GuestUpload.MediaType.IMAGE, "danse1.jpg", category_code="dancefloor", movie_score=80),
+            self._upload(GuestUpload.MediaType.IMAGE, "danse2.jpg", category_code="dancefloor", movie_score=90),
+            self._upload(GuestUpload.MediaType.IMAGE, "gateau.jpg", category_code="cake", movie_score=60),
+        ]
+
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, deliverable="hero")
+
+        sources = {clip["src"] for clip in props["highlightClips"]}
+        # Les 3 candidats festifs (danse2 > danse1 > gateau) sont tous repris,
+        # jamais la ceremonie malgre son meilleur score : hors reservoir festif.
+        self.assertEqual(len(props["highlightClips"]), 3)
+        self.assertNotIn("clip_0001.jpg", sources)  # ceremonie exclue
+
+    def test_highlight_clips_empty_below_two_candidates(self):
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "ceremonie.jpg", category_code="ceremony"),
+            self._upload(GuestUpload.MediaType.IMAGE, "danse1.jpg", category_code="dancefloor"),
+        ]
+
+        props = build_film_props(self._event(), uploads, self._soundtrack(), fps=30, deliverable="hero")
+
+        self.assertEqual(props["highlightClips"], [])
+
+    def test_extra_cards_disabled_on_teaser(self):
+        event = self._event()
+        event.welcome_message = "Un mot pour vous"
+        from processing.remotion import build_film_props
+
+        uploads = [
+            self._upload(GuestUpload.MediaType.IMAGE, "danse1.jpg", category_code="dancefloor", movie_score=80),
+            self._upload(GuestUpload.MediaType.IMAGE, "danse2.jpg", category_code="dancefloor", movie_score=90),
+        ]
+
+        props = build_film_props(event, uploads, self._soundtrack(), fps=30, deliverable="teaser")
+
+        self.assertEqual(props["welcomeMessage"], "")
+        self.assertIsNone(props["stats"])
+        self.assertEqual(props["highlightClips"], [])
 
 
 class MusicLibraryTests(TestCase):

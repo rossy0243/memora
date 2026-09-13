@@ -16,9 +16,11 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 
 from uploads.models import GuestUpload
 
+from .analysis import get_analysis_score
 from .soundtrack import materialize_soundtrack
 from .title_cards import event_intro_texts
 
@@ -58,6 +60,12 @@ _TRANSITION_SECONDS_BY_PACE = {
     "gentle": 22 / 30,
 }
 
+# Categories festives/energiques : reservoir du mini-collage de fin (voir
+# _select_highlight_uploads). "party" n'existe pas cote catalogue reel — seules
+# ces trois categories sont effectivement seedees (uploads/services.py).
+_HIGHLIGHT_CATEGORY_CODES = {"dancefloor", "cake", "funny"}
+
+
 def _clip_keeps_audio(upload):
     """Vrai si le plan garde son audio : toute video. Le son des invites EST
     l'emotion — meme regle que le pipeline ffmpeg, qui mixe l'audio de tous les
@@ -80,6 +88,74 @@ def _jittered_photo_seconds(base_seconds, seed):
     rng = random.Random(seed or 0)
     factor = rng.uniform(0.85, 1.2)
     return max(base_seconds * factor, 0.1)
+
+
+def _exposure_correction(upload):
+    """Correction douce de luminosite (multiplicateur CSS `brightness()`) a partir
+    du score deja calcule par l'analyse locale (processing.analysis). Cible 55
+    (voir _score_upload) : une photo de soiree trop sombre remonte un peu, une
+    photo cramee redescend — sans repeindre l'accord colorimetrique du plan.
+    Bornee a +/-25% : correctrice, jamais un filtre qui se voit."""
+    try:
+        brightness = upload.analysis.brightness
+    except (ObjectDoesNotExist, AttributeError):
+        # ObjectDoesNotExist : upload reel, analyse pas encore faite.
+        # AttributeError : upload de test (SimpleNamespace) sans champ `brightness`.
+        return 1.0
+    if brightness is None:
+        return 1.0
+    correction = 1 + (55 - brightness) / 180
+    return round(max(0.85, min(correction, 1.25)), 3)
+
+
+def _select_highlight_uploads(uploads, limit=3):
+    """Meilleures photos festives (dancefloor/gateau/moment drole) parmi celles
+    deja retenues pour ce montage — pour le mini-collage de fin. En dessous de 2
+    candidats, pas de collage : mieux vaut l'omettre qu'un montage chiche."""
+    candidates = [
+        upload
+        for upload in uploads
+        if upload.media_type == GuestUpload.MediaType.IMAGE
+        and getattr(getattr(upload, "category", None), "code", "") in _HIGHLIGHT_CATEGORY_CODES
+    ]
+    scored = sorted(candidates, key=lambda upload: get_analysis_score(upload) or 0, reverse=True)
+    selected = scored[:limit]
+    return selected if len(selected) >= 2 else []
+
+
+def _select_cold_open_index(uploads):
+    """Index (dans `uploads`, donc dans `clips`) du plan choisi pour l'ouverture a
+    froid. Priorite au meilleur score (processing.analysis) plutot qu'au premier
+    plan chronologique — sans analyse disponible, on retombe sur le tout premier."""
+    best_index = 0
+    best_score = None
+    for index, upload in enumerate(uploads):
+        score = get_analysis_score(upload)
+        if score is not None and (best_score is None or score > best_score):
+            best_score = score
+            best_index = index
+    return best_index
+
+
+def _event_stats(event):
+    """Chiffres de participation reels de l'evenement (pas seulement les plans
+    retenus pour ce montage) : le carton doit refleter toute la collecte, pas
+    le sous-ensemble monte cette fois-ci. `event` peut etre un double de test
+    (SimpleNamespace) sans relation `guest_uploads` : dans ce cas, pas de carton."""
+    guest_uploads = getattr(event, "guest_uploads", None)
+    if guest_uploads is None:
+        return None
+
+    approved = guest_uploads.filter(
+        is_deleted=False, moderation_status=GuestUpload.ModerationStatus.APPROVED
+    )
+    total = approved.count()
+    if not total:
+        return None
+    contributors = (
+        approved.exclude(session_key="").values("session_key").distinct().count()
+    )
+    return {"totalMemories": total, "contributors": contributors}
 
 
 def _clip_seconds(upload, beat_interval):
@@ -118,23 +194,37 @@ def build_film_props(
     chapters = assign_time_chapters(list(uploads))
 
     clips = []
+    src_by_upload_pk = {}
     for index, upload in enumerate(uploads, start=1):
         suffix = Path(upload.original_filename or upload.media_file.name).suffix.lower() or ".media"
         seconds = _clip_seconds(upload, beat_interval)
         category = getattr(upload, "category", None)
         _, chapter_label = chapters.get(upload.pk, (0, ""))
+        src = f"clip_{index:04d}{suffix}"
+        src_by_upload_pk[upload.pk] = src
         clips.append(
             {
                 "kind": "video" if upload.media_type == GuestUpload.MediaType.VIDEO else "image",
-                "src": f"clip_{index:04d}{suffix}",
+                "src": src,
                 "durationInFrames": _seconds_to_frames(seconds, fps),
                 "category": getattr(category, "code", "") or "",
                 "label": chapter_label,
                 "keepAudio": bool(allow_guest_audio and _clip_keeps_audio(upload)),
+                "brightnessCorrection": _exposure_correction(upload),
             }
         )
 
     title, subtitle = event_intro_texts(event)
+
+    # Cartons additionnels : Hero/Full seulement — le Teaser doit rester court et
+    # percutant, sans les ralentir avec un mot des maries ou un recap en chiffres.
+    include_extra_cards = deliverable != "teaser"
+    welcome_message = (getattr(event, "welcome_message", "") or "").strip() if include_extra_cards else ""
+    stats = _event_stats(event) if include_extra_cards else None
+    highlight_uploads = _select_highlight_uploads(uploads) if include_extra_cards else []
+    highlight_clips = [
+        {"kind": "image", "src": src_by_upload_pk[upload.pk]} for upload in highlight_uploads
+    ]
 
     audio_src = None
     audio_offset = 0.0
@@ -172,6 +262,26 @@ def build_film_props(
         # visible du debut a la fin, pas seulement sur le sceau du carton final
         # que peu de monde regarde jusqu'au bout sur les reseaux.
         "watermark": deliverable == "teaser",
+        # Ouverture a froid : quel plan (index dans `clips`) sert de fond muet au
+        # carton d'intro. Le meilleur score plutot que le premier chronologique —
+        # voir _select_cold_open_index.
+        "coldOpenClipIndex": _select_cold_open_index(uploads),
+        # Mot des maries : vide si le champ event.welcome_message ne contient rien,
+        # ou sur le Teaser (voir include_extra_cards ci-dessus).
+        "welcomeMessage": welcome_message,
+        "welcomeMessageDurationInFrames": _seconds_to_frames(
+            settings.MEMORA_MOVIE_MESSAGE_CARD_SECONDS, fps
+        ),
+        # Recap en chiffres (participation reelle de l'evenement) : null si aucun
+        # souvenir approuve, ou sur le Teaser.
+        "stats": stats,
+        "statsDurationInFrames": _seconds_to_frames(settings.MEMORA_MOVIE_STATS_CARD_SECONDS, fps),
+        # Mini-collage des meilleurs moments festifs : liste vide si moins de 2
+        # candidats trouves, ou sur le Teaser.
+        "highlightClips": highlight_clips,
+        "highlightDurationInFrames": _seconds_to_frames(
+            settings.MEMORA_MOVIE_HIGHLIGHT_CARD_SECONDS, fps
+        ),
     }
 
 

@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Easing,
   Img,
   OffthreadVideo,
   interpolate,
@@ -115,10 +116,19 @@ export const Clip: React.FC<{
 
   // Ken Burns : zoom lent et continu, centre. Donne du mouvement a une photo fixe
   // et une respiration cinema a une video. L'amplitude suit le rythme du format.
+  // Easing ease-in-out (au lieu d'un lineaire) : un zoom qui demarre et finit en
+  // douceur se voit comme "monte", un lineaire se voit comme mecanique — c'est
+  // exactement ce qui distingue un etalonnage pro d'un diaporama.
   const [from, to] = KEN_BURNS[pace] ?? KEN_BURNS.balanced;
   const scale = interpolate(frame, [0, clip.durationInFrames], [from, to], {
     extrapolateRight: "clamp",
+    easing: Easing.inOut(Easing.ease),
   });
+
+  // Correction d'exposition douce (processing.analysis, voir types.ts) : une
+  // photo mesuree trop sombre ou trop cramee est legerement rattrapee, sans
+  // toucher a l'accord colorimetrique (gradeFilter) applique par-dessus.
+  const brightnessCorrection = clip.brightnessCorrection ?? 1;
 
   // La musique a deja un fondu enchaine (MemoraFilm) ; sans le meme traitement ici,
   // la voix de l'invite entrait et sortait plein volume d'un coup — l'image fond en
@@ -199,7 +209,7 @@ export const Clip: React.FC<{
           justifyContent: "center",
           alignItems: "center",
           transform: `scale(${scale})`,
-          filter: gradeFilter(grade),
+          filter: `${gradeFilter(grade)} brightness(${brightnessCorrection})`,
         }}
       >
         {React.cloneElement(media, {

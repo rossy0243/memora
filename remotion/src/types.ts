@@ -17,6 +17,24 @@ export interface FilmClip {
   // videos avec voix, pour le heros et l'integrale — jamais sur le teaser.
   // La musique est automatiquement duckee pendant ces passages.
   keepAudio?: boolean;
+  // Multiplicateur CSS brightness() : corrige une exposition mesuree trop
+  // sombre/cramee (processing.analysis), sans toucher a l'accord colorimetrique.
+  // Absent ou 1 = pas de correction.
+  brightnessCorrection?: number;
+}
+
+// Photo utilisee dans le mini-collage de fin (voir HighlightCollage.tsx) — un
+// sous-ensemble de FilmClip : pas de duree/keepAudio propres, la collage a sa
+// propre duree globale et n'a jamais de son.
+export interface HighlightClip {
+  kind: ClipKind;
+  src: string;
+}
+
+// Chiffres de participation reels de l'evenement, pour le carton recap.
+export interface FilmStats {
+  totalMemories: number;
+  contributors: number;
 }
 
 export interface FilmProps {
@@ -48,6 +66,21 @@ export interface FilmProps {
   // Watermark permanent (coin bas-droit) : reserve au teaser, le format que les
   // invites partagent — la marque doit y rester visible du debut a la fin.
   watermark?: boolean;
+  // Index (dans `clips`) du plan choisi pour l'ouverture a froid — le mieux note
+  // (processing.analysis), pas forcement le premier chronologique. Absent = 0.
+  coldOpenClipIndex?: number;
+  // Mot des maries : carton juste apres l'intro. Vide = carton saute (jamais sur
+  // le Teaser, voir processing.remotion.build_film_props).
+  welcomeMessage?: string;
+  welcomeMessageDurationInFrames?: number;
+  // Recap en chiffres (participation reelle de l'evenement) avant la sortie.
+  // null/absent = carton saute.
+  stats?: FilmStats | null;
+  statsDurationInFrames?: number;
+  // Mini-collage des meilleurs moments festifs, juste avant le recap/la sortie.
+  // Tableau vide = pas de collage (moins de 2 candidats trouves cote Python).
+  highlightClips?: HighlightClip[];
+  highlightDurationInFrames?: number;
 }
 
 // --- Montage du livre d'or ---------------------------------------------------
@@ -126,4 +159,11 @@ export const defaultFilmProps: FilmProps = {
   duckedMusicVolume: 0.25,
   cinematicBars: false,
   watermark: false,
+  coldOpenClipIndex: 0,
+  welcomeMessage: "",
+  welcomeMessageDurationInFrames: 150,
+  stats: null,
+  statsDurationInFrames: 120,
+  highlightClips: [],
+  highlightDurationInFrames: 120,
 };

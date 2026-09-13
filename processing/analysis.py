@@ -99,9 +99,14 @@ def analyze_event_media(event):
 
 def get_analysis_score(upload):
     try:
-        return round(upload.analysis.movie_score, 2)
-    except ObjectDoesNotExist:
+        score = upload.analysis.movie_score
+    except (ObjectDoesNotExist, AttributeError):
+        # ObjectDoesNotExist : upload Django reel, analyse pas encore faite.
+        # AttributeError : upload de test (SimpleNamespace) sans champ `analysis`.
         return None
+    if score is None:
+        return None
+    return round(score, 2)
 
 
 def process_media_analysis(analysis):
