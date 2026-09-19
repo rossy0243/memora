@@ -111,6 +111,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Premier : redirige les anciennes adresses onrender.com avant tout le reste.
+    "core.middleware.CanonicalHostRedirectMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     # Compression des reponses dynamiques (HTML, JSON) ; WhiteNoise ne compresse

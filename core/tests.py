@@ -554,3 +554,57 @@ class LegalAndProgramAlignmentTests(TestCase):
 
         self.assertNotContains(terms, "Remise de bienvenue")
         self.assertNotContains(program, "remise sur son premier événement")
+
+
+class CanonicalHostRedirectTests(TestCase):
+    """Les anciennes adresses onrender.com renvoient vers le domaine officiel."""
+
+    OFFICIAL = "https://memoracd.site"
+
+    def _get(self, path, host, **extra):
+        return self.client.get(path, HTTP_HOST=host, **extra)
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL=OFFICIAL, ALLOWED_HOSTS=["*"])
+    def test_legacy_host_is_redirected_permanently_keeping_path_and_query(self):
+        response = self._get("/dashboard/?page=2", "memora-web-vsib.onrender.com")
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "https://memoracd.site/dashboard/?page=2")
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL=OFFICIAL, ALLOWED_HOSTS=["*"])
+    def test_old_render_hostnames_of_any_name_are_redirected(self):
+        response = self._get("/e/mariage/abc/", "memora-web-ee0s.onrender.com")
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "https://memoracd.site/e/mariage/abc/")
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL=OFFICIAL, ALLOWED_HOSTS=["*"])
+    def test_post_is_redirected_with_308_to_keep_the_method(self):
+        response = self.client.post("/comptes/connexion/", {}, HTTP_HOST="memora-web-vsib.onrender.com")
+
+        self.assertEqual(response.status_code, 308)
+        self.assertEqual(response["Location"], "https://memoracd.site/comptes/connexion/")
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL=OFFICIAL, ALLOWED_HOSTS=["*"])
+    def test_health_check_is_never_redirected(self):
+        response = self._get("/health/", "memora-web-vsib.onrender.com")
+
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL=OFFICIAL, ALLOWED_HOSTS=["*"])
+    def test_official_host_is_not_redirected(self):
+        response = self._get("/health/", "memoracd.site")
+
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL="", ALLOWED_HOSTS=["*"])
+    def test_disabled_without_an_official_url(self):
+        response = self._get("/health/", "memora-web-vsib.onrender.com")
+
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(MEMORA_PUBLIC_BASE_URL="https://memora-web-vsib.onrender.com", ALLOWED_HOSTS=["*"])
+    def test_disabled_while_the_official_url_is_still_onrender(self):
+        response = self._get("/health/", "memora-web-vsib.onrender.com")
+
+        self.assertEqual(response.status_code, 200)

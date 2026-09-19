@@ -1,14 +1,46 @@
 """Middlewares transverses de Memora."""
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.http import HttpResponse, HttpResponsePermanentRedirect
 from django.shortcuts import redirect
 from django.urls import reverse
 
 LAST_ACTIVITY_KEY = "memora_last_activity"
+
+
+class CanonicalHostRedirectMiddleware:
+    """Renvoie les anciennes adresses `*.onrender.com` vers le domaine officiel.
+
+    Les liens deja partages (QR codes imprimes, e-mails, favoris) pointent vers
+    l'adresse Render : ils continuent de marcher, en arrivant sur le vrai domaine.
+    Le chemin et les parametres sont conserves. Inactif tant que
+    MEMORA_PUBLIC_BASE_URL n'est pas un domaine hors onrender.com (dev, tests).
+    Le point de controle Render (/health/) n'est jamais redirige.
+    """
+
+    LEGACY_SUFFIX = ".onrender.com"
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        canonical = urlsplit(getattr(settings, "MEMORA_PUBLIC_BASE_URL", "") or "")
+        canonical_host = (canonical.hostname or "").lower()
+        if canonical_host and not canonical_host.endswith(self.LEGACY_SUFFIX):
+            host = request.META.get("HTTP_HOST", "").split(":")[0].lower()
+            if host.endswith(self.LEGACY_SUFFIX) and request.path != "/health/":
+                target = f"{canonical.scheme or 'https'}://{canonical.netloc}{request.get_full_path()}"
+                if request.method in ("GET", "HEAD"):
+                    return HttpResponsePermanentRedirect(target)
+                # 308 : le navigateur rejoue la requete avec la meme methode.
+                response = HttpResponse(status=308)
+                response["Location"] = target
+                return response
+        return self.get_response(request)
 
 
 class SessionIdleTimeoutMiddleware:
