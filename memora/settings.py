@@ -246,6 +246,8 @@ EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", True)
 EMAIL_USE_SSL = env_bool("DJANGO_EMAIL_USE_SSL", False)
+# Sans delai, un serveur SMTP qui ne repond pas bloquerait la requete indefiniment.
+EMAIL_TIMEOUT = int(os.getenv("DJANGO_EMAIL_TIMEOUT", "15"))
 MEMORA_PUBLIC_BASE_URL = os.getenv("MEMORA_PUBLIC_BASE_URL", "")
 
 # --- Cache -----------------------------------------------------------------

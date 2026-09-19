@@ -35,6 +35,30 @@ services:
       - &env_public_base_url
         key: MEMORA_PUBLIC_BASE_URL
         value: https://memoracd.site
+      - &env_email_backend
+        key: DJANGO_EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - &env_email_host
+        key: DJANGO_EMAIL_HOST
+        value: mail97.lwspanel.com
+      - &env_email_port
+        key: DJANGO_EMAIL_PORT
+        value: "465"
+      - &env_email_ssl
+        key: DJANGO_EMAIL_USE_SSL
+        value: "True"
+      - &env_email_tls
+        key: DJANGO_EMAIL_USE_TLS
+        value: "False"
+      - &env_email_user
+        key: DJANGO_EMAIL_HOST_USER
+        value: no-reply@memoracd.site
+      - &env_email_password
+        key: DJANGO_EMAIL_HOST_PASSWORD
+        sync: false
+      - &env_email_from
+        key: DJANGO_DEFAULT_FROM_EMAIL
+        value: Memora <no-reply@memoracd.site>
       - &env_ssl_redirect
         key: DJANGO_SECURE_SSL_REDIRECT
         value: "True"
@@ -242,6 +266,18 @@ services:
       - *env_allowed_hosts
       - *env_csrf_origins
       - *env_public_base_url
+      - *env_email_backend
+      - *env_email_host
+      - *env_email_port
+      - *env_email_ssl
+      - *env_email_tls
+      - *env_email_user
+      - key: DJANGO_EMAIL_HOST_PASSWORD
+        fromService:
+          type: web
+          name: memora-web
+          envVarKey: DJANGO_EMAIL_HOST_PASSWORD
+      - *env_email_from
       - *env_ssl_redirect
       - *env_session_secure
       - *env_csrf_secure
