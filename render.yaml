@@ -28,13 +28,13 @@ services:
         value: "False"
       - &env_allowed_hosts
         key: DJANGO_ALLOWED_HOSTS
-        value: .onrender.com
+        value: .onrender.com,memoracd.site,www.memoracd.site
       - &env_csrf_origins
         key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://*.onrender.com
+        value: https://*.onrender.com,https://memoracd.site,https://www.memoracd.site
       - &env_public_base_url
         key: MEMORA_PUBLIC_BASE_URL
-        value: https://memora-web-ee0s.onrender.com
+        value: https://memoracd.site
       - &env_ssl_redirect
         key: DJANGO_SECURE_SSL_REDIRECT
         value: "True"

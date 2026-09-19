@@ -2,7 +2,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import (
+    PasswordChangeView,
     PasswordResetCompleteView,
     PasswordResetConfirmView,
     PasswordResetDoneView,
@@ -11,7 +13,7 @@ from django.contrib.auth.views import (
 )
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.decorators.http import require_POST
 
 from core.models import SiteConfiguration
@@ -122,6 +124,26 @@ def password_help(request):
             "has_support_contact": configuration.has_support_contact,
         },
     )
+
+
+class AccountPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
+    """Changement de mot de passe depuis le compte : organisateurs comme agents.
+
+    Exige l'ancien mot de passe (le formulaire Django le fait) : une session
+    laissee ouverte sur un poste partage ne suffit pas a prendre le compte. La
+    session reste ouverte apres le changement (update_session_auth_hash).
+    """
+
+    template_name = "accounts/password_change.html"
+
+    def get_success_url(self):
+        if hasattr(self.request.user, "agent_profile"):
+            return reverse("guestbook:agent_home")
+        return reverse("dashboard:home")
+
+    def form_valid(self, form):
+        messages.success(self.request, "Votre mot de passe a bien été modifié.")
+        return super().form_valid(form)
 
 
 class OrganizerPasswordResetView(PasswordResetView):

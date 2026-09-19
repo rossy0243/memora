@@ -248,3 +248,83 @@ class PasswordResetFlowTests(TestCase):
 
         self.assertContains(response, "invalide")
         self.assertContains(response, reverse("accounts:password_help"))
+
+
+class PasswordChangeTests(TestCase):
+    """Changement de mot de passe depuis le compte (organisateur et agent)."""
+
+    OLD = "ancien-mot-de-passe-42"
+    NEW = "un-nouveau-mot-de-passe-42"
+
+    def setUp(self):
+        cache.clear()
+        self.organizer = get_user_model().objects.create_user(
+            username="orga", email="orga@memora.test", password=self.OLD
+        )
+        self.agent = get_user_model().objects.create_user(
+            username="agent", email="agent@memora.test", password=self.OLD
+        )
+        from accounts.models import AgentProfile
+
+        AgentProfile.objects.create(user=self.agent)
+
+    def _change(self, old=None, new=None, confirm=None):
+        return self.client.post(
+            reverse("accounts:password_change"),
+            {
+                "old_password": old or self.OLD,
+                "new_password1": new or self.NEW,
+                "new_password2": confirm or new or self.NEW,
+            },
+        )
+
+    def test_anonymous_user_is_sent_to_login(self):
+        response = self.client.get(reverse("accounts:password_change"))
+
+        self.assertRedirects(
+            response, f"{reverse('accounts:login')}?next={reverse('accounts:password_change')}"
+        )
+
+    def test_organizer_can_change_password_and_stays_logged_in(self):
+        self.client.login(username="orga", password=self.OLD)
+
+        response = self._change()
+
+        self.assertRedirects(response, reverse("dashboard:home"))
+        self.organizer.refresh_from_db()
+        self.assertTrue(self.organizer.check_password(self.NEW))
+        self.assertEqual(self.client.get(reverse("dashboard:home")).status_code, 200)
+
+    def test_agent_can_change_password_and_lands_on_missions(self):
+        self.client.login(username="agent", password=self.OLD)
+
+        response = self._change()
+
+        self.assertRedirects(response, reverse("guestbook:agent_home"))
+        self.agent.refresh_from_db()
+        self.assertTrue(self.agent.check_password(self.NEW))
+
+    def test_wrong_current_password_is_refused(self):
+        self.client.login(username="orga", password=self.OLD)
+
+        response = self._change(old="pas-le-bon-mot-de-passe")
+
+        self.assertEqual(response.status_code, 200)
+        self.organizer.refresh_from_db()
+        self.assertTrue(self.organizer.check_password(self.OLD))
+
+    def test_weak_or_mismatched_new_password_is_refused(self):
+        self.client.login(username="orga", password=self.OLD)
+
+        self.assertEqual(self._change(new="12345678").status_code, 200)
+        self.assertEqual(self._change(new=self.NEW, confirm="autre-chose-42-xyz").status_code, 200)
+        self.organizer.refresh_from_db()
+        self.assertTrue(self.organizer.check_password(self.OLD))
+
+    def test_account_menu_offers_the_link_to_both_roles(self):
+        link = reverse("accounts:password_change")
+        self.client.login(username="orga", password=self.OLD)
+        self.assertContains(self.client.get(reverse("dashboard:home")), link)
+
+        self.client.login(username="agent", password=self.OLD)
+        self.assertContains(self.client.get(reverse("guestbook:agent_home")), link)

@@ -20,6 +20,11 @@ urlpatterns = [
     ),
     path("mot-de-passe-oublie/", views.password_help, name="password_help"),
     path(
+        "mot-de-passe/modifier/",
+        views.AccountPasswordChangeView.as_view(),
+        name="password_change",
+    ),
+    path(
         "mot-de-passe/reinitialiser/",
         views.OrganizerPasswordResetView.as_view(),
         name="password_reset",
