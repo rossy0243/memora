@@ -57,8 +57,14 @@ def brand_contact_items(site_configuration):
         items.append(email)
     whatsapp = (site_configuration.support_whatsapp or "").strip()
     if whatsapp:
-        items.append(f"WhatsApp {whatsapp}")
+        items.append(f"WhatsApp {_format_phone(whatsapp)}")
     return items
+
+
+def _format_phone(number):
+    """+243842616570 -> +243 842 616 570 (un numero deja espace est laisse tel quel)."""
+    match = re.fullmatch(r"\+243(\d{3})(\d{3})(\d{3})", number)
+    return f"+243 {match.group(1)} {match.group(2)} {match.group(3)}" if match else number
 
 
 # --- QR ---------------------------------------------------------------------------

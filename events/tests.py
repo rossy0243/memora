@@ -1841,6 +1841,11 @@ class QrKitTests(TestCase):
             self.configuration.support_whatsapp = ""
             self.assertEqual(brand_contact_items(self.configuration), ["memoracd.site"])
 
+    def test_a_compact_congolese_number_is_grouped_for_reading(self):
+        self.configuration.support_whatsapp = "+243842616570"
+
+        self.assertIn("WhatsApp +243 842 616 570", brand_contact_items(self.configuration))
+
     def test_dashboard_offers_a_single_download_button(self):
         self.event.mark_paid(provider="test")
         self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
