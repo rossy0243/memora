@@ -351,11 +351,12 @@ class GuestUploadViewTests(TestCase):
         response = self.client.get(self.upload_url())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Prendre une photo ou filmer")
         # L'invite doit savoir a quel evenement il contribue.
         self.assertContains(response, self.event.title)
         self.assertNotContains(response, "Inscription")
-        self.assertContains(response, "Caméra Memora")
+        # Deux actions, rien d'autre : pas de jargon de marque ni de slogan.
+        self.assertNotContains(response, "Capturez sans quitter la page")
+        self.assertContains(response, "(10 s max)")
         self.assertContains(response, "start-camera-photo-button")
         self.assertContains(response, "start-camera-video-button")
         self.assertContains(response, "Selfie")
@@ -367,12 +368,13 @@ class GuestUploadViewTests(TestCase):
         self.assertNotContains(response, "video-mode-button")
         self.assertNotContains(response, "record-video-button")
         self.assertNotContains(response, "stop-video-button")
-        self.assertContains(response, "Noir blanc")
+        self.assertNotContains(response, "Noir blanc")
+        self.assertNotContains(response, "camera-filter")
         self.assertContains(response, "Photo")
         self.assertContains(response, "Vidéo")
         self.assertNotContains(response, "Caméra du téléphone")
         self.assertNotContains(response, "Ouvrir l'appareil natif")
-        self.assertNotContains(response, 'capture="environment"')
+        self.assertNotContains(response, "galerie")
         self.assertContains(response, "Souvenir prêt à envoyer")
         self.assertContains(response, "Reprendre")
         # La revue plein ecran envoie directement le souvenir : pas d'etape de confirmation intermediaire.
@@ -383,8 +385,10 @@ class GuestUploadViewTests(TestCase):
         self.assertNotContains(response, "Moment obligatoire")
         self.assertNotContains(response, "Sélectionner le moment")
         self.assertNotContains(response, "moment-select")
-        self.assertContains(response, "5 souvenirs maximum par appareil")
-        self.assertContains(response, "Il vous reste 5 envois")
+        # Le quota ne s'affiche que lorsqu'il devient utile (2 envois ou moins).
+        self.assertNotContains(response, "souvenirs maximum par appareil")
+        self.assertNotContains(response, "Il vous reste")
+        self.assertNotContains(response, "Plus que")
         self.assertContains(response, "Envoyer le souvenir")
         self.assertContains(response, "upload-progress.js")
         # Un echec d'envoi (reseau, validation, stockage) doit pouvoir s'afficher
@@ -421,16 +425,73 @@ class GuestUploadViewTests(TestCase):
 
         response = self.client.get(self.upload_url())
 
-        self.assertContains(response, "5 souvenirs maximum par appareil")
-        self.assertContains(response, "Il vous reste 4 envois")
+        self.assertNotContains(response, "Plus que")
+        self.assertNotContains(response, "Il vous reste")
 
-    def test_guest_confirmation_page_promotes_next_actions(self):
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=3)
+    def test_quota_is_only_shown_when_two_uploads_or_fewer_remain(self):
+        self.assertNotContains(self.client.get(self.upload_url()), "Plus que")
+
+        self.client.post(self.upload_url(), {"media_file": make_test_image_file("un.jpg")})
+        two_left = self.client.get(self.upload_url())
+        self.assertContains(two_left, "Plus que 2 envois")
+
+        self.client.post(self.upload_url(), {"media_file": make_test_image_file("deux.jpg")})
+        one_left = self.client.get(self.upload_url())
+        self.assertContains(one_left, "Plus qu'un envoi")
+        self.assertNotContains(one_left, "Plus que 1")
+
+    def test_camera_panel_ships_hidden_and_the_stylesheet_lets_hidden_win(self):
+        """`.camera-panel { display: grid }` battait l'attribut hidden : le viseur
+        noir et ses commandes s'affichaient des l'arrivee de l'invite."""
+        response = self.client.get(self.upload_url())
+        css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
+
+        self.assertContains(response, 'id="camera-panel" role="dialog" aria-modal="true" aria-label="Caméra Memora" hidden')
+        self.assertIn(".camera-panel[hidden]", css)
+
+    def test_native_photo_fallback_opens_the_phone_camera_for_photos_only(self):
+        response = self.client.get(self.upload_url())
+        html = response.content.decode()
+        input_tag = html[html.index('id="native-photo-input"') - 40:html.index('id="native-photo-input"') + 120]
+
+        self.assertContains(response, "native-photo-button")
+        self.assertContains(response, "native-photo.js")
+        # Photo uniquement, prise sur le moment : ni video, ni galerie.
+        self.assertIn('accept="image/*"', input_tag)
+        self.assertIn('capture="environment"', input_tag)
+        self.assertNotIn("video", input_tag)
+        # Cet input n'a pas de nom : il n'est jamais poste tel quel.
+        self.assertNotIn('name="', input_tag)
+        # Le champ principal (1er input fichier) reste celui que upload-progress.js pilote.
+        self.assertLess(html.index('name="media_file"'), html.index('id="native-photo-input"'))
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=0)
+    def test_native_photo_fallback_is_hidden_once_the_limit_is_reached(self):
+        self.assertNotContains(self.client.get(self.upload_url()), "native-photo-button")
+
+    def test_guest_pages_have_no_marketing_footer(self):
+        for url in (self.upload_url(), self.thanks_url()):
+            response = self.client.get(url)
+
+            self.assertNotContains(response, "site-footer")
+            self.assertNotContains(response, "Programme Ambassadeur")
+            self.assertNotContains(response, "Créer un événement")
+
+    def test_filters_are_gone_from_the_camera_script(self):
+        script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
+
+        self.assertNotIn("cameraFilters", script)
+        self.assertNotIn("data-camera-filter", script)
+
+    def test_guest_confirmation_page_has_a_single_next_action(self):
         response = self.client.get(self.thanks_url())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Souvenir envoyé.")
-        self.assertContains(response, "Ajouter un autre souvenir")
-        self.assertContains(response, "Retour à l'événement")
+        self.assertContains(response, "Envoyer un autre souvenir")
+        # « Retour a l'evenement » menait a la meme page d'envoi : un seul bouton.
+        self.assertNotContains(response, "Retour à l")
         self.assertContains(response, "Vous pouvez fermer cette page")
 
     def test_guest_upload_requires_guest_access_code_when_enabled(self):

@@ -9,6 +9,9 @@
 {# Un invite n'est pas un prospect : pas de lien d'inscription sur son parcours. #}
 {% block site_nav %}{% endblock %}
 
+{# Un invite n'est pas un prospect : pas de pied de page marketing. #}
+{% block site_footer %}{% endblock %}
+
 {% block content %}
 <section class="guest-upload-shell">
   <header class="guest-upload-heading{% if event.cover_image %} guest-upload-heading--cover{% endif %}">
@@ -22,7 +25,6 @@
       {% if event.welcome_message %}
         <p class="guest-upload-heading__welcome">{{ event.welcome_message }}</p>
       {% endif %}
-      <p class="guest-upload-heading__hint">Prendre une photo ou filmer &mdash; vidéo 10 secondes max.</p>
     </div>
   </header>
 
@@ -35,28 +37,28 @@
       {{ form.media_file.errors }}
     </div>
 
-    <div class="upload-quota {% if upload_quota.is_reached %}upload-quota--full{% endif %}">
-      <span>{{ upload_quota.limit }} souvenirs maximum par appareil</span>
-      {% if upload_quota.is_reached %}
+    {% if upload_quota.is_reached %}
+      <div class="upload-quota upload-quota--full">
+        <span>{{ upload_quota.limit }} souvenirs maximum par appareil</span>
         <strong>Limite atteinte</strong>
-      {% else %}
-        <strong>Il vous reste {{ upload_quota.remaining }} envoi{% if upload_quota.remaining > 1 %}s{% endif %}</strong>
-      {% endif %}
-    </div>
+      </div>
+    {% elif upload_quota.remaining <= 2 %}
+      <div class="upload-quota">
+        <strong>{% if upload_quota.remaining == 1 %}Plus qu'un envoi{% else %}Plus que {{ upload_quota.remaining }} envois{% endif %}</strong>
+      </div>
+    {% endif %}
 
     <section class="camera-studio{% if upload_quota.is_reached %} camera-studio--quota-reached{% endif %}" id="camera-studio">
       <div class="camera-studio__intro">
-        <span>Caméra Memora</span>
         {% if upload_quota.is_reached %}
           <strong>Limite de souvenirs atteinte.</strong>
           <p>Vous avez déjà envoyé le maximum autorisé pour cet événement. Merci pour vos souvenirs !</p>
         {% else %}
-          <strong>Capturez sans quitter la page.</strong>
-          <p id="camera-permission-note">Votre navigateur demandera l'autorisation caméra et micro.</p>
           <div class="camera-studio__cta">
             <button class="button button--primary" type="button" id="start-camera-photo-button" aria-label="Ouvrir la caméra en mode photo">Photo</button>
-            <button class="button button--primary" type="button" id="start-camera-video-button" aria-label="Ouvrir la caméra en mode vidéo">Vidéo</button>
+            <button class="button button--primary" type="button" id="start-camera-video-button" aria-label="Ouvrir la caméra en mode vidéo">Vidéo <span class="camera-studio__limit">(10 s max)</span></button>
           </div>
+          <p id="camera-permission-note">Votre navigateur demandera l'autorisation caméra et micro.</p>
         {% endif %}
       </div>
 
@@ -75,16 +77,6 @@
         </div>
 
         <div class="camera-panel__dock">
-          <details class="camera-filter-menu">
-            <summary>Filtres</summary>
-            <div class="camera-filters" aria-label="Filtres camera">
-              <button type="button" class="camera-filter is-active" data-camera-filter="none">Naturel</button>
-              <button type="button" class="camera-filter" data-camera-filter="soft">Doux</button>
-              <button type="button" class="camera-filter" data-camera-filter="warm">Chaud</button>
-              <button type="button" class="camera-filter" data-camera-filter="mono">Noir blanc</button>
-            </div>
-          </details>
-
           <div class="camera-controls">
             <button class="camera-pill camera-pill--mode is-active" type="button" id="mode-toggle-button" aria-label="Passer en vidéo">Vidéo</button>
             <button class="camera-shutter" type="button" id="camera-action-button" aria-label="Prendre la photo">
@@ -100,6 +92,15 @@
     <div class="memora-camera-input" aria-hidden="true">
       {{ form.media_file }}
     </div>
+
+    {% if not upload_quota.is_reached %}
+      {# Secours si la camera integree ne s'ouvre pas : l'appareil photo du telephone, en PHOTO uniquement (jamais la galerie, jamais une video : le souvenir doit etre pris sur le moment). Cet input n'a pas de nom : il n'est jamais envoye tel quel, native-photo.js confie la photo au champ principal. #}
+      <div class="native-photo">
+        <button class="native-photo__button" type="button" id="native-photo-button">La caméra ne s'ouvre pas&nbsp;? Prendre une photo avec le téléphone</button>
+        <input type="file" id="native-photo-input" accept="image/*" capture="environment" hidden>
+        <p class="native-photo__error" id="native-photo-error" role="alert" hidden>Seule une photo prise à l'instant est acceptée.</p>
+      </div>
+    {% endif %}
 
     <div class="capture-preview" id="capture-preview" hidden>
       <div class="capture-preview__media">
@@ -131,4 +132,5 @@
 
 {% block scripts %}
 <script src="{% static 'js/upload-progress.js' %}"></script>
+<script src="{% static 'js/native-photo.js' %}"></script>
 {% endblock %}

@@ -2854,10 +2854,6 @@ h2 {
   color: #fff;
 }
 
-.camera-studio--unsupported .camera-studio__intro strong::after {
-  content: " Réessayez depuis un navigateur compatible.";
-}
-
 /* Aucune tentative ne peut aboutir sans l'API camera : on retire le bouton
    plutot que de laisser une action qui echouera a chaque fois. */
 .camera-studio--unsupported .camera-studio__cta {
@@ -2872,13 +2868,6 @@ h2 {
   display: grid;
   gap: 10px;
   padding: 18px;
-}
-
-.camera-studio__intro span {
-  color: var(--color-champagne);
-  font-size: 0.78rem;
-  font-weight: 900;
-  text-transform: uppercase;
 }
 
 .camera-studio__intro strong {
@@ -2906,6 +2895,20 @@ h2 {
 
 .camera-studio__cta .button {
   flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* « (10 s max) » sous « Vidéo » plutot qu'une coupure au hasard du libelle. */
+.camera-studio__limit {
+  font-size: 0.78em;
+  white-space: nowrap;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.camera-studio[hidden] {
+  display: none;
 }
 
 body.camera-open {
@@ -2916,6 +2919,15 @@ body.camera-open {
   display: grid;
   gap: 12px;
   padding: 0 12px 14px;
+}
+
+/* `display: grid` ci-dessus l'emporte sur l'attribut hidden : sans cette regle,
+   le viseur noir et ses commandes s'affichaient des l'arrivee de l'invite. */
+.camera-panel[hidden],
+.capture-preview[hidden],
+.camera-recording-badge[hidden],
+.camera-feedback[hidden] {
+  display: none;
 }
 
 .camera-studio--active .camera-panel {
@@ -3068,42 +3080,11 @@ body.camera-open {
   padding-top: 12px;
 }
 
-.camera-filter-menu {
-  position: relative;
-}
-
-.camera-filter-menu summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  padding: 0 14px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  font: inherit;
-  font-weight: 900;
-  cursor: pointer;
-  list-style: none;
-}
-
-.camera-filter-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.camera-filters,
 .camera-controls {
   display: grid;
   gap: 8px;
 }
 
-.camera-filters {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding-top: 8px;
-}
-
-.camera-filter,
 .camera-pill {
   min-height: 46px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -3114,7 +3095,6 @@ body.camera-open {
   font-weight: 900;
 }
 
-.camera-filter.is-active,
 .camera-pill.is-active {
   color: var(--color-ink);
   background: var(--color-sage);
@@ -3585,9 +3565,6 @@ body.capture-review-open {
     aspect-ratio: 16 / 9;
   }
 
-  .camera-filters {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 
   .camera-controls {
     grid-template-columns: 0.78fr minmax(112px, 1fr) 0.78fr;
@@ -4649,4 +4626,51 @@ body.capture-review-open {
   padding-top: 14px;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   font-size: 0.92rem;
+}
+
+/* Secours photo : discret tant que la camera integree fonctionne. */
+.native-photo {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.native-photo__button {
+  min-height: 44px;
+  border: 0;
+  padding: 8px 12px;
+  color: var(--color-muted);
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.native-photo__error {
+  margin: 0;
+  color: #9f2f2f;
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.native-photo[hidden],
+.native-photo__error[hidden] {
+  display: none;
+}
+
+/* Sans camera integree, c'est le moyen principal d'envoyer : un vrai bouton. */
+.native-photo--primary .native-photo__button {
+  width: 100%;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  font-size: 1rem;
+  font-weight: 800;
+  text-decoration: none;
 }

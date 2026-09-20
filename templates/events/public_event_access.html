@@ -4,6 +4,9 @@
 {% block title %}Accès invité - {{ event.title }} - Memora{% endblock %}
 {% block robots %}noindex,nofollow{% endblock %}
 
+{# Un invite n'est pas un prospect : pas de pied de page marketing. #}
+{% block site_footer %}{% endblock %}
+
 {% block content %}
 <section class="public-event">
   {% if event.cover_image %}

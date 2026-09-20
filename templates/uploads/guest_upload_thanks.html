@@ -8,6 +8,9 @@
 
 {% block site_nav %}{% endblock %}
 
+{# Un invite n'est pas un prospect : pas de pied de page marketing. #}
+{% block site_footer %}{% endblock %}
+
 {% block content %}
 <section class="guest-confirmation">
   <div class="confirmation-card">
@@ -16,8 +19,7 @@
     <h1>Souvenir envoyé.</h1>
     <p class="confirmation-copy">Merci, votre photo ou vidéo a bien rejoint l'album de {{ event.title }}.</p>
     <div class="confirmation-actions">
-      <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Ajouter un autre souvenir</a>
-      <a class="button button--secondary" href="{{ event.get_public_url }}">Retour à l'événement</a>
+      <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Envoyer un autre souvenir</a>
     </div>
     <p class="confirmation-note">Aucun compte invité. Vous pouvez fermer cette page.</p>
   </div>

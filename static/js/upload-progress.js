@@ -27,7 +27,6 @@
   const modeToggleButton = document.getElementById("mode-toggle-button");
   const cameraActionButton = document.getElementById("camera-action-button");
   const closeCameraButton = document.getElementById("close-camera-button");
-  const filterButtons = document.querySelectorAll("[data-camera-filter]");
   const progress = form.querySelector(".upload-progress");
   const progressBar = form.querySelector(".upload-progress__bar span");
   const progressText = form.querySelector(".upload-progress p");
@@ -36,7 +35,6 @@
   let previewUrl = "";
   let cameraStream = null;
   let facingMode = "environment";
-  let activeFilter = "none";
   let recorder = null;
   let recordedChunks = [];
   let recordingTimeout = null;
@@ -49,13 +47,6 @@
   const maxRecordingSeconds = 10;
   let slowUploadTimer = null;
   let verySlowUploadTimer = null;
-
-  const cameraFilters = {
-    none: "none",
-    soft: "contrast(1.04) saturate(1.14) brightness(1.06)",
-    warm: "sepia(0.18) saturate(1.25) contrast(1.04)",
-    mono: "grayscale(1) contrast(1.12)",
-  };
 
   function resetPreviewUrl() {
     if (previewUrl) {
@@ -328,7 +319,6 @@
     try {
       cameraStream = await requestCameraStream();
       liveVideo.srcObject = cameraStream;
-      liveVideo.style.filter = cameraFilters[activeFilter] || "none";
       setCameraStatus(facingMode === "user" ? "Selfie actif" : "Caméra arrière active");
       updateCameraUi();
     } catch (error) {
@@ -390,7 +380,6 @@
     canvas.width = liveVideo.videoWidth || 1280;
     canvas.height = liveVideo.videoHeight || 720;
     const context = canvas.getContext("2d");
-    context.filter = cameraFilters[activeFilter] || "none";
     if (facingMode === "user") {
       context.translate(canvas.width, 0);
       context.scale(-1, 1);
@@ -549,18 +538,6 @@
   if (closeCameraButton) {
     closeCameraButton.addEventListener("click", stopCamera);
   }
-
-  filterButtons.forEach(function (button) {
-    button.addEventListener("click", function () {
-      activeFilter = button.dataset.cameraFilter || "none";
-      filterButtons.forEach(function (item) {
-        item.classList.toggle("is-active", item === button);
-      });
-      if (liveVideo) {
-        liveVideo.style.filter = cameraFilters[activeFilter] || "none";
-      }
-    });
-  });
 
   if (fileInput) {
     fileInput.addEventListener("change", function () {
