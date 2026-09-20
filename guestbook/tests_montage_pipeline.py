@@ -550,3 +550,57 @@ class GuestbookDownloadTests(TestCase):
         self.assertContains(response, "Télécharger en HD (850")
         self.assertContains(response, "Version légère (340")
         self.assertContains(response, f"{self.url}?v=light")
+
+
+class PurgeOrphanGuestbookFilesTests(TestCase):
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp(prefix="memora_gb_orphans_")
+        self.addCleanup(shutil.rmtree, self.media_root, ignore_errors=True)
+        organizer = get_user_model().objects.create_user(username="orga-o", password="secret")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Orphelins",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+        )
+        self.directory = Path(self.media_root) / "events" / self.event.slug / "livre-dor" / "montage"
+        self.directory.mkdir(parents=True)
+        for name in ("livre-dor-x.mp4", "livre-dor-x-leger.mp4", "livre-dor-x_OLD1.mp4", "livre-dor-x-leger_OLD2.mp4", "notes.txt"):
+            (self.directory / name).write_bytes(b"data")
+        base = f"events/{self.event.slug}/livre-dor/montage"
+        self.movie = GuestBookMovie.objects.create(
+            event=self.event, status=GuestBookMovie.Status.COMPLETED,
+            final_file=f"{base}/livre-dor-x.mp4", light_file=f"{base}/livre-dor-x-leger.mp4",
+        )
+
+    def _run(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        with override_settings(MEDIA_ROOT=self.media_root):
+            call_command("purge_orphan_guestbook_files", *args, stdout=out)
+        return out.getvalue()
+
+    def _files(self):
+        return sorted(p.name for p in self.directory.iterdir())
+
+    def test_dry_run_lists_orphans_but_deletes_nothing(self):
+        output = self._run()
+
+        self.assertIn("livre-dor-x_OLD1.mp4", output)
+        self.assertIn("2 fichier(s) orphelin(s)", output)
+        self.assertEqual(len(self._files()), 5)
+
+    def test_apply_removes_only_unreferenced_montage_files(self):
+        self._run("--apply")
+
+        self.assertEqual(self._files(), ["livre-dor-x-leger.mp4", "livre-dor-x.mp4", "notes.txt"])
+
+    def test_montage_in_progress_is_left_alone(self):
+        GuestBookMovie.objects.filter(pk=self.movie.pk).update(status=GuestBookMovie.Status.PROCESSING)
+
+        self._run("--apply")
+
+        self.assertEqual(len(self._files()), 5)

@@ -246,11 +246,12 @@ services:
     name: memora-schedule-movies
     runtime: docker
     region: frankfurt
-    # Pro Plus : ce cron porte tout le rendu de films (Remotion complet). Il a
-    # remplace le worker permanent memora-movie-worker (supprime 2026-09), qui
-    # etait facture 24h/24 en Pro Plus alors qu'un film ne se genere qu'a J+1.
-    # Un cron n'est facture que pendant son execution reelle.
-    plan: pro-plus
+    # 8 CPU / 16 Go (passe de Pro Plus le 2026-09-20 via l'API : `pro_ultra` est
+    # refuse pour ce service). Ce cron porte tout le rendu (films Remotion, montage
+    # du livre d'or FFmpeg, CPU-bound). Il a remplace le worker permanent
+    # memora-movie-worker (supprime 2026-09), facture 24h/24 alors qu'un film ne
+    # se genere qu'a J+1. Un cron n'est facture que pendant son execution reelle.
+    plan: 8c-16g
     # Image dediee : Node + Chrome headless Remotion en plus de Python/FFmpeg.
     dockerfilePath: ./Dockerfile.worker
     dockerContext: .
