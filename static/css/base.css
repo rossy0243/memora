@@ -1754,114 +1754,6 @@ h2 {
   background: var(--color-surface-soft);
 }
 
-.qr-print-page {
-  display: grid;
-  gap: 24px;
-  justify-items: center;
-  padding: 40px 20px;
-}
-
-.qr-print-page__actions {
-  display: flex;
-  gap: 12px;
-}
-
-.qr-print-sheet {
-  display: grid;
-  gap: 16px;
-  justify-items: center;
-  max-width: 420px;
-  padding: 48px 32px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  text-align: center;
-}
-
-.qr-print-sheet__eyebrow {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 0.8rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.qr-print-sheet__tagline {
-  margin: 0;
-  color: var(--color-body);
-}
-
-.qr-print-sheet__code {
-  width: 260px;
-  height: 260px;
-}
-
-.qr-print-sheet__footer {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 0.85rem;
-}
-
-/* La marque Memora en petit : logo, slogan, filet dore, contact. */
-.qr-print-sheet__brand {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  border-top: 1px solid var(--color-hairline);
-  padding-top: 18px;
-  width: 100%;
-}
-
-.qr-print-sheet__brand p.qr-print-sheet__logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-ink);
-  font-family: var(--font-display, "Fraunces", Georgia, serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.qr-print-sheet__logo img {
-  width: 28px;
-  height: 28px;
-}
-
-.qr-print-sheet__brand p {
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-
-.qr-print-sheet__brand .qr-print-sheet__contact {
-  color: var(--color-ink);
-  font-weight: 600;
-}
-
-/* Chaque contact reste d'un seul tenant ; le point separateur se met devant le suivant. */
-.qr-print-sheet__contact span {
-  white-space: nowrap;
-}
-
-.qr-print-sheet__contact span:not(:last-child)::after {
-  content: " ·";
-}
-
-@media print {
-  .site-header,
-  .site-footer,
-  .no-print {
-    display: none !important;
-  }
-
-  .qr-print-sheet {
-    border: none;
-    box-shadow: none;
-  }
-}
-
 .live-dashboard__hero,
 .quick-panel {
   border: 1px solid var(--color-hairline);
@@ -1966,13 +1858,20 @@ h2 {
   gap: 12px;
 }
 
+.public-share-panel .quick-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.public-share-panel__download {
+  grid-column: 1 / -1;
+}
+
 .public-share-panel__qr {
   width: min(100%, 220px);
   justify-self: center;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
-  padding: 12px;
-  background: var(--color-canvas);
+  background: #fff;
 }
 
 .movie-preview {
@@ -3717,11 +3616,11 @@ body.capture-review-open {
   }
 
   .public-share-panel {
-    grid-template-columns: minmax(0, 1fr) 184px;
+    grid-template-columns: minmax(0, 1fr) 200px;
   }
 
   .public-share-panel__qr {
-    width: 184px;
+    width: 200px;
   }
 
   .movie-steps {

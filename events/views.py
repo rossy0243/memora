@@ -32,8 +32,8 @@ from .access import (
     upcoming_event_response,
 )
 from .models import Event
-from .qr_branding import BRAND_SLOGAN, build_branded_qr_png, brand_contact_items
-from .services import build_event_qr_code_png, build_hourly_upload_breakdown, build_readiness_checklist
+from .qr_kit import build_preview_png, build_qr_kit_zip
+from .services import build_hourly_upload_breakdown, build_readiness_checklist
 
 
 class OrganizerEventMixin(LoginRequiredMixin):
@@ -121,7 +121,7 @@ class EventDetailView(OrganizerEventMixin, DetailView):
                 "latest_uploads": latest_uploads,
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
                 "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
-                "qr_print_sheet_url": reverse("events:qr_print_sheet", kwargs={"pk": self.object.pk}),
+                "qr_kit_url": reverse("events:qr_kit", kwargs={"pk": self.object.pk}),
                 "readiness_checklist": build_readiness_checklist(self.object),
                 "has_guestbook": self.object.guestbook_assignments.exists() or self.object.guestbook_messages.exists(),
                 **get_live_stats_context(self.object),
@@ -457,34 +457,25 @@ def live_stats_panel(request, pk):
 
 
 @login_required
-def qr_print_sheet(request, pk):
+def event_qr_code(request, pk):
+    """Apercu du QR a imprimer (mise en page portrait), affiche dans le tableau de bord."""
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
-    return render(
-        request,
-        "events/qr_print_sheet.html",
-        {
-            "event": event,
-            "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": event.pk}),
-            "brand_slogan": BRAND_SLOGAN,
-            "brand_contacts": brand_contact_items(SiteConfiguration.current()),
-        },
-    )
+    public_url = request.build_absolute_uri(event.get_public_url())
+    response = HttpResponse(build_preview_png(public_url, SiteConfiguration.current()), content_type="image/png")
+    response["Content-Disposition"] = f'inline; filename="{event.slug}-qr.png"'
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 @login_required
-def event_qr_code(request, pk):
+def download_event_qr_kit(request, pk):
+    """Pack QR pret a poser sur tout support : SVG, PDF et PNG, noir et blanc, 3 formats."""
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     public_url = request.build_absolute_uri(event.get_public_url())
-    if request.GET.get("branded"):
-        # Version a telecharger pour l'impression : le QR, puis la marque en petit.
-        response = HttpResponse(
-            build_branded_qr_png(public_url, SiteConfiguration.current()), content_type="image/png"
-        )
-        response["Content-Disposition"] = f'attachment; filename="{event.slug}-qr-memora.png"'
-    else:
-        response = HttpResponse(build_event_qr_code_png(public_url), content_type="image/png")
-        response["Content-Disposition"] = f'inline; filename="{event.slug}-qr.png"'
-    response["Cache-Control"] = "private, max-age=300"
+    archive = build_qr_kit_zip(public_url, event.slug, SiteConfiguration.current())
+    response = HttpResponse(archive, content_type="application/zip")
+    response["Content-Disposition"] = f'attachment; filename="memora-qr-{event.slug}.zip"'
+    response["Cache-Control"] = "private, no-store"
     return response
 
 

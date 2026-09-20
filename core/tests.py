@@ -631,3 +631,28 @@ class SetSupportContactCommandTests(TestCase):
 
         self.assertIn("+243 990 000 000", out.getvalue())
         self.assertNotIn("modifie", out.getvalue())
+
+
+class SendBrandAssetsCommandTests(TestCase):
+    """E-mail des visuels de marque : trois PNG en piece jointe, depuis le contact Memora."""
+
+    def test_sends_the_three_visuals_from_the_memora_contact(self):
+        from django.core import mail
+
+        configuration = SiteConfiguration.current()
+        configuration.support_email = "contact@memoracd.site"
+        configuration.save()
+
+        with override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            call_command("send_brand_assets", "moi@example.com", stdout=StringIO())
+
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["moi@example.com"])
+        self.assertEqual(message.from_email, "Memora <contact@memoracd.site>")
+        self.assertEqual(message.reply_to, ["contact@memoracd.site"])
+        self.assertEqual(
+            [name for name, _, _ in message.attachments],
+            ["memora-logo-icone.png", "memora-logo-nom.png", "memora-banniere.png"],
+        )
+        self.assertTrue(all(content.startswith(b"\x89PNG") for _, content, _ in message.attachments))

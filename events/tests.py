@@ -4,7 +4,10 @@ from pathlib import Path
 import shutil
 import tempfile
 from unittest.mock import patch
+import zipfile
+from xml.etree import ElementTree
 from zipfile import ZipFile
+import zlib
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -19,7 +22,17 @@ from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, MomentTemplate, UploadCategory
 
+from .brand_assets import ASSETS
 from .models import Event, EventPlan, EventType
+from .qr_kit import (
+    brand_contact_items,
+    build_qr_kit_zip,
+    landscape_layout,
+    portrait_layout,
+    qr_matrix,
+    render_mask,
+    square_layout,
+)
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
@@ -843,35 +856,6 @@ class EventViewTests(TestCase):
         self.client.login(username="owner", password="secret")
 
         response = self.client.get(reverse("events:live_stats", kwargs={"pk": event.pk}))
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_qr_print_sheet_shows_printable_code(self):
-        event = Event.objects.create(
-            organizer=self.user,
-            title="Reception Fiche",
-            event_type=self.event_type,
-            event_date=date(2026, 7, 8),
-        )
-        self.mark_paid(event)
-        self.client.login(username="owner", password="secret")
-
-        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": event.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Imprimer")
-        self.assertContains(response, reverse("events:qr_code", kwargs={"pk": event.pk}))
-
-    def test_qr_print_sheet_is_limited_to_owner(self):
-        event = Event.objects.create(
-            organizer=self.other_user,
-            title="Reception Fiche Autrui",
-            event_type=self.event_type,
-            event_date=date(2026, 7, 8),
-        )
-        self.client.login(username="owner", password="secret")
-
-        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": event.pk}))
 
         self.assertEqual(response.status_code, 404)
 
@@ -1707,8 +1691,10 @@ class UpcomingEventTests(TestCase):
         self.assertFalse(self._event(days_from_today=-2).is_upcoming)
 
 
-class BrandedQrTests(TestCase):
-    """QR code a imprimer : le QR en grand, la marque Memora en petit dessous."""
+class QrKitTests(TestCase):
+    """Pack QR : le QR en grand, la phrase d'invitation et la marque Memora, sur fond transparent."""
+
+    URL = "https://memoracd.site/e/mariage-qr/cle/"
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="orga-qr", password="secret")
@@ -1723,52 +1709,128 @@ class BrandedQrTests(TestCase):
         self.configuration.support_email = "contact@memoracd.site"
         self.configuration.support_whatsapp = "+243 990 000 000"
         self.configuration.save()
+        self.contacts = brand_contact_items(self.configuration)
 
-    def _branded(self):
-        return self.client.get(reverse("events:qr_code", kwargs={"pk": self.event.pk}), {"branded": "1"})
+    def _kit(self):
+        return zipfile.ZipFile(BytesIO(build_qr_kit_zip(self.URL, "mariage-qr", self.configuration)))
 
-    def test_branded_download_is_a_png_attachment(self):
-        response = self._branded()
+    def test_download_is_a_zip_attachment(self):
+        response = self.client.get(reverse("events:qr_kit", kwargs={"pk": self.event.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertEqual(response["Content-Type"], "application/zip")
         self.assertIn("attachment", response["Content-Disposition"])
-        self.assertIn(f"{self.event.slug}-qr-memora.png", response["Content-Disposition"])
+        self.assertIn(f"memora-qr-{self.event.slug}.zip", response["Content-Disposition"])
+        self.assertTrue(zipfile.is_zipfile(BytesIO(response.content)))
 
-    def test_plain_qr_is_unchanged_and_used_inline_by_the_sheet(self):
-        plain = self.client.get(reverse("events:qr_code", kwargs={"pk": self.event.pk}))
+    def test_kit_holds_every_format_layout_and_colour(self):
+        names = self._kit().namelist()
 
-        self.assertIn("inline", plain["Content-Disposition"])
-        self.assertNotIn("qr-memora", plain["Content-Disposition"])
-        self.assertLess(len(plain.content), len(self._branded().content))
+        for colour, background in (("noir-pour-fonds-clairs", "fond-blanc"), ("blanc-pour-fonds-fonces", "fond-noir")):
+            for layout in ("portrait", "paysage-16x9", "carre"):
+                base = f"memora-qr-mariage-qr/{colour}/{layout}/qr-{layout}"
+                for suffix in (".svg", ".pdf", "-transparent.png", f"-{background}.png"):
+                    self.assertIn(base + suffix, names)
+        self.assertIn("memora-qr-mariage-qr/LISEZ-MOI.txt", names)
+        self.assertEqual(len(names), 25)
 
-    def test_branding_sits_below_the_code_and_leaves_the_code_untouched(self):
-        import qrcode
-        from PIL import Image
+    def test_svg_is_vector_with_outlined_text_and_no_background(self):
+        archive = self._kit()
+        for name in archive.namelist():
+            if not name.endswith(".svg"):
+                continue
+            svg = archive.read(name).decode("utf-8")
+            ElementTree.fromstring(svg)  # XML valide
+            self.assertNotIn("<text", svg)  # texte en courbes : aucune police a installer
+            self.assertNotIn("<image", svg)
+            self.assertIn('id="logo"', svg)  # la marque est toujours presente
+        black = archive.read("memora-qr-mariage-qr/noir-pour-fonds-clairs/portrait/qr-portrait.svg").decode()
+        white = archive.read("memora-qr-mariage-qr/blanc-pour-fonds-fonces/portrait/qr-portrait.svg").decode()
+        self.assertIn('fill="#000000"', black)
+        self.assertIn('fill="#ffffff"', white)
+        self.assertNotIn("<rect width", black)  # pas de rectangle de fond
 
-        from .qr_branding import build_branded_qr_png
+    def test_pdf_is_one_vector_page_printed_in_pure_black_ink(self):
+        archive = self._kit()
+        black = archive.read("memora-qr-mariage-qr/noir-pour-fonds-clairs/portrait/qr-portrait.pdf")
+        landscape = archive.read("memora-qr-mariage-qr/noir-pour-fonds-clairs/paysage-16x9/qr-paysage-16x9.pdf")
 
-        public_url = "https://memoracd.site/e/mariage-qr/cle/"
-        image = Image.open(BytesIO(build_branded_qr_png(public_url, self.configuration)))
-        reference = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=2)
-        reference.add_data(public_url)
-        reference.make(fit=True)
-        code = reference.make_image(fill_color="#241f22", back_color="#fffaf7").convert("RGB")
-        margin = 90
+        self.assertTrue(black.startswith(b"%PDF-1.4"))
+        self.assertTrue(black.rstrip().endswith(b"%%EOF"))
+        self.assertIn(b"/MediaBox [0 0 595.276 841.890]", black)  # A4 portrait
+        self.assertIn(b"/MediaBox [0 0 841.890 473.563]", landscape)  # 297 mm, 16:9
+        self.assertNotIn(b"/Image", black)
+        content = zlib.decompress(black.split(b"stream\n", 1)[1].split(b"\nendstream", 1)[0]).decode("ascii")
+        self.assertTrue(content.startswith("0 0 0 1 k"))  # noir K seul, pas de noir quadrichromie
 
-        # Le QR est reproduit a l'identique, en grand, sans rien par-dessus.
-        self.assertEqual(
-            image.convert("RGB").crop((margin, margin, margin + code.width, margin + code.height)).tobytes(),
-            code.tobytes(),
-        )
-        # La marque occupe la bande du dessous : il y a du texte sombre sous le QR.
-        below = image.convert("L").crop((0, margin + code.height + 20, image.width, image.height))
-        self.assertLess(min(below.getdata()), 128)
-        self.assertGreater(image.height, code.height + 2 * margin + 200)
+    def test_transparent_png_has_no_background_and_reproduces_every_module(self):
+        matrix = qr_matrix(self.URL)
+        archive = self._kit()
+        for layout_name, build in (
+            ("portrait", portrait_layout),
+            ("carre", square_layout),
+            ("paysage-16x9", landscape_layout),
+        ):
+            layout = build(matrix, self.contacts)
+            path = f"memora-qr-mariage-qr/noir-pour-fonds-clairs/{layout_name}/qr-{layout_name}-transparent.png"
+            image = Image.open(BytesIO(archive.read(path)))
+            self.assertEqual(image.mode, "RGBA")
+            self.assertEqual(image.size[0], layout.png_width)
+            alpha = image.getchannel("A")
+            self.assertEqual(alpha.getpixel((0, 0)), 0)
+            self.assertEqual(alpha.getpixel((image.width - 1, image.height - 1)), 0)
+
+            scale = image.width / layout.width
+            _, x, y, size = next(item for item in layout.items if item[0] == "qr")
+            unit = size / len(matrix)
+            for row in range(len(matrix)):
+                for col in range(len(matrix)):
+                    centre = (round((x + (col + 0.5) * unit) * scale), round((y + (row + 0.5) * unit) * scale))
+                    self.assertEqual(alpha.getpixel(centre) > 127, matrix[row][col], (layout_name, row, col))
+
+    def test_nothing_is_drawn_in_the_quiet_zone_around_the_code(self):
+        matrix = qr_matrix(self.URL)
+        for build in (portrait_layout, square_layout, landscape_layout):
+            layout = build(matrix, self.contacts)
+            mask = render_mask(layout, matrix, width_px=1000)
+            scale = mask.width / layout.width
+            _, x, y, size = next(item for item in layout.items if item[0] == "qr")
+            quiet = 4 * size / len(matrix)  # zone de silence normalisee : 4 modules
+            inner = (round(x * scale) - 2, round(y * scale) - 2, round((x + size) * scale) + 2, round((y + size) * scale) + 2)
+            zone = (
+                max(round((x - quiet) * scale), 0),
+                max(round((y - quiet) * scale), 0),
+                min(round((x + size + quiet) * scale), mask.width),
+                min(round((y + size + quiet) * scale), mask.height),
+            )
+            pixels = mask.load()
+            for py in range(zone[1], zone[3]):
+                for px in range(zone[0], zone[2]):
+                    inside_code = inner[0] <= px <= inner[2] and inner[1] <= py <= inner[3]
+                    self.assertTrue(inside_code or pixels[px, py] < 30, (build.__name__, px, py))
+
+    def test_brand_is_always_present_below_the_code(self):
+        layout = portrait_layout(qr_matrix(self.URL), self.contacts)
+        _, _, qr_y, qr_size = next(item for item in layout.items if item[0] == "qr")
+
+        self.assertEqual([item[0] for item in layout.items].count("mark"), 1)
+        self.assertTrue(any(item[0] == "text" and item[2] == "Memora" for item in layout.items))
+        self.assertTrue(any(item[0] == "text" and item[2].startswith("Revivez votre") for item in layout.items))
+        below = [item for item in layout.items if item[0] == "text" and item[5] > qr_y + qr_size]
+        self.assertGreaterEqual(len(below), 3)
+
+    def test_the_layouts_fit_their_page(self):
+        matrix = qr_matrix(self.URL)
+        for build in (portrait_layout, square_layout, landscape_layout):
+            layout = build(matrix, self.contacts)
+            mask = render_mask(layout, matrix, width_px=800)
+            left, top, right, bottom = mask.getbbox()
+            self.assertGreaterEqual(left, 0.04 * mask.width, build.__name__)
+            self.assertGreaterEqual(top, 0.04 * mask.height, build.__name__)
+            self.assertLessEqual(right, 0.96 * mask.width, build.__name__)
+            self.assertLessEqual(bottom, 0.96 * mask.height, build.__name__)
 
     def test_contact_line_lists_only_what_is_filled_in(self):
-        from .qr_branding import brand_contact_items
-
         with override_settings(MEMORA_PUBLIC_BASE_URL="https://memoracd.site"):
             self.assertEqual(
                 brand_contact_items(self.configuration),
@@ -1779,21 +1841,66 @@ class BrandedQrTests(TestCase):
             self.configuration.support_whatsapp = ""
             self.assertEqual(brand_contact_items(self.configuration), ["memoracd.site"])
 
-    def test_print_sheet_carries_the_logo_slogan_and_contact(self):
-        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": self.event.pk}))
-
-        self.assertContains(response, "memora-mark.svg")
-        self.assertContains(response, "Revivez votre événement à travers les yeux de vos invités.")
-        self.assertContains(response, "contact@memoracd.site")
-        self.assertContains(response, "WhatsApp +243 990 000 000")
-
-    def test_dashboard_download_button_gets_the_branded_version(self):
+    def test_dashboard_offers_a_single_download_button(self):
         self.event.mark_paid(provider="test")
         self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
 
         response = self.client.get(reverse("events:detail", kwargs={"pk": self.event.pk}))
 
-        self.assertContains(response, "?branded=1")
+        self.assertContains(response, reverse("events:qr_kit", kwargs={"pk": self.event.pk}))
+        self.assertContains(response, "Télécharger le QR code")
+        self.assertNotContains(response, "Fiche à imprimer")
+
+    def test_kit_and_preview_are_limited_to_the_organizer(self):
+        get_user_model().objects.create_user(username="autre-qr", password="secret")
+        self.client.login(username="autre-qr", password="secret")
+        for name in ("events:qr_kit", "events:qr_code"):
+            self.assertEqual(self.client.get(reverse(name, kwargs={"pk": self.event.pk})).status_code, 404)
+
+        response = self.client_class().get(reverse("events:qr_kit", kwargs={"pk": self.event.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("connexion", response["Location"])
+
+    def test_preview_is_an_inline_portrait_png(self):
+        response = self.client.get(reverse("events:qr_code", kwargs={"pk": self.event.pk}))
+
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertIn("inline", response["Content-Disposition"])
+        image = Image.open(BytesIO(response.content))
+        self.assertGreater(image.height, image.width)
+
+    def test_readme_explains_how_to_choose_and_keep_the_code_scannable(self):
+        readme = self._kit().read("memora-qr-mariage-qr/LISEZ-MOI.txt").decode("utf-8")
+
+        for phrase in ("noir-pour-fonds-clairs", "blanc-pour-fonds-fonces", "portrait", "paysage-16x9", "carre", "zone UNIE"):
+            self.assertIn(phrase, readme)
+
+
+class BrandAssetsTests(TestCase):
+    """Visuels de marque pour les reseaux : trois SVG maitres aux couleurs de la charte."""
+
+    def test_svg_masters_are_valid_outlined_and_on_the_charter_colours(self):
+        for name, (build, width, height) in ASSETS.items():
+            svg = build()
+            root = ElementTree.fromstring(svg)
+            self.assertEqual(root.get("viewBox"), f"0 0 {width} {height}", name)
+            self.assertNotIn("<text", svg, name)  # texte en courbes
+            self.assertIn("#241f22", svg, name)  # encre de la charte
+            self.assertIn("#f4d9d5", svg, name)  # monogramme
+
+    def test_the_banner_carries_logo_name_and_slogan_inside_the_central_band(self):
+        svg = ASSETS["memora-banniere"][0]()
+
+        self.assertIn('aria-label="Memora"', svg)
+        self.assertIn("Revivez votre événement à travers les yeux de vos invités.", svg)
+        self.assertIn("#d8b46a", svg)  # ornement champagne
+        self.assertEqual(ASSETS["memora-banniere"][1:], (3000, 1000))
+
+    def test_icon_is_a_full_bleed_square(self):
+        _, width, height = ASSETS["memora-logo-icone"]
+
+        self.assertEqual(width, height)
+        self.assertNotRegex(ASSETS["memora-logo-icone"][0](), r"<rect[^>]*rx=")  # pas de coins arrondis : la plateforme decoupe
 
 
 class GuestTestAdminTests(TestCase):

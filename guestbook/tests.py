@@ -67,6 +67,13 @@ class GuestbookViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Mariage Livre d&#x27;Or")
 
+    def test_agent_home_has_no_marketing_footer(self):
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(reverse("guestbook:agent_home"))
+
+        self.assertNotContains(response, 'class="site-footer"')
+
     def test_agent_cannot_access_mission_not_assigned_to_them(self):
         self.client.login(username="agent2", password="secret")
 

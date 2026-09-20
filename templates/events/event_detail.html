@@ -64,15 +64,14 @@
           <p class="section__label">Accès invité</p>
           <h3>QR code invité</h3>
           {% if event.is_paid %}
-            <p class="muted-copy">À afficher sur les tables, le bar ou l'écran d'accueil.</p>
+            <p class="muted-copy">Prêt à poser sur tout support : chevalet, affiche, bâche, écran. Fond transparent, en noir ou en blanc.</p>
           {% else %}
             <p class="muted-copy">Disponible après activation de l'événement.</p>
           {% endif %}
           <code id="public-event-url">{{ public_event_url }}</code>
           <div class="quick-actions">
+            <a class="button button--primary button--compact public-share-panel__download" href="{{ qr_kit_url }}" download>Télécharger le QR code</a>
             <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
-            <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}?branded=1" download>Télécharger QR</a>
-            <a class="button button--secondary button--compact" href="{{ qr_print_sheet_url }}">Fiche à imprimer</a>
             {% if event.is_paid %}
               <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>
             {% else %}
