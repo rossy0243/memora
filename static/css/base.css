@@ -3711,7 +3711,13 @@ body.capture-review-open {
 }
 
 .guestbook-montage {
+  display: grid;
+  gap: 12px;
   margin-bottom: 20px;
+}
+
+.guestbook-montage > * {
+  margin-block: 0;
 }
 
 .guestbook-montage__preview {
