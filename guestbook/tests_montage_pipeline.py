@@ -190,6 +190,35 @@ class FfmpegSegmentTests(SimpleTestCase):
 
         self.assertLessEqual(duration, 2.2)  # plafond = 2 x duree maximale d'enregistrement
 
+    def test_webm_recorded_like_mediarecorder_is_measured_even_without_a_duration_header(self):
+        """Les messages du stand sont des webm VP9 ecrits en flux par MediaRecorder :
+        ni duree ni index dans l'en-tete (ffprobe repond N/A). La duree doit alors
+        venir des paquets, sinon fondus et musique seraient calees a l'aveugle."""
+        clip = self.tmp / "stream.webm"
+        try:
+            with open(clip, "wb") as target:
+                subprocess.run(
+                    [
+                        settings.MEMORA_FFMPEG_BINARY, "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "testsrc=size=160x284:rate=47:duration=3",
+                        "-f", "lavfi", "-i", "sine=frequency=300:duration=3",
+                        "-c:v", "libvpx", "-b:v", "500k", "-c:a", "libopus", "-shortest",
+                        "-f", "webm", "pipe:1",
+                    ],
+                    check=True, stdout=target, stderr=subprocess.PIPE,
+                )
+        except subprocess.CalledProcessError:
+            self.skipTest("encodeur VP8/Opus indisponible")
+        header = subprocess.run(
+            [settings.MEMORA_FFPROBE_BINARY, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(clip)],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        self.assertIn(header, ("N/A", ""), "le fichier de test doit bien etre sans duree d'en-tete")
+
+        self.assertAlmostEqual(gm._probe_duration(clip), 3.0, delta=0.2)
+        _, duration = self._segment(clip, fallback=10)
+        self.assertAlmostEqual(duration, 3.0, delta=0.3)
+
     def test_card_becomes_a_silent_segment_of_the_requested_length(self):
         card = self.tmp / "card.png"
         _make_card(card)

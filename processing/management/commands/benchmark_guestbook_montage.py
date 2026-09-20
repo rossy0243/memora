@@ -28,35 +28,32 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--messages", type=int, default=20)
         parser.add_argument("--seconds", type=int, default=20, help="Duree de chaque message.")
-        parser.add_argument("--size", default="1280x720", help="Resolution des messages sources.")
+        parser.add_argument("--size", default="1080x1920", help="Resolution des messages sources.")
+        parser.add_argument("--fps", type=int, default=47)
+        parser.add_argument(
+            "--codec", choices=["vp9", "h264"], default="vp9",
+            help="vp9 = webm de MediaRecorder (telephone de l'agent), sans duree dans l'en-tete.",
+        )
 
     def handle(self, *args, **options):
         count, seconds, size = options["messages"], options["seconds"], options["size"]
         encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
+        codec, fps = options["codec"], options["fps"]
         self.stdout.write(
             f"encodeur={encoder} preset={getattr(settings, 'MEMORA_GUESTBOOK_MONTAGE_PRESET', '-')} "
             f"workers={montage._worker_count()} cpus={montage._available_cpus()} "
-            f"(os.cpu_count={os.cpu_count()}) messages={count}x{seconds}s source={size}"
+            f"(os.cpu_count={os.cpu_count()}) messages={count}x{seconds}s source={size}@{fps}fps {codec}"
         )
 
         with tempfile.TemporaryDirectory(prefix="memora_bench_") as tmp:
             work = Path(tmp)
-            source = work / "source.mp4"
-            subprocess.run(
-                [
-                    settings.MEMORA_FFMPEG_BINARY, "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "lavfi", "-i", f"testsrc2=size={size}:rate=30:duration={seconds}",
-                    "-f", "lavfi", "-i", f"sine=frequency=300:duration={seconds}",
-                    "-c:v", encoder, "-b:v", "3M", "-c:a", "aac", "-shortest", str(source),
-                ],
-                check=True,
-            )
+            source = self._make_source(work, options)
 
             names = ["Camille & Noé", "Tante Jeanne", "Élodie-Marie Ouédraogo", "Les voisins du 4ème", ""]
             messages = [
                 SimpleNamespace(
-                    original_filename="source.mp4",
-                    media_file=SimpleNamespace(name="source.mp4"),
+                    original_filename=source.name,
+                    media_file=SimpleNamespace(name=source.name),
                     duration=timedelta(seconds=seconds),
                     guest_name=names[index % len(names)],
                 )
@@ -89,3 +86,32 @@ class Command(BaseCommand):
                 f"| HD {result.output_path.stat().st_size / 1e6:.0f} Mo"
                 + (f" | legere {result.light_path.stat().st_size / 1e6:.0f} Mo" if result.light_path else " | pas de version legere")
             )
+
+    def _make_source(self, work, options):
+        """Message synthetique au format reel d'un enregistrement de stand : en VP9,
+        ecrit vers un tube comme le fait MediaRecorder — donc sans duree ni index
+        dans l'en-tete du fichier."""
+        seconds, size, fps = options["seconds"], options["size"], options["fps"]
+        inputs = [
+            "-f", "lavfi", "-i", f"testsrc2=size={size}:rate={fps}:duration={seconds}",
+            "-f", "lavfi", "-i", f"sine=frequency=300:duration={seconds}",
+        ]
+        base = [settings.MEMORA_FFMPEG_BINARY, "-hide_banner", "-loglevel", "error", "-y", *inputs]
+        if options["codec"] == "vp9":
+            source = work / "source.webm"
+            with open(source, "wb") as target:
+                subprocess.run(
+                    [
+                        *base, "-c:v", "libvpx-vp9", "-b:v", "6M", "-deadline", "realtime",
+                        "-cpu-used", "8", "-row-mt", "1", "-c:a", "libopus", "-shortest",
+                        "-f", "webm", "pipe:1",
+                    ],
+                    check=True, stdout=target,
+                )
+            return source
+        source = work / "source.mp4"
+        subprocess.run(
+            [*base, "-c:v", settings.MEMORA_MOVIE_VIDEO_ENCODER, "-b:v", "3M", "-c:a", "aac", "-shortest", str(source)],
+            check=True,
+        )
+        return source
