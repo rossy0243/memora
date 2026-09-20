@@ -101,7 +101,15 @@ async function main() {
       }
     };
 
+    const tSelect = Date.now();
     await Promise.all(Array.from({ length: Math.min(parallel, cards.length) }, worker));
+    // Chronologie (secondes) : repere quelle etape coute, sans instrumenter Python.
+    process.stdout.write(
+      `TIMINGS bundle=${((tBundle - t0) / 1000).toFixed(1)} chrome=${((tBrowser - tBundle) / 1000).toFixed(1)} ` +
+        `select=${((tSelect - tBrowser) / 1000).toFixed(1)} stills=${((Date.now() - tSelect) / 1000).toFixed(1)} ` +
+        `cards=${cards.length} parallel=${parallel}
+`
+    );
   } finally {
     await browser.close({ silent: true });
   }

@@ -27,6 +27,11 @@ class Command(BaseCommand):
                 self.stdout.write(f"Montage #{movie.pk} remis en file (statut {movie.status}).")
 
         for movie in GuestBookMovie.objects.select_related("event").order_by("pk"):
+            elapsed = ""
+            if movie.started_at and movie.completed_at and movie.completed_at >= movie.started_at:
+                elapsed = f" rendu={int((movie.completed_at - movie.started_at).total_seconds())}s"
+            sizes = f" hd={(movie.final_size or 0) / 1e6:.0f}Mo legere={(movie.light_size or 0) / 1e6:.0f}Mo"
+            self.stdout.write(f"    duree={movie.duration}{elapsed}{sizes}")
             self.stdout.write(
                 f"#{movie.pk} evenement={movie.event_id} statut={movie.status} "
                 f"{movie.progress_percent:.1f}% messages={movie.event.guestbook_messages.count()} "
