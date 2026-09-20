@@ -1,10 +1,12 @@
 """Envoie par e-mail les trois visuels de marque (assets/brand/*.png) depuis le contact Memora.
 
-    python manage.py send_brand_assets adresse@exemple.fr [--from contact@memoracd.site]
+    python manage.py send_brand_assets adresse@exemple.fr [--reply-to contact@memoracd.site]
 
-L'expediteur par defaut est le contact Memora de la configuration du site.
+Le mail part de l'adresse d'envoi du site (celle du compte SMTP : le serveur refuse tout
+autre expediteur) et les reponses vont au contact Memora de la configuration.
 """
 import sys
+from email.utils import parseaddr
 from pathlib import Path
 
 from django.conf import settings
@@ -34,24 +36,25 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("recipient")
-        parser.add_argument("--from", dest="sender", default="", help="Adresse expeditrice (defaut : contact Memora).")
+        parser.add_argument("--reply-to", default="", help="Adresse de reponse (defaut : contact Memora).")
 
     def handle(self, *args, **options):
-        sender = options["sender"] or SiteConfiguration.current().effective_support_email or settings.DEFAULT_FROM_EMAIL
+        contact = options["reply_to"] or SiteConfiguration.current().effective_support_email
+        sender = parseaddr(settings.DEFAULT_FROM_EMAIL)[1] or settings.DEFAULT_FROM_EMAIL
         folder = Path(settings.BASE_DIR) / "assets" / "brand"
         message = EmailMessage(
             "Memora - vos trois visuels pour les réseaux",
             _BODY,
             f"Memora <{sender}>",
             [options["recipient"]],
-            reply_to=[sender],
+            reply_to=[contact] if contact else None,
         )
         for name in ASSETS:
             path = folder / f"{name}.png"
             if not path.exists():
                 raise CommandError(f"Visuel introuvable : {path}")
             message.attach(path.name, path.read_bytes(), "image/png")
-        self.stdout.write(f"CONFIG host={settings.EMAIL_HOST} expediteur={sender} pieces_jointes={len(message.attachments)}")
+        self.stdout.write(f"CONFIG host={settings.EMAIL_HOST} expediteur={sender} reponse={contact or '-'} pieces_jointes={len(message.attachments)}")
         sys.stdout.flush()
         try:
             sent = message.send()

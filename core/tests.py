@@ -636,20 +636,23 @@ class SetSupportContactCommandTests(TestCase):
 class SendBrandAssetsCommandTests(TestCase):
     """E-mail des visuels de marque : trois PNG en piece jointe, depuis le contact Memora."""
 
-    def test_sends_the_three_visuals_from_the_memora_contact(self):
+    def test_sends_the_three_visuals_replying_to_the_memora_contact(self):
         from django.core import mail
 
         configuration = SiteConfiguration.current()
         configuration.support_email = "contact@memoracd.site"
         configuration.save()
 
-        with override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+        with override_settings(
+            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+            DEFAULT_FROM_EMAIL="Memora <no-reply@memoracd.site>",
+        ):
             call_command("send_brand_assets", "moi@example.com", stdout=StringIO())
 
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, ["moi@example.com"])
-        self.assertEqual(message.from_email, "Memora <contact@memoracd.site>")
+        self.assertEqual(message.from_email, "Memora <no-reply@memoracd.site>")
         self.assertEqual(message.reply_to, ["contact@memoracd.site"])
         self.assertEqual(
             [name for name, _, _ in message.attachments],
