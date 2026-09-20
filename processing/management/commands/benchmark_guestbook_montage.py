@@ -6,6 +6,7 @@ le temps de chaque etape. N'ecrit ni en base ni sur R2 : a lancer sur le worker
 (cron) pour savoir combien de temps prendra un vrai livre d'or, ou apres un
 changement de reglage (workers, preset...).
 """
+import os
 import shutil
 import subprocess
 import tempfile
@@ -34,7 +35,8 @@ class Command(BaseCommand):
         encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
         self.stdout.write(
             f"encodeur={encoder} preset={getattr(settings, 'MEMORA_GUESTBOOK_MONTAGE_PRESET', '-')} "
-            f"workers={montage._worker_count()} messages={count}x{seconds}s source={size}"
+            f"workers={montage._worker_count()} cpus={montage._available_cpus()} "
+            f"(os.cpu_count={os.cpu_count()}) messages={count}x{seconds}s source={size}"
         )
 
         with tempfile.TemporaryDirectory(prefix="memora_bench_") as tmp:

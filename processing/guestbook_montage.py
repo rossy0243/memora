@@ -361,7 +361,7 @@ def _render_cards(cards, work_dir, assets_dir, progress_callback):
     cards_path.write_text(json.dumps(specs), encoding="utf-8")
     progress_path = work_dir / "cards_progress.json"
 
-    run_remotion_subprocess(
+    output = run_remotion_subprocess(
         [
             node_binary, str(script),
             f"--cards={cards_path}",
@@ -374,6 +374,9 @@ def _render_cards(cards, work_dir, assets_dir, progress_callback):
         progress_callback=progress_callback,
         failure_label="Rendu des cartons du livre d'or",
     )
+    for line in (output or "").splitlines():
+        if line.startswith("TIMINGS"):
+            logger.info("Guestbook cards %s", line)
 
 
 # --- Musique ----------------------------------------------------------------------
@@ -458,11 +461,38 @@ def _encode_light_version(source, destination, total_seconds, progress_callback)
 # --- Orchestration ----------------------------------------------------------------
 
 
+def _available_cpus():
+    """Coeurs reellement utilisables. `os.cpu_count()` renvoie ceux de la machine
+    hote, pas le quota du conteneur : sur Render il annonce 8 a 16 coeurs pour un
+    service qui en a 4, et on lancait alors deux fois trop d'encodages (memoire
+    et temps gaspilles a se disputer les memes coeurs)."""
+    count = os.cpu_count() or 1
+    try:
+        count = min(count, len(os.sched_getaffinity(0)))
+    except AttributeError:
+        pass
+    try:  # cgroup v2
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            count = min(count, max(1, -(-int(quota) // int(period))))
+    except (OSError, ValueError):
+        pass
+    try:  # cgroup v1
+        quota = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
+        period = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())
+        if quota > 0:
+            count = min(count, max(1, -(-quota // period)))
+    except (OSError, ValueError):
+        pass
+    return max(1, count)
+
+
 def _worker_count():
     configured = getattr(settings, "MEMORA_GUESTBOOK_MONTAGE_WORKERS", 0)
     if configured and configured > 0:
         return configured
-    return max(1, (os.cpu_count() or 2) // 2)
+    # Deux coeurs par encodage ; plafonne : chaque encodage 1080p pese ~400 Mo.
+    return max(1, min(_available_cpus() // 2, 4))
 
 
 def render_guestbook_montage(event, messages, output_path, light_output_path=None, progress_callback=None):
@@ -482,7 +512,7 @@ def render_guestbook_montage(event, messages, output_path, light_output_path=Non
 
     encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
     workers = _worker_count()
-    threads_per_encode = max(1, (os.cpu_count() or 2) // workers)
+    threads_per_encode = max(1, _available_cpus() // workers)
     soundtrack = choose_movie_soundtrack(event, [])
     grade = _grade_filter(soundtrack)
 

@@ -55,8 +55,11 @@ async function main() {
     cpSync(fontsSrc, fontsDest, { recursive: true });
   }
 
+  const t0 = Date.now();
   const serveUrl = await bundle({ entryPoint: path.join(__dirname, "src", "index.ts"), publicDir });
+  const tBundle = Date.now();
   const browser = await openBrowser("chrome", { chromiumOptions });
+  const tBrowser = Date.now();
 
   try {
     // Metadonnees (taille, fps) identiques pour tous les cartons : une seule

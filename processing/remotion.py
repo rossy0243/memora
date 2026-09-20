@@ -390,6 +390,7 @@ def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progre
             f"{failure_label} echoue (code {process.returncode}) : "
             f"{(stderr or stdout or '').strip()[:500]}"
         )
+    return stdout
 
 
 def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
