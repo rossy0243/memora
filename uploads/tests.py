@@ -534,7 +534,15 @@ class GuestUploadViewTests(TestCase):
             self.assertIn("video/mp4;codecs=avc1.42E01E,mp4a.40.2", script, name)
             self.assertIn("iP(hone|ad|od)", script, name)
             self.assertIn("explainUnreadablePreview", script, name)
-            self.assertIn("Aperçu indisponible sur cet appareil", script, name)
+            self.assertIn("Aperçu animé indisponible sur cet appareil" if name == "upload-progress.js" else "Aperçu indisponible sur cet appareil", script, name)
+
+    def test_guest_video_preview_never_shows_a_black_screen(self):
+        """Affiche = derniere image du viseur ; lecture relancee une fois la revue affichee ;
+        commandes natives si l'autoplay est refuse ; un toucher active le son."""
+        script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
+
+        for fragment in ("captureLiveFrame", "previewVideo.poster", "retryPreviewPlayback", "previewVideo.controls = true", "#t=0.001"):
+            self.assertIn(fragment, script, fragment)
 
     def test_cover_photo_is_framed_towards_the_top_so_faces_are_not_cut(self):
         css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
@@ -820,3 +828,14 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Patientez quelques secondes")
         self.assertEqual(GuestUpload.objects.count(), 1)
+
+
+class ReviewScreenStylesTests(TestCase):
+    """Garde-fou CSS : l'apercu video ne doit plus jamais etre repousse hors ecran."""
+
+    def test_hidden_review_media_really_disappear(self):
+        css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
+
+        # « display: block » sur ces elements l'emportait sur l'attribut hidden : l'image vide
+        # gardait sa place et repoussait la video -> apercu noir sur tous les navigateurs.
+        self.assertIn("#capture-preview-image[hidden],\n#capture-preview-video[hidden] {\n  display: none;", css)

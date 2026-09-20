@@ -46,6 +46,8 @@
   let recordingStartedAt = 0;
   let recordingInterval = null;
   let pendingCapturedDuration = null;
+  let pendingPoster = "";
+  let previewPlaybackTimer = null;
   let cameraMode = "photo";
   let isSwitchingCamera = false;
   let isStoppingRecording = false;
@@ -78,9 +80,15 @@
       previewImage.removeAttribute("src");
       previewImage.hidden = true;
     }
+    if (previewPlaybackTimer) {
+      window.clearTimeout(previewPlaybackTimer);
+      previewPlaybackTimer = null;
+    }
     if (previewVideo) {
       previewVideo.pause();
       previewVideo.removeAttribute("src");
+      previewVideo.removeAttribute("poster");
+      previewVideo.controls = false;
       previewVideo.hidden = true;
       previewVideo.load();
     }
@@ -374,6 +382,39 @@
     document.body.classList.remove("capture-review-open");
   }
 
+  // Sur iPhone, une video chargee dans un element pas encore affiche (ou en mode
+  // economie d'energie) ne demarre pas seule et reste NOIRE. Des que la revue est
+  // visible, on relance la lecture ; sinon on affiche les commandes natives.
+  function retryPreviewPlayback() {
+    if (!previewVideo || previewVideo.hidden || !previewVideo.getAttribute("src")) {
+      return;
+    }
+    const playback = previewVideo.play();
+    if (playback && playback.catch) {
+      playback.catch(function () {
+        previewVideo.controls = true;
+      });
+    }
+  }
+
+  // Derniere image du viseur, utilisee comme affiche de la video : meme si le
+  // telephone ne sait pas relire son propre enregistrement, l'invite voit son plan.
+  function captureLiveFrame() {
+    try {
+      if (!liveVideo || !liveVideo.videoWidth) {
+        return "";
+      }
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 960 / liveVideo.videoWidth);
+      canvas.width = Math.round(liveVideo.videoWidth * scale);
+      canvas.height = Math.round(liveVideo.videoHeight * scale);
+      canvas.getContext("2d").drawImage(liveVideo, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    } catch (error) {
+      return "";
+    }
+  }
+
   function showPreviewAfterCapture(message) {
     showCameraFeedback(message, "success");
     // On reste en plein ecran : l'image capturee remplace le flux au meme endroit,
@@ -382,6 +423,7 @@
     // l'ouverture de la revue : le navigateur ne peint jamais la page intermediaire.
     stopCamera();
     openCaptureReview();
+    retryPreviewPlayback();
   }
 
   function capturePhoto() {
@@ -459,6 +501,7 @@
       const recordedType = recorder.mimeType || mimeType || "video/webm";
       const extension = recordedType.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(recordedChunks, { type: recordedType });
+      pendingPoster = captureLiveFrame();
       setCapturedFile(blob, "memora-video-" + timestamp() + "." + extension, recordedSeconds);
       recordedChunks = [];
       recordingStartedAt = 0;
@@ -612,20 +655,25 @@
       }
 
       if (isVideo && previewVideo) {
-        previewVideo.src = previewUrl;
+        const poster = pendingPoster;
+        pendingPoster = "";
+        const sizeLabel = formatFileSize(file.size);
+        // Image d'affiche : visible tant que la lecture n'a pas demarre, et pour de bon si
+        // le telephone ne relit pas son enregistrement (jamais d'ecran noir).
+        if (poster) {
+          previewVideo.poster = poster;
+        }
+        previewVideo.controls = false;
+        // « #t=0.001 » force l'affichage de la 1re image sur iOS meme sans lecture.
+        previewVideo.src = previewUrl + "#t=0.001";
         previewVideo.hidden = false;
-        // Sans lecture, une video fraiche affiche une frame noire sur mobile.
-        // On la joue en boucle, en silence : l'invite voit tout de suite son plan.
-        // Autoplay muet, en boucle : l'invite voit son plan bouger tout de suite,
-        // comme la photo. L'attribut autoplay du HTML est le mecanisme principal
-        // (iOS l'honore) ; ces proprietes le renforcent apres coup.
         previewVideo.muted = true;
         previewVideo.loop = true;
         previewVideo.autoplay = true;
         previewVideo.playsInline = true;
+        previewVideo.preload = "auto";
         previewVideo.setAttribute("muted", "");
         if (previewDetails) {
-          const sizeLabel = formatFileSize(file.size);
           previewDetails.textContent = sizeLabel ? "Vidéo prête - " + sizeLabel + "." : "Vidéo prête.";
         }
         previewVideo.addEventListener("loadedmetadata", function handleMetadata() {
@@ -633,39 +681,64 @@
           if (duration && Number.isFinite(duration)) {
             setClientDuration(duration);
             if (previewDetails) {
-              const sizeLabel = formatFileSize(file.size);
               const parts = ["Vidéo prête", formatDuration(duration), sizeLabel].filter(Boolean);
               previewDetails.textContent = parts.join(" - ") + ".";
             }
           }
-          const playback = previewVideo.play();
-          if (playback && playback.catch) {
-            // Si l'autoplay est refuse, on force au moins l'affichage de la 1re frame.
-            playback.catch(function () {
-              try {
-                previewVideo.currentTime = 0.05;
-              } catch (error) {
-                /* certains navigateurs refusent le seek avant lecture : sans gravite */
-              }
-            });
+          retryPreviewPlayback();
+        }, { once: true });
+        previewVideo.addEventListener("playing", function handlePlaying() {
+          if (previewPlaybackTimer) {
+            window.clearTimeout(previewPlaybackTimer);
+            previewPlaybackTimer = null;
+          }
+          previewVideo.controls = false;
+          if (previewDetails && previewVideo.muted) {
+            previewDetails.textContent = previewDetails.textContent.replace(/\.$/, "") + ". Touchez la vidéo pour le son.";
           }
         }, { once: true });
-        // Filet de securite : si le navigateur n'arrive pas a relire son propre
-        // enregistrement (ecran noir), on le dit au lieu de laisser croire a un
-        // bug ; le fichier, lui, est bien capture et peut etre envoye.
+        // Filet de securite : la lecture n'a pas demarre (autoplay refuse, economie
+        // d'energie...) -> commandes natives pour lancer l'apercu d'un toucher. Si le
+        // navigateur ne sait pas du tout relire son enregistrement, on le dit ; l'affiche
+        // reste visible et le fichier, lui, est bien capture et peut etre envoye.
         function explainUnreadablePreview() {
-          if (!previewVideo.getAttribute("src") || previewVideo.readyState > 0 || !previewDetails) {
+          if (!previewVideo.getAttribute("src") || !previewDetails) {
             return;
           }
-          const sizeLabel = formatFileSize(file.size);
+          if (previewVideo.readyState > 0) {
+            if (previewVideo.paused) {
+              previewVideo.controls = true;
+              previewDetails.textContent = "Vidéo prête" + (sizeLabel ? " - " + sizeLabel : "") + ". Touchez ▶ pour la revoir.";
+            }
+            return;
+          }
+          previewVideo.controls = false;
           previewDetails.textContent =
-            "Aperçu indisponible sur cet appareil, mais la vidéo est bien enregistrée" +
+            "Aperçu animé indisponible sur cet appareil, mais la vidéo est bien enregistrée" +
             (sizeLabel ? " (" + sizeLabel + ")" : "") + ". Vous pouvez l'envoyer.";
+          if (/[?&]debug=1/.test(window.location.search)) {
+            const code = previewVideo.error ? previewVideo.error.code : "-";
+            previewDetails.textContent += " [" + (file.type || "?") + " erreur=" + code + "]";
+          }
         }
         previewVideo.addEventListener("error", explainUnreadablePreview, { once: true });
-        window.setTimeout(explainUnreadablePreview, 4000);
+        previewPlaybackTimer = window.setTimeout(explainUnreadablePreview, 2500);
         previewVideo.load();
       }
+    });
+  }
+
+  if (previewVideo) {
+    previewVideo.addEventListener("click", function () {
+      if (previewVideo.controls) {
+        return;
+      }
+      if (previewVideo.paused) {
+        previewVideo.muted = false; // geste de l'invite : le son est autorise
+      } else {
+        previewVideo.muted = !previewVideo.muted;
+      }
+      retryPreviewPlayback();
     });
   }
 

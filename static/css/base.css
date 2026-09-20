@@ -3359,6 +3359,14 @@ body.camera-open {
   background: var(--color-ink);
 }
 
+/* L'attribut hidden doit gagner sur « display: block » ci-dessus : sinon l'image
+   vide (pendant une video) garde sa place, occupe toute la zone de revue et repousse
+   la video hors de l'ecran -> apercu video « noir ». */
+#capture-preview-image[hidden],
+#capture-preview-video[hidden] {
+  display: none;
+}
+
 /* Le fond floute est masque par defaut ; il n'apparait qu'en revue, pour une photo.
    L'id (specificite 1-0-0) garantit qu'aucune autre regle ne le rende visible. */
 #capture-preview-backdrop {
