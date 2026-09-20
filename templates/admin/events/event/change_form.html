@@ -1,0 +1,35 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  {% if original and original.pk %}
+    <li>
+      <form method="post" action="{% url 'admin:events_event_toggle_guest_test' original.pk %}" class="guest-test-toggle">
+        {% csrf_token %}
+        <button type="submit">{% if original.guest_preview_enabled %}Refermer le test invités{% else %}Activer pour test{% endif %}</button>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <style>
+    .object-tools li form.guest-test-toggle { margin: 0; }
+    .object-tools li form.guest-test-toggle button {
+      display: block;
+      float: left;
+      padding: 3px 12px;
+      border: 0;
+      border-radius: 15px;
+      color: var(--object-tools-fg);
+      background: var(--object-tools-bg);
+      font-size: 0.6875rem;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .object-tools li form.guest-test-toggle button:hover { background: var(--object-tools-hover-bg); }
+  </style>
+{% endblock %}

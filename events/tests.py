@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 import shutil
@@ -989,14 +989,13 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Télécharger le film")
         self.assertNotContains(response, "Retour dashboard")
 
-    def test_public_movie_share_shows_a_waiting_page_for_an_unfinished_movie(self):
+    def test_public_movie_share_hides_unfinished_movie(self):
         event = Event.objects.create(
             organizer=self.user,
             title="Reception Film Non Pret",
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
-        self.mark_paid(event)
         GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
 
         response = self.client.get(
@@ -1004,25 +1003,6 @@ class EventViewTests(TestCase):
                 "public_movie",
                 kwargs={"slug": event.slug, "access_key": event.public_access_key},
             )
-        )
-
-        # L'invite qui y arrive depuis la page de remerciement ne doit pas voir une 404.
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Le film est en préparation")
-        self.assertContains(response, "9 juillet 2026")
-        self.assertNotContains(response, "Télécharger")
-        self.assertNotContains(response, "site-footer")
-
-    def test_public_movie_share_of_an_unpaid_event_is_still_a_404(self):
-        event = Event.objects.create(
-            organizer=self.user,
-            title="Reception Film Non Payee",
-            event_type=self.event_type,
-            event_date=date(2026, 7, 8),
-        )
-
-        response = self.client.get(
-            reverse("public_movie", kwargs={"slug": event.slug, "access_key": event.public_access_key})
         )
 
         self.assertEqual(response.status_code, 404)
@@ -1634,6 +1614,264 @@ class EventViewTests(TestCase):
         event = Event.objects.get(title="Conference Memora")
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         self.assertEqual(event.event_type, custom_type)
+
+
+class UpcomingEventTests(TestCase):
+    """Evenement paye mais dont le jour n'est pas arrive : page d'attente, puis le
+    meme lien mene a la prise de photo/video le jour J."""
+
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(username="orga-j", password="secret")
+        self.event_type = EventType.objects.get(code="wedding")
+
+    def _event(self, days_from_today, paid=True):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Jour J",
+            couple_name="Beny & Deborah",
+            event_type=self.event_type,
+            event_date=timezone.localdate() + timedelta(days=days_from_today),
+        )
+        if paid:
+            event.mark_paid(provider="test")
+            event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
+        return event
+
+    def _upload_url(self, event):
+        return reverse("uploads:create", kwargs={"slug": event.slug, "access_key": event.public_access_key})
+
+    def test_qr_link_shows_a_waiting_page_before_the_day(self):
+        event = self._event(days_from_today=3)
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Rendez-vous le")
+        self.assertContains(response, "Beny &amp; Deborah")
+        self.assertContains(response, "data-opens-at=")
+        self.assertContains(response, "event-opens.js")
+        self.assertNotContains(response, "start-camera-photo-button")
+        self.assertNotContains(response, "site-footer")
+
+    def test_upload_page_and_upload_are_closed_before_the_day(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        event = self._event(days_from_today=3)
+
+        get_response = self.client.get(self._upload_url(event))
+        post_response = self.client.post(
+            self._upload_url(event),
+            {"media_file": SimpleUploadedFile("p.jpg", b"img", content_type="image/jpeg")},
+        )
+
+        self.assertContains(get_response, "Rendez-vous le")
+        self.assertContains(post_response, "Rendez-vous le")
+        self.assertEqual(GuestUpload.objects.filter(event=event).count(), 0)
+
+    def test_the_same_link_opens_the_camera_on_the_day(self):
+        event = self._event(days_from_today=0)
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertRedirects(response, self._upload_url(event), fetch_redirect_response=False)
+        self.assertContains(self.client.get(self._upload_url(event)), "start-camera-photo-button")
+
+    def test_organizer_and_staff_can_try_the_guest_flow_before_the_day(self):
+        event = self._event(days_from_today=5)
+
+        self.client.login(username="orga-j", password="secret")
+        self.assertContains(self.client.get(self._upload_url(event)), "start-camera-photo-button")
+
+        self.client.logout()
+        get_user_model().objects.create_user(username="equipe", password="secret", is_staff=True)
+        self.client.login(username="equipe", password="secret")
+        self.assertContains(self.client.get(self._upload_url(event)), "start-camera-photo-button")
+
+        # Un autre organisateur, lui, voit la page d'attente.
+        self.client.logout()
+        get_user_model().objects.create_user(username="autre", password="secret")
+        self.client.login(username="autre", password="secret")
+        self.assertContains(self.client.get(self._upload_url(event)), "Rendez-vous le")
+
+    def test_an_unpaid_event_still_says_it_is_not_activated(self):
+        event = self._event(days_from_today=3, paid=False)
+
+        response = self.client.get(event.get_public_url())
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "pas encore activé", status_code=403)
+
+    def test_is_upcoming_follows_the_event_date(self):
+        self.assertTrue(self._event(days_from_today=1).is_upcoming)
+        self.assertFalse(self._event(days_from_today=0).is_upcoming)
+        self.assertFalse(self._event(days_from_today=-2).is_upcoming)
+
+
+class BrandedQrTests(TestCase):
+    """QR code a imprimer : le QR en grand, la marque Memora en petit dessous."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="orga-qr", password="secret")
+        self.event = Event.objects.create(
+            organizer=self.user,
+            title="Mariage QR",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="orga-qr", password="secret")
+        self.configuration = SiteConfiguration.current()
+        self.configuration.support_email = "contact@memoracd.site"
+        self.configuration.support_whatsapp = "+243 990 000 000"
+        self.configuration.save()
+
+    def _branded(self):
+        return self.client.get(reverse("events:qr_code", kwargs={"pk": self.event.pk}), {"branded": "1"})
+
+    def test_branded_download_is_a_png_attachment(self):
+        response = self._branded()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn(f"{self.event.slug}-qr-memora.png", response["Content-Disposition"])
+
+    def test_plain_qr_is_unchanged_and_used_inline_by_the_sheet(self):
+        plain = self.client.get(reverse("events:qr_code", kwargs={"pk": self.event.pk}))
+
+        self.assertIn("inline", plain["Content-Disposition"])
+        self.assertNotIn("qr-memora", plain["Content-Disposition"])
+        self.assertLess(len(plain.content), len(self._branded().content))
+
+    def test_branding_sits_below_the_code_and_leaves_the_code_untouched(self):
+        import qrcode
+        from PIL import Image
+
+        from .qr_branding import build_branded_qr_png
+
+        public_url = "https://memoracd.site/e/mariage-qr/cle/"
+        image = Image.open(BytesIO(build_branded_qr_png(public_url, self.configuration)))
+        reference = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=2)
+        reference.add_data(public_url)
+        reference.make(fit=True)
+        code = reference.make_image(fill_color="#241f22", back_color="#fffaf7").convert("RGB")
+        margin = 90
+
+        # Le QR est reproduit a l'identique, en grand, sans rien par-dessus.
+        self.assertEqual(
+            image.convert("RGB").crop((margin, margin, margin + code.width, margin + code.height)).tobytes(),
+            code.tobytes(),
+        )
+        # La marque occupe la bande du dessous : il y a du texte sombre sous le QR.
+        below = image.convert("L").crop((0, margin + code.height + 20, image.width, image.height))
+        self.assertLess(min(below.getdata()), 128)
+        self.assertGreater(image.height, code.height + 2 * margin + 200)
+
+    def test_contact_line_lists_only_what_is_filled_in(self):
+        from .qr_branding import brand_contact_items
+
+        with override_settings(MEMORA_PUBLIC_BASE_URL="https://memoracd.site"):
+            self.assertEqual(
+                brand_contact_items(self.configuration),
+                ["memoracd.site", "contact@memoracd.site", "WhatsApp +243 990 000 000"],
+            )
+            self.configuration.support_email = ""
+            self.configuration.legal_contact_email = ""
+            self.configuration.support_whatsapp = ""
+            self.assertEqual(brand_contact_items(self.configuration), ["memoracd.site"])
+
+    def test_print_sheet_carries_the_logo_slogan_and_contact(self):
+        response = self.client.get(reverse("events:qr_print_sheet", kwargs={"pk": self.event.pk}))
+
+        self.assertContains(response, "memora-mark.svg")
+        self.assertContains(response, "Revivez votre événement à travers les yeux de vos invités.")
+        self.assertContains(response, "contact@memoracd.site")
+        self.assertContains(response, "WhatsApp +243 990 000 000")
+
+    def test_dashboard_download_button_gets_the_branded_version(self):
+        self.event.mark_paid(provider="test")
+        self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": self.event.pk}))
+
+        self.assertContains(response, "?branded=1")
+
+
+class GuestTestAdminTests(TestCase):
+    """Bouton admin « Activer pour test » : ouvre la collecte avant le jour J."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(username="admin-t", email="a@b.c", password="secret")
+        organizer = get_user_model().objects.create_user(username="orga-t", password="secret")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Test Admin",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=timezone.localdate() + timedelta(days=9),
+        )
+        self.event.mark_paid(provider="test")
+        self.event.save(update_fields=["payment_status", "paid_at", "payment_provider"])
+        self.toggle_url = reverse("admin:events_event_toggle_guest_test", args=[self.event.pk])
+        self.upload_url = reverse(
+            "uploads:create", kwargs={"slug": self.event.slug, "access_key": self.event.public_access_key}
+        )
+
+    def test_change_page_offers_the_test_button(self):
+        self.client.login(username="admin-t", password="secret")
+
+        response = self.client.get(reverse("admin:events_event_change", args=[self.event.pk]))
+
+        self.assertContains(response, "Activer pour test")
+        self.assertContains(response, self.toggle_url)
+
+    def test_button_opens_then_closes_the_event_to_guests(self):
+        self.client.login(username="admin-t", password="secret")
+        guest = self.client_class()
+        self.assertContains(guest.get(self.upload_url), "Rendez-vous le")
+
+        response = self.client.post(self.toggle_url)
+        self.assertRedirects(response, reverse("admin:events_event_change", args=[self.event.pk]))
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.guest_preview_enabled)
+        # Un invite (non connecte) accede desormais a la prise de photo/video.
+        self.assertContains(guest.get(self.upload_url), "start-camera-photo-button")
+        self.assertContains(
+            self.client.get(reverse("admin:events_event_change", args=[self.event.pk])),
+            "Refermer le test invités",
+        )
+
+        self.client.post(self.toggle_url)
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.guest_preview_enabled)
+        self.assertContains(guest.get(self.upload_url), "Rendez-vous le")
+
+    def test_toggle_requires_post_and_an_admin_session(self):
+        self.client.login(username="admin-t", password="secret")
+        self.assertEqual(self.client.get(self.toggle_url).status_code, 405)
+
+        anonymous = self.client_class()
+        response = anonymous.post(self.toggle_url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response["Location"])
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.guest_preview_enabled)
+
+    def test_list_actions_open_and_close_several_events(self):
+        self.client.login(username="admin-t", password="secret")
+        changelist = reverse("admin:events_event_changelist")
+
+        self.client.post(changelist, {"action": "open_for_guest_test", "_selected_action": [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.guest_preview_enabled)
+
+        self.client.post(changelist, {"action": "close_guest_test", "_selected_action": [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.guest_preview_enabled)
+
+    def test_the_test_flag_only_matters_before_the_day(self):
+        self.event.guest_preview_enabled = True
+        self.assertFalse(self.event.is_upcoming)
+        self.event.guest_preview_enabled = False
+        self.assertTrue(self.event.is_upcoming)
 
 
 class PurgeEventMediaTests(TestCase):

@@ -33,8 +33,8 @@
   const submitButton = form.querySelector("button[type='submit']");
   const quotaBox = document.getElementById("upload-quota");
   const quotaText = document.getElementById("upload-quota-text");
-  const sentSummary = document.getElementById("sent-summary");
-  const sentSummaryText = document.getElementById("sent-summary-text");
+  const quotaDots = document.querySelectorAll("#upload-quota-dots i");
+  const quotaFinish = document.getElementById("upload-quota-finish");
   const cameraSentCount = document.getElementById("camera-sent-count");
   const initialSubmitLabel = submitButton ? submitButton.textContent : "";
   let previewUrl = "";
@@ -685,19 +685,27 @@
     captureErrors.innerHTML = "";
   }
 
+  // Compteur d'envois : meme texte que celui du serveur (guest_upload_form.html).
   function updateSentUi() {
-    const sentLabel = sentCount + " souvenir" + (sentCount > 1 ? "s envoyés" : " envoyé");
-    if (sentSummary && sentSummaryText) {
-      sentSummaryText.textContent = "✓ " + sentLabel;
-      sentSummary.hidden = false;
+    const limit = quotaBox ? parseInt(quotaBox.dataset.limit, 10) : NaN;
+    const used = Number.isFinite(limit) ? limit - remainingUploads : sentCount;
+    if (quotaBox && quotaText && Number.isFinite(limit)) {
+      quotaText.textContent =
+        remainingUploads === 1
+          ? "Plus qu'un envoi"
+          : remainingUploads === 2
+            ? "Plus que 2 envois"
+            : used + " souvenir" + (used > 1 ? "s envoyés" : " envoyé") + " sur " + limit;
+    }
+    quotaDots.forEach(function (dot, index) {
+      dot.classList.toggle("is-used", index < used);
+    });
+    if (quotaFinish) {
+      quotaFinish.hidden = used < 1;
     }
     if (cameraSentCount) {
-      cameraSentCount.textContent = "✓ " + sentCount + " envoyé" + (sentCount > 1 ? "s" : "");
+      cameraSentCount.textContent = Number.isFinite(limit) ? "✓ " + used + " sur " + limit : "✓ " + sentCount + " envoyé" + (sentCount > 1 ? "s" : "");
       cameraSentCount.hidden = false;
-    }
-    if (quotaBox && quotaText && remainingUploads <= 2) {
-      quotaText.textContent = remainingUploads === 1 ? "Plus qu'un envoi" : "Plus que " + remainingUploads + " envois";
-      quotaBox.hidden = false;
     }
   }
 

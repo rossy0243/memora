@@ -16,10 +16,11 @@ from processing.services import (
     create_event_movie_job,
     get_event_movie_schedule_at,
     get_event_zip_filename,
-    get_ready_movie,
     iter_event_zip_chunks,
 )
 from uploads.models import GuestUpload, UploadCategory
+
+from core.models import SiteConfiguration
 
 from .forms import EventForm
 from .access import (
@@ -28,8 +29,10 @@ from .access import (
     has_guest_access,
     record_guest_access_failure,
     reset_guest_access_failures,
+    upcoming_event_response,
 )
 from .models import Event
+from .qr_branding import BRAND_SLOGAN, build_branded_qr_png, brand_contact_items
 from .services import build_event_qr_code_png, build_hourly_upload_breakdown, build_readiness_checklist
 
 
@@ -259,6 +262,9 @@ def public_event_preview(request, slug, access_key):
     )
     if not event.can_accept_guest_uploads:
         return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
+    upcoming = upcoming_event_response(request, event)
+    if upcoming:
+        return upcoming
     if event.requires_guest_access_code and not has_guest_access(request, event):
         access_error = ""
         if request.method == "POST":
@@ -360,13 +366,7 @@ def public_movie_share(request, slug, access_key):
     event = get_object_or_404(Event, slug=slug, public_access_key=access_key, payment_status=Event.PaymentStatus.PAID)
     ready_movie = _get_ready_movie(event)
     if not ready_movie:
-        # L'invite arrive ici depuis la page de remerciement, parfois avant la fin
-        # du film : une page d'attente vaut mieux qu'une erreur 404.
-        return render(
-            request,
-            "events/public_movie_pending.html",
-            {"event": event, "movie_schedule_at": get_event_movie_schedule_at(event)},
-        )
+        raise Http404("Film souvenir indisponible.")
     return render(
         request,
         "events/movie_ready.html",
@@ -465,6 +465,8 @@ def qr_print_sheet(request, pk):
         {
             "event": event,
             "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": event.pk}),
+            "brand_slogan": BRAND_SLOGAN,
+            "brand_contacts": brand_contact_items(SiteConfiguration.current()),
         },
     )
 
@@ -473,8 +475,15 @@ def qr_print_sheet(request, pk):
 def event_qr_code(request, pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     public_url = request.build_absolute_uri(event.get_public_url())
-    response = HttpResponse(build_event_qr_code_png(public_url), content_type="image/png")
-    response["Content-Disposition"] = f'inline; filename="{event.slug}-qr.png"'
+    if request.GET.get("branded"):
+        # Version a telecharger pour l'impression : le QR, puis la marque en petit.
+        response = HttpResponse(
+            build_branded_qr_png(public_url, SiteConfiguration.current()), content_type="image/png"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{event.slug}-qr-memora.png"'
+    else:
+        response = HttpResponse(build_event_qr_code_png(public_url), content_type="image/png")
+        response["Content-Disposition"] = f'inline; filename="{event.slug}-qr.png"'
     response["Cache-Control"] = "private, max-age=300"
     return response
 
@@ -496,7 +505,15 @@ def _get_latest_movie(event):
 
 
 def _get_ready_movie(event):
-    return get_ready_movie(event)
+    return (
+        event.generated_movies.filter(
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file__isnull=False,
+        )
+        .exclude(final_file="")
+        .order_by("-generated_at", "-created_at")
+        .first()
+    )
 
 
 def _movie_download_filename(event, movie):

@@ -385,10 +385,10 @@ class GuestUploadViewTests(TestCase):
         self.assertNotContains(response, "Moment obligatoire")
         self.assertNotContains(response, "Sélectionner le moment")
         self.assertNotContains(response, "moment-select")
-        # Le quota ne s'affiche que lorsqu'il devient utile (2 envois ou moins).
+        # Le plafond est annonce des l'arrivee, sans alarmer.
+        self.assertContains(response, "Jusqu'à 5 souvenirs par invité")
         self.assertNotContains(response, "souvenirs maximum par appareil")
         self.assertNotContains(response, "Il vous reste")
-        self.assertNotContains(response, "Plus que")
         self.assertContains(response, "Envoyer le souvenir")
         self.assertContains(response, "upload-progress.js")
         # Un echec d'envoi (reseau, validation, stockage) doit pouvoir s'afficher
@@ -425,21 +425,36 @@ class GuestUploadViewTests(TestCase):
 
         response = self.client.get(self.upload_url())
 
-        self.assertNotContains(response, "Plus que")
+        self.assertContains(response, "1 souvenir envoyé sur 5")
         self.assertNotContains(response, "Il vous reste")
 
-    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=3)
-    def test_quota_is_only_shown_when_two_uploads_or_fewer_remain(self):
-        self.assertNotContains(self.client.get(self.upload_url()), "Plus que")
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=4)
+    def test_quota_text_and_dots_follow_the_uploads(self):
+        first = self.client.get(self.upload_url())
+        self.assertContains(first, "Jusqu'à 4 souvenirs par invité")
+        self.assertContains(first, "<i></i><i></i><i></i><i></i>", html=False)
+        self.assertNotContains(first, 'class="is-used"')
 
         self.client.post(self.upload_url(), {"media_file": make_test_image_file("un.jpg")})
-        two_left = self.client.get(self.upload_url())
-        self.assertContains(two_left, "Plus que 2 envois")
+        one = self.client.get(self.upload_url())
+        self.assertContains(one, "1 souvenir envoyé sur 4")
+        self.assertContains(one, '<i class="is-used"></i><i></i><i></i><i></i>')
+        # « Terminer » n'apparait qu'une fois un souvenir envoye.
+        self.assertRegex(first.content.decode(), r'id="upload-quota-finish" href="[^"]+" hidden')
+        self.assertNotRegex(one.content.decode(), r'id="upload-quota-finish" href="[^"]+" hidden')
 
         self.client.post(self.upload_url(), {"media_file": make_test_image_file("deux.jpg")})
-        one_left = self.client.get(self.upload_url())
-        self.assertContains(one_left, "Plus qu'un envoi")
-        self.assertNotContains(one_left, "Plus que 1")
+        self.assertContains(self.client.get(self.upload_url()), "Plus que 2 envois")
+
+        self.client.post(self.upload_url(), {"media_file": make_test_image_file("trois.jpg")})
+        self.assertContains(self.client.get(self.upload_url()), "Plus qu'un envoi")
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=12)
+    def test_quota_dots_are_left_out_when_the_limit_is_large(self):
+        response = self.client.get(self.upload_url())
+
+        self.assertContains(response, "Jusqu'à 12 souvenirs par invité")
+        self.assertNotContains(response, "upload-quota-dots")
 
     def test_camera_panel_ships_hidden_and_the_stylesheet_lets_hidden_win(self):
         """`.camera-panel { display: grid }` battait l'attribut hidden : le viseur
@@ -490,11 +505,11 @@ class GuestUploadViewTests(TestCase):
 
         self.assertContains(response, 'data-remaining="5"')
         self.assertContains(response, f'data-thanks-url="{self.thanks_url()}"')
-        # Presents mais caches tant qu'aucun souvenir n'est parti / que le quota est large.
-        self.assertIn('id="sent-summary" hidden', html)
-        self.assertIn('id="upload-quota" hidden', html)
+        self.assertIn('id="upload-quota" data-limit="5"', html)
+        # Le lien « Terminer » existe mais reste cache tant que rien n'est parti.
+        self.assertIn('id="upload-quota-finish"', html)
+        self.assertRegex(html, r'id="upload-quota-finish" href="[^"]+" hidden')
         self.assertContains(response, 'id="camera-sent-count"')
-        self.assertContains(response, "Terminer")
 
     def test_camera_script_keeps_the_guest_in_the_camera_between_sends(self):
         script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
@@ -506,30 +521,7 @@ class GuestUploadViewTests(TestCase):
         self.assertIn("--rec-progress", script)
         self.assertIn("--rec-progress", css)
         # Les blocs caches par attribut doivent vraiment disparaitre.
-        self.assertIn(".upload-quota[hidden]", css)
-
-    def test_confirmation_page_tells_the_guest_when_the_film_arrives(self):
-        response = self.client.get(self.thanks_url())
-
-        # 8 juillet 2026 -> film le lendemain.
-        self.assertContains(response, "sera disponible à partir du")
-        self.assertContains(response, "9 juillet")
-        self.assertContains(response, self.event.get_public_movie_url())
-
-    def test_confirmation_page_links_to_the_film_once_it_is_ready(self):
-        from django.core.files.base import ContentFile
-
-        from processing.models import GeneratedMovie
-
-        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.COMPLETED)
-        movie.final_file.save("film.mp4", ContentFile(b"film"), save=True)
-        self.addCleanup(movie.final_file.storage.delete, movie.final_file.name)
-
-        response = self.client.get(self.thanks_url())
-
-        self.assertContains(response, "Le film souvenir est prêt")
-        self.assertContains(response, "Voir le film")
-        self.assertNotContains(response, "sera disponible à partir du")
+        self.assertIn(".upload-quota a[hidden]", css)
 
     def test_guest_confirmation_page_has_a_single_next_action(self):
         response = self.client.get(self.thanks_url())
@@ -539,6 +531,9 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Envoyer un autre souvenir")
         # « Retour a l'evenement » menait a la meme page d'envoi : un seul bouton.
         self.assertNotContains(response, "Retour à l")
+        # Les films sont pour l'organisateur : l'invite envoie des souvenirs, point.
+        self.assertNotContains(response, "film souvenir sera")
+        self.assertNotContains(response, "Voir le film")
         self.assertContains(response, "Vous pouvez fermer cette page")
 
     def test_guest_upload_requires_guest_access_code_when_enabled(self):

@@ -301,6 +301,15 @@ class Event(models.Model):
         help_text="Date d'envoi du recu de paiement a l'organisateur. Vide = pas encore envoye.",
     )
     is_active = models.BooleanField(default=True)
+    guest_preview_enabled = models.BooleanField(
+        "ouvert aux invités avant la date (test)",
+        default=False,
+        help_text=(
+            "Réservé aux essais de l'équipe : ouvre la collecte aux invités avant le jour "
+            "de l'événement (par défaut, le lien affiche « Rendez-vous le … » jusqu'à la "
+            "date). À retirer une fois le test terminé."
+        ),
+    )
     media_retention_days = models.PositiveIntegerField(default=7)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -346,6 +355,13 @@ class Event(models.Model):
     @property
     def can_accept_guest_uploads(self):
         return self.is_active and self.is_paid
+
+    @property
+    def is_upcoming(self):
+        """Vrai tant que le jour de l'evenement n'est pas arrive (fuseau du site) :
+        la collecte est payee mais pas encore ouverte aux invites. L'equipe peut
+        l'ouvrir avant l'heure pour un essai (`guest_preview_enabled`)."""
+        return not self.guest_preview_enabled and timezone.localdate() < self.event_date
 
     @property
     def formatted_price(self):

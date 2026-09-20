@@ -18,7 +18,19 @@
     <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
     <p class="qr-print-sheet__tagline">Scannez pour partager vos photos et vidéos de la soirée.</p>
     <img class="qr-print-sheet__code" src="{{ event_qr_code_url }}" alt="QR code de {{ event.title }}">
-    <p class="qr-print-sheet__footer">Memora &mdash; {{ event.event_date|date:"d/m/Y" }}</p>
+    <p class="qr-print-sheet__footer">{{ event.event_date|date:"d/m/Y" }}</p>
+
+    {# La marque en petit, sous le QR : jamais a cote, pour ne pas gener la lecture. #}
+    <footer class="qr-print-sheet__brand">
+      <p class="qr-print-sheet__logo">
+        <img src="{% static 'img/memora-mark.svg' %}" alt="" width="28" height="28">
+        <span>Memora</span>
+      </p>
+      <p>{{ brand_slogan }}</p>
+      {% if brand_contacts %}
+        <p class="qr-print-sheet__contact">{% for item in brand_contacts %}<span>{{ item }}</span> {% endfor %}</p>
+      {% endif %}
+    </footer>
   </article>
 </section>
 {% endblock %}

@@ -418,19 +418,6 @@ def _weave_photos_between_videos(videos, photos):
     return selected
 
 
-def get_ready_movie(event):
-    """Dernier film termine de l'evenement (fichier final present), ou None."""
-    return (
-        event.generated_movies.filter(
-            status=GeneratedMovie.Status.COMPLETED,
-            final_file__isnull=False,
-        )
-        .exclude(final_file="")
-        .order_by("-generated_at", "-created_at")
-        .first()
-    )
-
-
 def get_event_movie_schedule_at(event):
     scheduled_date = event.event_date + timedelta(days=1)
     scheduled_time = time(hour=settings.MEMORA_MOVIE_AUTOGENERATE_HOUR)

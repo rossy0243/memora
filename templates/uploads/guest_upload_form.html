@@ -13,8 +13,8 @@
 {% block site_footer %}{% endblock %}
 
 {% block content %}
-<section class="guest-upload-shell">
-  <header class="guest-upload-heading{% if event.cover_image %} guest-upload-heading--cover{% endif %}">
+<section class="guest-upload-shell guest-upload-shell--fill">
+  <header class="guest-upload-heading guest-upload-heading--hero{% if event.cover_image %} guest-upload-heading--cover{% endif %}">
     {% if event.cover_image %}
       <img class="guest-upload-heading__cover" src="{{ event.cover_image.url }}" alt="">
       <div class="guest-upload-heading__shade" aria-hidden="true"></div>
@@ -43,16 +43,15 @@
         <strong>Limite atteinte</strong>
       </div>
     {% else %}
-      {# Toujours present pour que le script puisse l'afficher au fil des envois ; visible seulement a partir de 2 envois restants. #}
-      <div class="upload-quota" id="upload-quota"{% if upload_quota.remaining > 2 %} hidden{% endif %}>
-        <strong id="upload-quota-text">{% if upload_quota.remaining == 1 %}Plus qu'un envoi{% elif upload_quota.remaining == 2 %}Plus que 2 envois{% endif %}</strong>
+      {# Le plafond est annonce des l'arrivee, sans alarmer : un point par souvenir permis, qui se remplit a chaque envoi. #}
+      <div class="upload-quota" id="upload-quota" data-limit="{{ upload_quota.limit }}">
+        {% if quota_slots %}
+          <span class="upload-quota__dots" id="upload-quota-dots" aria-hidden="true">{% for slot in quota_slots %}<i{% if forloop.counter <= upload_quota.used %} class="is-used"{% endif %}></i>{% endfor %}</span>
+        {% endif %}
+        <strong id="upload-quota-text">{% if upload_quota.remaining == 1 %}Plus qu'un envoi{% elif upload_quota.remaining == 2 %}Plus que 2 envois{% elif upload_quota.used %}{{ upload_quota.used }} souvenir{{ upload_quota.used|pluralize }} envoyé{{ upload_quota.used|pluralize }} sur {{ upload_quota.limit }}{% else %}Jusqu'à {{ upload_quota.limit }} souvenirs par invité{% endif %}</strong>
+        <a id="upload-quota-finish" href="{% url 'uploads:thanks' event.slug event.public_access_key %}"{% if not upload_quota.used %} hidden{% endif %}>Terminer</a>
       </div>
     {% endif %}
-
-    <div class="sent-summary" id="sent-summary" hidden>
-      <strong id="sent-summary-text"></strong>
-      <a href="{% url 'uploads:thanks' event.slug event.public_access_key %}">Terminer</a>
-    </div>
 
     <section class="camera-studio{% if upload_quota.is_reached %} camera-studio--quota-reached{% endif %}" id="camera-studio">
       <div class="camera-studio__intro">

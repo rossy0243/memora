@@ -18,14 +18,6 @@
     <p class="section__label">Merci</p>
     <h1>Souvenir envoyé.</h1>
     <p class="confirmation-copy">Merci, votre photo ou vidéo a bien rejoint l'album de {{ event.title }}.</p>
-    {% if ready_movie %}
-      <p class="confirmation-copy">Le film souvenir est prêt.</p>
-      <div class="confirmation-actions">
-        <a class="button button--secondary" href="{{ event.get_public_movie_url }}">Voir le film</a>
-      </div>
-    {% else %}
-      <p class="confirmation-copy">Le film souvenir sera disponible à partir du <strong>{{ movie_schedule_at|date:"j F" }}</strong> sur <a href="{{ event.get_public_movie_url }}">cette page</a>.</p>
-    {% endif %}
     <div class="confirmation-actions">
       <a class="button button--primary" href="{% url 'uploads:create' event.slug event.public_access_key %}">Envoyer un autre souvenir</a>
     </div>

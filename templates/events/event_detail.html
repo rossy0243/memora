@@ -71,7 +71,7 @@
           <code id="public-event-url">{{ public_event_url }}</code>
           <div class="quick-actions">
             <button class="button button--secondary button--compact" type="button" data-copy-target="public-event-url">Copier le lien</button>
-            <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}" download>Télécharger QR</a>
+            <a class="button button--secondary button--compact" href="{{ event_qr_code_url }}?branded=1" download>Télécharger QR</a>
             <a class="button button--secondary button--compact" href="{{ qr_print_sheet_url }}">Fiche à imprimer</a>
             {% if event.is_paid %}
               <a class="button button--secondary button--compact" href="{{ event.get_public_url }}">Tester</a>

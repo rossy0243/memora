@@ -1802,6 +1802,53 @@ h2 {
   font-size: 0.85rem;
 }
 
+/* La marque Memora en petit : logo, slogan, filet dore, contact. */
+.qr-print-sheet__brand {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--color-hairline);
+  padding-top: 18px;
+  width: 100%;
+}
+
+.qr-print-sheet__brand p.qr-print-sheet__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-ink);
+  font-family: var(--font-display, "Fraunces", Georgia, serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.qr-print-sheet__logo img {
+  width: 28px;
+  height: 28px;
+}
+
+.qr-print-sheet__brand p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.qr-print-sheet__brand .qr-print-sheet__contact {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+/* Chaque contact reste d'un seul tenant ; le point separateur se met devant le suivant. */
+.qr-print-sheet__contact span {
+  white-space: nowrap;
+}
+
+.qr-print-sheet__contact span:not(:last-child)::after {
+  content: " ·";
+}
+
 @media print {
   .site-header,
   .site-footer,
@@ -2759,6 +2806,69 @@ h2 {
   color: var(--color-muted);
 }
 
+/* Page d'envoi des invites : l'en-tete devient un « heros ». La photo de l'evenement
+   occupe toute la hauteur que laissent les boutons (qui restent sous le pouce, en
+   bas), le texte est cale dessous sur un voile qui ne s'assombrit que la ou il
+   porte le texte. Sans photo, un fond de marque garde le meme decor. Classes
+   dediees : la page de l'agent du livre d'or partage les classes de base. */
+.guest-upload-shell--fill {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - 73px);
+  min-height: calc(100svh - 73px);
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+}
+
+.guest-upload-shell--fill > .guest-upload-form {
+  flex: 0 0 auto;
+}
+
+.guest-upload-heading--hero {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  min-height: 240px;
+  margin-bottom: 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  color: #fff;
+  background: linear-gradient(160deg, #4a3a40, #241f22);
+}
+
+.guest-upload-heading--hero .guest-upload-heading__shade {
+  background: linear-gradient(
+    180deg,
+    rgba(36, 31, 34, 0.04) 0%,
+    rgba(36, 31, 34, 0.16) 42%,
+    rgba(36, 31, 34, 0.82) 100%
+  );
+}
+
+.guest-upload-heading--hero .guest-upload-heading__content {
+  width: 100%;
+}
+
+.guest-upload-heading--hero .section__label {
+  margin-bottom: 8px;
+  color: var(--color-champagne);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+
+.guest-upload-heading--hero h1 {
+  color: #fff;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Trois classes : le message de bienvenue est le dernier paragraphe de l'en-tete,
+   et `.guest-upload-heading p:last-child` lui imposait un gris illisible. */
+.guest-upload-heading--hero .guest-upload-heading__content .guest-upload-heading__welcome {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
+}
+
 .guest-upload-form {
   display: grid;
   gap: 20px;
@@ -2825,31 +2935,48 @@ h2 {
   text-align: right;
 }
 
-.upload-quota[hidden],
-.sent-summary[hidden],
 .camera-sent-count[hidden] {
   display: none;
 }
 
-/* Rappel discret de ce qui est deja parti, avec la sortie « Terminer ». */
-.sent-summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid rgba(107, 155, 114, 0.35);
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
-  background: rgba(223, 231, 221, 0.6);
-  color: #25563d;
-  font-size: 0.92rem;
+/* Le plafond de souvenirs, annonce sans alarmer : des points qui se remplissent. */
+#upload-quota {
+  justify-content: flex-start;
+  align-items: center;
 }
 
-.sent-summary a {
-  color: #25563d;
+.upload-quota__dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.upload-quota__dots i {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--color-muted);
+  border-radius: 50%;
+  opacity: 0.55;
+}
+
+.upload-quota__dots i.is-used {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  opacity: 1;
+}
+
+.upload-quota a {
+  margin-left: auto;
+  color: var(--color-primary-active);
+  font-size: 0.86rem;
   font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.upload-quota a[hidden] {
+  display: none;
 }
 
 /* Compteur d'envois dans la camera plein ecran. */
@@ -2911,6 +3038,13 @@ h2 {
   padding: 18px;
 }
 
+.camera-studio__intro span {
+  color: var(--color-champagne);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .camera-studio__intro strong {
   font-size: 1.18rem;
 }
@@ -2941,7 +3075,9 @@ h2 {
 }
 
 /* « (10 s max) » sous « Vidéo » plutot qu'une coupure au hasard du libelle. */
-.camera-studio__limit {
+.camera-studio__intro .camera-studio__limit {
+  color: inherit;
+  text-transform: none;
   font-size: 0.78em;
   white-space: nowrap;
   font-weight: 600;

@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import path, reverse
+from django.views.decorators.http import require_POST
 
 from uploads.models import UploadCategory
 
@@ -86,12 +89,14 @@ class GuestBookAssignmentInline(admin.TabularInline):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     inlines = [UploadCategoryInline, GuestBookAssignmentInline]
-    actions = ("mark_events_paid", "purge_r2_files")
+    actions = ("mark_events_paid", "open_for_guest_test", "close_guest_test", "purge_r2_files")
+    change_form_template = "admin/events/event/change_form.html"
     list_display = (
         "title",
         "organizer",
         "event_type",
         "event_date",
+        "guest_preview_enabled",
         "payment_status",
         "formatted_price",
         "paid_at",
@@ -145,6 +150,7 @@ class EventAdmin(admin.ModelAdmin):
                     "guest_access_code",
                     "qr_code_image",
                     "is_active",
+                    "guest_preview_enabled",
                 )
             },
         ),
@@ -213,6 +219,52 @@ class EventAdmin(admin.ModelAdmin):
             request,
             f"{updated} evenement(s) marque(s) comme paye(s), {receipts_sent} recu(s) envoye(s) par e-mail.",
         )
+
+    def _set_guest_preview(self, request, queryset, enabled):
+        queryset.update(guest_preview_enabled=enabled)
+        return queryset.count()
+
+    @admin.action(description="Ouvrir aux invites pour test (avant la date)")
+    def open_for_guest_test(self, request, queryset):
+        count = self._set_guest_preview(request, queryset, True)
+        self.message_user(
+            request,
+            f"{count} evenement(s) ouvert(s) aux invites pour test. Pensez a refermer le test ensuite.",
+            level=messages.WARNING,
+        )
+
+    @admin.action(description="Refermer le test invites (retour a la date)")
+    def close_guest_test(self, request, queryset):
+        count = self._set_guest_preview(request, queryset, False)
+        self.message_user(request, f"{count} evenement(s) : le lien attend a nouveau la date de l'evenement.")
+
+    def get_urls(self):
+        custom = [
+            path(
+                "<path:object_id>/basculer-test-invites/",
+                self.admin_site.admin_view(require_POST(self.toggle_guest_test)),
+                name="events_event_toggle_guest_test",
+            )
+        ]
+        return custom + super().get_urls()
+
+    def toggle_guest_test(self, request, object_id):
+        """Bouton de la fiche evenement : ouvre ou referme le test avant la date."""
+        event = get_object_or_404(Event, pk=object_id)
+        if not self.has_change_permission(request, event):
+            return redirect("admin:index")
+        event.guest_preview_enabled = not event.guest_preview_enabled
+        event.save(update_fields=["guest_preview_enabled", "updated_at"])
+        if event.guest_preview_enabled:
+            self.message_user(
+                request,
+                f"Ouvert aux invites pour test : {request.build_absolute_uri(event.get_public_url())} "
+                "— pensez a refermer le test ensuite.",
+                level=messages.WARNING,
+            )
+        else:
+            self.message_user(request, "Test referme : le lien attend a nouveau la date de l'evenement.")
+        return redirect(reverse("admin:events_event_change", args=[event.pk]))
 
     @admin.action(description="Purger les fichiers R2 (garder l'evenement)")
     def purge_r2_files(self, request, queryset):

@@ -1,11 +1,31 @@
+from datetime import datetime, time
 from hashlib import sha256
 import math
 
 from django.conf import settings
 from django.core.cache import cache
+from django.shortcuts import render
 from django.utils import timezone
 
 from core.security import get_client_ip
+
+
+def is_event_preview_user(request, event):
+    """L'organisateur (et l'equipe Memora) peuvent essayer le parcours invite avant le jour J."""
+    user = request.user
+    return user.is_authenticated and (user.pk == event.organizer_id or user.is_staff)
+
+
+def upcoming_event_response(request, event):
+    """Page d'attente si l'evenement est paye mais que son jour n'est pas arrive.
+
+    Le lien (et le QR code) est le meme le jour J : il ouvre alors directement la
+    prise de photo ou de video. Renvoie None quand la collecte est ouverte.
+    """
+    if not event.is_upcoming or is_event_preview_user(request, event):
+        return None
+    opens_at = timezone.make_aware(datetime.combine(event.event_date, time.min))
+    return render(request, "events/public_event_upcoming.html", {"event": event, "opens_at": opens_at})
 
 
 def event_access_session_key(event):
