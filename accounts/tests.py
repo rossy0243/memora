@@ -448,6 +448,25 @@ class AccountDataExportTests(TestCase):
             payload = archive.read("compte.json").decode()
             self.assertIn("exporter", payload)
 
+    def test_export_includes_the_song_the_organizer_uploaded(self):
+        from io import BytesIO
+        from zipfile import ZipFile
+
+        from django.core.files.base import ContentFile
+
+        self.event.custom_music_file.save("ma-chanson.mp3", ContentFile(b"song-bytes"), save=True)
+        self.addCleanup(self.event.custom_music_file.storage.delete, self.event.custom_music_file.name)
+        self.client.login(username="exporter", password="secret")
+
+        response = self.client.get(reverse("accounts:export_data"))
+
+        with ZipFile(BytesIO(b"".join(response.streaming_content))) as archive:
+            songs = [n for n in archive.namelist() if "/musique/" in n]
+            self.assertEqual(len(songs), 1)
+            self.assertEqual(archive.read(songs[0]), b"song-bytes")
+            event_json = next(n for n in archive.namelist() if n.endswith("evenement.json"))
+            self.assertIn("ma-chanson", archive.read(event_json).decode())
+
     def test_export_only_contains_the_requesting_users_events(self):
         from io import BytesIO
         from zipfile import ZipFile

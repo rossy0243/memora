@@ -208,12 +208,15 @@ def purge_event_media(event, *, include_deliverables=True):
             montage.media_purged = True
             montage.save(update_fields=["final_file", "light_file", "media_purged"])
 
-    for field_name in ("cover_image", "qr_code_image"):
+    # La chanson televersee par l'organisateur est un fichier a lui : elle part avec
+    # l'evenement, comme la couverture et le QR code.
+    event_fields = ("cover_image", "qr_code_image", "custom_music_file")
+    for field_name in event_fields:
         if drop(event, field_name):
             counts["event"] += 1
             setattr(event, field_name, "")
     if counts["event"]:
-        event.save(update_fields=["cover_image", "qr_code_image", "updated_at"])
+        event.save(update_fields=[*event_fields, "updated_at"])
 
     logger.info("purge_event_media event=%s counts=%s", event.pk, counts)
     return counts

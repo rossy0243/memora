@@ -123,6 +123,9 @@ def _event_payload(event):
             for m in messages
         ],
         "films": films,
+        "musique_personnalisee": (
+            event.custom_music_file.name.rsplit("/", 1)[-1] if event.custom_music_file else None
+        ),
     }, uploads, messages, movie, montage
 
 
@@ -168,6 +171,10 @@ def iter_account_export_zip_chunks(user):
             for field in _film_fields(movie, montage):
                 name = _unique(f"{root}/films/{field.name.rsplit('/', 1)[-1]}", used)
                 yield from _write_file(archive, buffer, field, name)
+
+            if event.custom_music_file:
+                name = _unique(f"{root}/musique/{event.custom_music_file.name.rsplit('/', 1)[-1]}", used)
+                yield from _write_file(archive, buffer, event.custom_music_file, name)
 
     yield from buffer.drain()
 

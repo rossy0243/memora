@@ -1680,6 +1680,22 @@ class PurgeEventMediaTests(TestCase):
         self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
         self.assertEqual(self.event.guest_uploads.count(), 1)
 
+    def test_purge_event_media_also_removes_the_organizers_song(self):
+        from django.core.files.base import ContentFile
+
+        from events.services import purge_event_media
+
+        self.event.custom_music_file.save("chanson.mp3", ContentFile(b"song"), save=True)
+        storage, name = self.event.custom_music_file.storage, self.event.custom_music_file.name
+        self.assertTrue(storage.exists(name))
+
+        counts = purge_event_media(self.event)
+
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.custom_music_file)
+        self.assertFalse(storage.exists(name))
+        self.assertGreaterEqual(counts["event"], 1)
+
     def test_admin_delete_purges_r2_then_removes_event(self):
         from django.contrib.admin.sites import AdminSite
 
