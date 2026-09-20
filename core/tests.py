@@ -608,3 +608,26 @@ class CanonicalHostRedirectTests(TestCase):
         response = self._get("/health/", "memora-web-vsib.onrender.com")
 
         self.assertEqual(response.status_code, 200)
+
+
+class SetSupportContactCommandTests(TestCase):
+    def test_sets_and_reports_the_support_contact(self):
+        out = StringIO()
+
+        call_command("set_support_contact", "--email", "contact@memoracd.site", stdout=out)
+
+        configuration = SiteConfiguration.current()
+        self.assertEqual(configuration.support_email, "contact@memoracd.site")
+        self.assertIn("contact@memoracd.site", out.getvalue())
+        self.assertIn("support_email", out.getvalue())
+
+    def test_without_options_only_reads(self):
+        configuration = SiteConfiguration.current()
+        configuration.support_whatsapp = "+243 990 000 000"
+        configuration.save()
+        out = StringIO()
+
+        call_command("set_support_contact", stdout=out)
+
+        self.assertIn("+243 990 000 000", out.getvalue())
+        self.assertNotIn("modifie", out.getvalue())
