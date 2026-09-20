@@ -523,6 +523,25 @@ class GuestUploadViewTests(TestCase):
         # Les blocs caches par attribut doivent vraiment disparaitre.
         self.assertIn(".upload-quota a[hidden]", css)
 
+    def test_recording_asks_safari_for_mp4_and_explains_an_unreadable_preview(self):
+        """Safari (iOS 18.4+) enregistre en WebM/VP9 mais ne le relit pas toujours :
+        apercu noir avec « Video prete - 11,2 Mo » et aucune duree. On lui demande du
+        MP4, et si l'apercu reste illisible on le dit au lieu de laisser croire a un bug."""
+        for name in ("upload-progress.js", "guestbook-capture.js"):
+            script = (settings.BASE_DIR / "static" / "js" / name).read_text(encoding="utf-8")
+
+            self.assertIn("prefersMp4Recording", script, name)
+            self.assertIn("video/mp4;codecs=avc1.42E01E,mp4a.40.2", script, name)
+            self.assertIn("iP(hone|ad|od)", script, name)
+            self.assertIn("explainUnreadablePreview", script, name)
+            self.assertIn("Aperçu indisponible sur cet appareil", script, name)
+
+    def test_cover_photo_is_framed_towards_the_top_so_faces_are_not_cut(self):
+        css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
+
+        self.assertIn(".guest-upload-heading--hero .guest-upload-heading__cover", css)
+        self.assertIn("object-position: 50% 18%", css)
+
     def test_guest_confirmation_page_has_a_single_next_action(self):
         response = self.client.get(self.thanks_url())
 

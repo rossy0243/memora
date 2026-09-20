@@ -63,7 +63,7 @@
             <button class="button button--primary" type="button" id="start-camera-photo-button" aria-label="Ouvrir la caméra en mode photo">Photo</button>
             <button class="button button--primary" type="button" id="start-camera-video-button" aria-label="Ouvrir la caméra en mode vidéo">Vidéo <span class="camera-studio__limit">(10 s max)</span></button>
           </div>
-          <p id="camera-permission-note">Votre navigateur demandera l'autorisation caméra et micro.</p>
+          <p id="camera-permission-note">L'accès caméra et micro vous sera demandé.</p>
         {% endif %}
       </div>
 
@@ -102,7 +102,7 @@
     {% if not upload_quota.is_reached %}
       {# Secours si la camera integree ne s'ouvre pas : l'appareil photo du telephone, en PHOTO uniquement (jamais la galerie, jamais une video : le souvenir doit etre pris sur le moment). Cet input n'a pas de nom : il n'est jamais envoye tel quel, native-photo.js confie la photo au champ principal. #}
       <div class="native-photo">
-        <button class="native-photo__button" type="button" id="native-photo-button">La caméra ne s'ouvre pas&nbsp;? Prendre une photo avec le téléphone</button>
+        <button class="native-photo__button" type="button" id="native-photo-button">Caméra indisponible&nbsp;? Photo avec le téléphone</button>
         <input type="file" id="native-photo-input" accept="image/*" capture="environment" hidden>
         <p class="native-photo__error" id="native-photo-error" role="alert" hidden>Seule une photo prise à l'instant est acceptée.</p>
       </div>

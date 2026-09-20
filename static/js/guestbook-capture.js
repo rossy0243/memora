@@ -336,11 +336,24 @@
     openCaptureReview();
   }
 
+  // Safari sur iPhone/iPad (tous les navigateurs iOS reposent sur WebKit) sait
+  // ENREGISTRER en WebM/VP9 depuis iOS 18.4, mais ne relit pas toujours ce fichier
+  // dans <video> : apercu noir, alors que la video est bien capturee. On lui
+  // demande donc du MP4 (H.264/AAC), que ses lecteurs decodent toujours.
+  function prefersMp4Recording() {
+    const ua = navigator.userAgent || "";
+    const isIos = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const isDesktopSafari = /Safari/.test(ua) && !/Chrom(e|ium)|Android|CriOS|FxiOS|Edg/.test(ua);
+    return isIos || isDesktopSafari;
+  }
+
   function supportedVideoMimeType() {
     if (!window.MediaRecorder) {
       return "";
     }
-    const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+    const webm = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    const mp4 = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4"];
+    const candidates = prefersMp4Recording() ? mp4.concat(webm) : webm.concat(mp4);
     return candidates.find(function (candidate) {
       return MediaRecorder.isTypeSupported(candidate);
     }) || "";
@@ -497,6 +510,20 @@
             });
           }
         }, { once: true });
+        // Filet de securite : si le navigateur n'arrive pas a relire son propre
+        // enregistrement (ecran noir), on le dit au lieu de laisser croire a un
+        // bug ; le fichier, lui, est bien capture et peut etre envoye.
+        function explainUnreadablePreview() {
+          if (!previewVideo.getAttribute("src") || previewVideo.readyState > 0 || !previewDetails) {
+            return;
+          }
+          const sizeLabel = formatFileSize(file.size);
+          previewDetails.textContent =
+            "Aperçu indisponible sur cet appareil, mais le message est bien enregistré" +
+            (sizeLabel ? " (" + sizeLabel + ")" : "") + ". Vous pouvez l'envoyer.";
+        }
+        previewVideo.addEventListener("error", explainUnreadablePreview, { once: true });
+        window.setTimeout(explainUnreadablePreview, 4000);
         previewVideo.load();
       }
     });

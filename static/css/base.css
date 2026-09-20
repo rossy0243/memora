@@ -2824,11 +2824,47 @@ h2 {
   flex: 0 0 auto;
 }
 
+/* Bloc d'action compact : plus il est bas et bas de plafond, plus la photo des maries
+   garde de hauteur (et moins elle est coupee). */
+.guest-upload-shell--fill {
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.guest-upload-shell--fill > .guest-upload-form {
+  gap: 10px;
+  padding: 12px;
+}
+
+.guest-upload-shell--fill .camera-studio__intro {
+  gap: 8px;
+  padding: 14px;
+}
+
+.guest-upload-shell--fill .camera-studio__intro p {
+  font-size: 0.82rem;
+}
+
+.guest-upload-shell--fill .native-photo {
+  margin-top: 0;
+}
+
+.guest-upload-shell--fill .native-photo__button {
+  min-height: 38px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+/* Les visages sont dans le haut de la photo : on cadre en haut plutot qu'au centre. */
+.guest-upload-heading--hero .guest-upload-heading__cover {
+  object-position: 50% 18%;
+}
+
 .guest-upload-heading--hero {
   display: flex;
   flex: 1 1 auto;
   align-items: flex-end;
-  min-height: 240px;
+  min-height: 300px;
   margin-bottom: 0;
   overflow: hidden;
   border-radius: var(--radius-lg);
