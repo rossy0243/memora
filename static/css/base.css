@@ -2825,6 +2825,47 @@ h2 {
   text-align: right;
 }
 
+.upload-quota[hidden],
+.sent-summary[hidden],
+.camera-sent-count[hidden] {
+  display: none;
+}
+
+/* Rappel discret de ce qui est deja parti, avec la sortie « Terminer ». */
+.sent-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(107, 155, 114, 0.35);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  background: rgba(223, 231, 221, 0.6);
+  color: #25563d;
+  font-size: 0.92rem;
+}
+
+.sent-summary a {
+  color: #25563d;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Compteur d'envois dans la camera plein ecran. */
+.camera-sent-count {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  right: 12px;
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: #fff;
+  background: rgba(37, 86, 61, 0.9);
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
 /* Quand la limite est atteinte, la mention redevient visible. */
 .upload-quota--full {
   border: 1px solid rgba(159, 79, 95, 0.28);
@@ -2996,7 +3037,7 @@ body.camera-open {
   transform: scaleX(-1);
 }
 
-.camera-live span {
+.camera-live > #camera-status {
   position: absolute;
   left: 12px;
   bottom: 12px;
@@ -3153,6 +3194,23 @@ body.camera-open {
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.camera-shutter {
+  position: relative;
+}
+
+/* Cercle de compte a rebours pendant l'enregistrement : il se remplit en 10 s,
+   l'invite voit venir la fin sans lire le chronometre. */
+.camera-shutter--stop::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border-radius: 50%;
+  background: conic-gradient(#ff9b8f calc(var(--rec-progress, 0) * 360deg), rgba(255, 255, 255, 0.2) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  pointer-events: none;
 }
 
 .camera-shutter span {

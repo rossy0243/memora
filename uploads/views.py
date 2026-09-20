@@ -6,6 +6,7 @@ from django.urls import reverse
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from events.access import has_guest_access
 from events.models import Event
+from processing.services import get_event_movie_schedule_at, get_ready_movie
 
 from .forms import GuestUploadForm
 from .services import (
@@ -90,4 +91,12 @@ def guest_upload_thanks(request, slug, access_key):
         return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
     if not has_guest_access(request, event):
         return redirect(event.get_public_url())
-    return render(request, "uploads/guest_upload_thanks.html", {"event": event})
+    return render(
+        request,
+        "uploads/guest_upload_thanks.html",
+        {
+            "event": event,
+            "ready_movie": get_ready_movie(event),
+            "movie_schedule_at": get_event_movie_schedule_at(event),
+        },
+    )

@@ -28,7 +28,7 @@
     </div>
   </header>
 
-  <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}">
+  <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}" data-remaining="{{ upload_quota.remaining }}" data-thanks-url="{% url 'uploads:thanks' event.slug event.public_access_key %}">
     {% csrf_token %}
     {{ form.client_duration_seconds }}
     {{ form.non_field_errors }}
@@ -42,11 +42,17 @@
         <span>{{ upload_quota.limit }} souvenirs maximum par appareil</span>
         <strong>Limite atteinte</strong>
       </div>
-    {% elif upload_quota.remaining <= 2 %}
-      <div class="upload-quota">
-        <strong>{% if upload_quota.remaining == 1 %}Plus qu'un envoi{% else %}Plus que {{ upload_quota.remaining }} envois{% endif %}</strong>
+    {% else %}
+      {# Toujours present pour que le script puisse l'afficher au fil des envois ; visible seulement a partir de 2 envois restants. #}
+      <div class="upload-quota" id="upload-quota"{% if upload_quota.remaining > 2 %} hidden{% endif %}>
+        <strong id="upload-quota-text">{% if upload_quota.remaining == 1 %}Plus qu'un envoi{% elif upload_quota.remaining == 2 %}Plus que 2 envois{% endif %}</strong>
       </div>
     {% endif %}
+
+    <div class="sent-summary" id="sent-summary" hidden>
+      <strong id="sent-summary-text"></strong>
+      <a href="{% url 'uploads:thanks' event.slug event.public_access_key %}">Terminer</a>
+    </div>
 
     <section class="camera-studio{% if upload_quota.is_reached %} camera-studio--quota-reached{% endif %}" id="camera-studio">
       <div class="camera-studio__intro">
@@ -71,6 +77,7 @@
         <div class="camera-live">
           <video id="camera-live-video" autoplay muted playsinline></video>
           <span id="camera-status">Caméra prête</span>
+          <span class="camera-sent-count" id="camera-sent-count" hidden></span>
           <em class="camera-orientation-hint">Tournez le téléphone en portrait pour une prise plus stable.</em>
           <strong class="camera-recording-badge" id="camera-recording-badge" hidden>REC <span id="camera-recording-timer">0,0 s</span></strong>
           <strong class="camera-feedback" id="camera-feedback" hidden></strong>

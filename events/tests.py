@@ -989,13 +989,14 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Télécharger le film")
         self.assertNotContains(response, "Retour dashboard")
 
-    def test_public_movie_share_hides_unfinished_movie(self):
+    def test_public_movie_share_shows_a_waiting_page_for_an_unfinished_movie(self):
         event = Event.objects.create(
             organizer=self.user,
             title="Reception Film Non Pret",
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
+        self.mark_paid(event)
         GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
 
         response = self.client.get(
@@ -1003,6 +1004,25 @@ class EventViewTests(TestCase):
                 "public_movie",
                 kwargs={"slug": event.slug, "access_key": event.public_access_key},
             )
+        )
+
+        # L'invite qui y arrive depuis la page de remerciement ne doit pas voir une 404.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Le film est en préparation")
+        self.assertContains(response, "9 juillet 2026")
+        self.assertNotContains(response, "Télécharger")
+        self.assertNotContains(response, "site-footer")
+
+    def test_public_movie_share_of_an_unpaid_event_is_still_a_404(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Non Payee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+        response = self.client.get(
+            reverse("public_movie", kwargs={"slug": event.slug, "access_key": event.public_access_key})
         )
 
         self.assertEqual(response.status_code, 404)

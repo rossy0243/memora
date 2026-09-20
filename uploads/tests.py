@@ -484,6 +484,53 @@ class GuestUploadViewTests(TestCase):
         self.assertNotIn("cameraFilters", script)
         self.assertNotIn("data-camera-filter", script)
 
+    def test_form_exposes_what_the_script_needs_to_stay_in_the_camera(self):
+        response = self.client.get(self.upload_url())
+        html = response.content.decode()
+
+        self.assertContains(response, 'data-remaining="5"')
+        self.assertContains(response, f'data-thanks-url="{self.thanks_url()}"')
+        # Presents mais caches tant qu'aucun souvenir n'est parti / que le quota est large.
+        self.assertIn('id="sent-summary" hidden', html)
+        self.assertIn('id="upload-quota" hidden', html)
+        self.assertContains(response, 'id="camera-sent-count"')
+        self.assertContains(response, "Terminer")
+
+    def test_camera_script_keeps_the_guest_in_the_camera_between_sends(self):
+        script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
+        css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
+
+        self.assertIn("finishSuccessfulSend", script)
+        self.assertIn("Envoyé ✓", script)
+        # Le cercle de compte a rebours suit l'enregistrement de la video.
+        self.assertIn("--rec-progress", script)
+        self.assertIn("--rec-progress", css)
+        # Les blocs caches par attribut doivent vraiment disparaitre.
+        self.assertIn(".upload-quota[hidden]", css)
+
+    def test_confirmation_page_tells_the_guest_when_the_film_arrives(self):
+        response = self.client.get(self.thanks_url())
+
+        # 8 juillet 2026 -> film le lendemain.
+        self.assertContains(response, "sera disponible à partir du")
+        self.assertContains(response, "9 juillet")
+        self.assertContains(response, self.event.get_public_movie_url())
+
+    def test_confirmation_page_links_to_the_film_once_it_is_ready(self):
+        from django.core.files.base import ContentFile
+
+        from processing.models import GeneratedMovie
+
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.COMPLETED)
+        movie.final_file.save("film.mp4", ContentFile(b"film"), save=True)
+        self.addCleanup(movie.final_file.storage.delete, movie.final_file.name)
+
+        response = self.client.get(self.thanks_url())
+
+        self.assertContains(response, "Le film souvenir est prêt")
+        self.assertContains(response, "Voir le film")
+        self.assertNotContains(response, "sera disponible à partir du")
+
     def test_guest_confirmation_page_has_a_single_next_action(self):
         response = self.client.get(self.thanks_url())
 

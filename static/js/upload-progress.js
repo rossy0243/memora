@@ -31,6 +31,11 @@
   const progressBar = form.querySelector(".upload-progress__bar span");
   const progressText = form.querySelector(".upload-progress p");
   const submitButton = form.querySelector("button[type='submit']");
+  const quotaBox = document.getElementById("upload-quota");
+  const quotaText = document.getElementById("upload-quota-text");
+  const sentSummary = document.getElementById("sent-summary");
+  const sentSummaryText = document.getElementById("sent-summary-text");
+  const cameraSentCount = document.getElementById("camera-sent-count");
   const initialSubmitLabel = submitButton ? submitButton.textContent : "";
   let previewUrl = "";
   let cameraStream = null;
@@ -45,6 +50,10 @@
   let isSwitchingCamera = false;
   let isStoppingRecording = false;
   const maxRecordingSeconds = 10;
+  // Envois reussis depuis cette page, et envois encore permis : la page reste en
+  // camera entre deux souvenirs au lieu de se recharger.
+  let sentCount = 0;
+  let remainingUploads = parseInt(form.dataset.remaining, 10);
   let slowUploadTimer = null;
   let verySlowUploadTimer = null;
 
@@ -163,6 +172,9 @@
     if (!isRecording && recordingTimer) {
       recordingTimer.textContent = "0,0 s";
     }
+    if (!isRecording && cameraActionButton) {
+      cameraActionButton.style.setProperty("--rec-progress", "0");
+    }
     updateCameraUi();
   }
 
@@ -173,6 +185,9 @@
     const elapsed = Math.min((Date.now() - recordingStartedAt) / 1000, maxRecordingSeconds);
     // Le "/ 10 s" pousse naturellement vers le chemin le plus court : laisser
     // l'auto-stop couper au lieu de chercher le bouton pour arreter soi-meme.
+    if (cameraActionButton) {
+      cameraActionButton.style.setProperty("--rec-progress", String(elapsed / maxRecordingSeconds));
+    }
     const elapsedLabel = elapsed.toFixed(elapsed >= 10 ? 0 : 1).replace(".", ",");
     recordingTimer.textContent = elapsedLabel + " / " + maxRecordingSeconds + " s";
     setCameraStatus("Vidéo en cours - stop pour terminer");
@@ -670,6 +685,22 @@
     captureErrors.innerHTML = "";
   }
 
+  function updateSentUi() {
+    const sentLabel = sentCount + " souvenir" + (sentCount > 1 ? "s envoyés" : " envoyé");
+    if (sentSummary && sentSummaryText) {
+      sentSummaryText.textContent = "✓ " + sentLabel;
+      sentSummary.hidden = false;
+    }
+    if (cameraSentCount) {
+      cameraSentCount.textContent = "✓ " + sentCount + " envoyé" + (sentCount > 1 ? "s" : "");
+      cameraSentCount.hidden = false;
+    }
+    if (quotaBox && quotaText && remainingUploads <= 2) {
+      quotaText.textContent = remainingUploads === 1 ? "Plus qu'un envoi" : "Plus que " + remainingUploads + " envois";
+      quotaBox.hidden = false;
+    }
+  }
+
   form.addEventListener("submit", function (event) {
     if (!window.XMLHttpRequest || !window.FormData) {
       return;
@@ -745,6 +776,27 @@
       }
     }
 
+    // Souvenir envoye et il en reste : on vide l'apercu et on rouvre la camera,
+    // avec une confirmation et un compteur. Aucun rechargement de page.
+    function finishSuccessfulSend() {
+      if (progress) {
+        progress.hidden = true;
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = initialSubmitLabel;
+      }
+      if (retakeCameraButton) {
+        retakeCameraButton.disabled = false;
+      }
+      clearPreview();
+      fileInput.value = "";
+      setClientDuration(null);
+      updateSentUi();
+      startCamera();
+      showCameraFeedback("Envoyé ✓", "success");
+    }
+
     request.addEventListener("load", function () {
       const responseUrl = request.responseURL || form.action;
       const currentAction = new URL(form.action, window.location.href).href;
@@ -755,7 +807,15 @@
         if (progressBar) {
           progressBar.style.width = "100%";
         }
-        window.location.assign(responseUrl);
+        sentCount += 1;
+        remainingUploads -= 1;
+        // Plus d'envoi possible (ou pas de compteur fiable) : la page de
+        // remerciement conclut. Sinon on reste en camera pour le souvenir suivant.
+        if (!(remainingUploads > 0) || !window.DataTransfer) {
+          window.location.assign(responseUrl);
+          return;
+        }
+        finishSuccessfulSend();
         return;
       }
 

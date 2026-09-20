@@ -16,6 +16,7 @@ from processing.services import (
     create_event_movie_job,
     get_event_movie_schedule_at,
     get_event_zip_filename,
+    get_ready_movie,
     iter_event_zip_chunks,
 )
 from uploads.models import GuestUpload, UploadCategory
@@ -359,7 +360,13 @@ def public_movie_share(request, slug, access_key):
     event = get_object_or_404(Event, slug=slug, public_access_key=access_key, payment_status=Event.PaymentStatus.PAID)
     ready_movie = _get_ready_movie(event)
     if not ready_movie:
-        raise Http404("Film souvenir indisponible.")
+        # L'invite arrive ici depuis la page de remerciement, parfois avant la fin
+        # du film : une page d'attente vaut mieux qu'une erreur 404.
+        return render(
+            request,
+            "events/public_movie_pending.html",
+            {"event": event, "movie_schedule_at": get_event_movie_schedule_at(event)},
+        )
     return render(
         request,
         "events/movie_ready.html",
@@ -489,15 +496,7 @@ def _get_latest_movie(event):
 
 
 def _get_ready_movie(event):
-    return (
-        event.generated_movies.filter(
-            status=GeneratedMovie.Status.COMPLETED,
-            final_file__isnull=False,
-        )
-        .exclude(final_file="")
-        .order_by("-generated_at", "-created_at")
-        .first()
-    )
+    return get_ready_movie(event)
 
 
 def _movie_download_filename(event, movie):
