@@ -119,9 +119,9 @@ class GuestBookMovie(models.Model):
     """Montage integral du livre d'or : tous les messages, dans l'ordre, chacun
     precede d'un carton « De la part de … ».
 
-    Livrable distinct du film souvenir (GeneratedMovie) et rendu avec la meme
-    exigence (Remotion) : un evenement a au plus un montage, regenere sur place
-    si de nouveaux messages arrivent.
+    Livrable distinct du film souvenir (GeneratedMovie), rendu en pipeline
+    hybride (cartons Remotion + assemblage FFmpeg) : un evenement a au plus un
+    montage, regenere sur place si de nouveaux messages arrivent.
     """
 
     class Status(models.TextChoices):
@@ -143,7 +143,7 @@ class GuestBookMovie(models.Model):
     progress_percent = models.FloatField(
         default=0,
         help_text=(
-            "Avancement 0-100, a la decimale pres pendant le rendu Remotion "
+            "Avancement 0-100, a la decimale pres pendant le montage "
             "(voir processing.guestbook_montage.render_guestbook_montage)."
         ),
     )
@@ -153,9 +153,20 @@ class GuestBookMovie(models.Model):
         blank=True,
         null=True,
     )
+    # Version 720p legere pour le telephone (4G, forfait limite). Optionnelle :
+    # son echec ne doit jamais faire perdre le montage HD.
+    light_file = models.FileField(
+        upload_to=guestbook_movie_upload_path,
+        blank=True,
+        null=True,
+    )
+    # Poids en octets, enregistres a la generation : afficher « 850 Mo » sur la
+    # page evite une requete au stockage a chaque affichage.
+    final_size = models.PositiveBigIntegerField(blank=True, null=True)
+    light_size = models.PositiveBigIntegerField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)
     message_count = models.PositiveIntegerField(default=0)
-    render_provider = models.CharField(max_length=40, default="remotion")
+    render_provider = models.CharField(max_length=40, default="remotion+ffmpeg")
     # True une fois le fichier final purge de R2 (retention livrable expiree).
     media_purged = models.BooleanField(default=False)
     error_message = models.TextField(blank=True)

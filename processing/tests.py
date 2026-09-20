@@ -1734,66 +1734,6 @@ class RemotionEdlTests(TestCase):
 
         self.assertTrue(killed["called"])
 
-    @patch("processing.guestbook_montage.choose_movie_soundtrack")
-    @patch("processing.guestbook_montage._normalize_clip_audio")
-    @patch("processing.guestbook_montage._materialize_upload")
-    @patch("processing.guestbook_montage.shutil.which", return_value="/usr/bin/node")
-    def test_guestbook_render_progress_callback_reads_the_progress_file(
-        self, _which, _materialize, _normalize, choose_soundtrack
-    ):
-        """Meme mecanisme que le film souvenir (voir
-        test_progress_callback_reads_the_progress_file) applique au montage du
-        livre d'or : sans lecture du fichier de progression, cette page restait
-        figee a l'oeil de l'organisateur pendant tout le rendu (signale en prod)."""
-        from processing.guestbook_montage import render_guestbook_montage
-
-        choose_soundtrack.return_value = self._soundtrack(has_track=False)
-        reported = []
-
-        def fake_communicate(timeout=None):
-            progress_path = next(
-                Path(arg.split("=", 1)[1])
-                for arg in fake_popen.last_command
-                if arg.startswith("--progress-file=")
-            )
-            progress_path.write_text(json.dumps({"progress": 0.5}), encoding="utf-8")
-            raise subprocess.TimeoutExpired(cmd="node", timeout=timeout)
-
-        call_count = {"n": 0}
-
-        def fake_communicate_then_finish(timeout=None):
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                return fake_communicate(timeout=timeout)
-            return "OK", ""
-
-        def fake_popen(command, **kwargs):
-            fake_popen.last_command = command
-            return SimpleNamespace(
-                returncode=0,
-                communicate=fake_communicate_then_finish,
-                kill=lambda: None,
-            )
-
-        message = SimpleNamespace(
-            pk=1,
-            guest_name="Les voisins",
-            original_filename="m.mp4",
-            media_file=SimpleNamespace(name="m.mp4"),
-            duration=timedelta(seconds=5),
-        )
-
-        with patch("processing.remotion.subprocess.Popen", side_effect=fake_popen):
-            with tempfile.TemporaryDirectory() as tmp:
-                render_guestbook_montage(
-                    self._event(),
-                    [message],
-                    Path(tmp) / "out.mp4",
-                    progress_callback=reported.append,
-                )
-
-        self.assertEqual(reported, [0.5])
-
     def test_json_serialisable(self):
         import json
         from processing.remotion import build_film_props

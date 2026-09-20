@@ -201,11 +201,12 @@ def purge_event_media(event, *, include_deliverables=True):
 
         montage = getattr(event, "guestbook_movie", None)
         if montage and not montage.media_purged:
-            if drop(montage, "final_file"):
-                counts["deliverables"] += 1
-            montage.final_file = ""
+            for field_name in ("final_file", "light_file"):
+                if drop(montage, field_name):
+                    counts["deliverables"] += 1
+                setattr(montage, field_name, "")
             montage.media_purged = True
-            montage.save(update_fields=["final_file", "media_purged"])
+            montage.save(update_fields=["final_file", "light_file", "media_purged"])
 
     for field_name in ("cover_image", "qr_code_image"):
         if drop(event, field_name):

@@ -190,7 +190,7 @@ class Command(BaseCommand):
         montages = (
             GuestBookMovie.objects.filter(media_purged=False)
             .select_related("event")
-            .only("id", "final_file", "event__event_date")
+            .only("id", "final_file", "light_file", "event__event_date")
         )
         for montage in list(montages):
             if montage.event.event_date > cutoff:
@@ -198,10 +198,13 @@ class Command(BaseCommand):
             if dry_run:
                 purged += 1
                 continue
-            if not self._clear_field(montage, "final_file", "montage"):
+            ok = True
+            for field in ("final_file", "light_file"):
+                ok = self._clear_field(montage, field, "montage") and ok
+            if not ok:
                 continue
             montage.media_purged = True
-            montage.save(update_fields=["final_file", "media_purged"])
+            montage.save(update_fields=["final_file", "light_file", "media_purged"])
             purged += 1
 
         if dry_run:

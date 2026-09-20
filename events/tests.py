@@ -1032,6 +1032,34 @@ class EventViewTests(TestCase):
         self.assertEqual(response["Content-Disposition"], 'attachment; filename="memora-camille-noe.mp4"')
         self.assertEqual(b"".join(response.streaming_content), b"movie-bytes")
 
+    def test_owner_can_download_the_teaser_variant_and_unknown_variants_fall_back_to_the_film(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Variantes",
+            couple_name="Camille & Noe",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        for name, content in (("film.mp4", b"film-bytes"), ("teaser.mp4", b"teaser-bytes")):
+            path = Path(TEST_MEDIA_ROOT) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="film.mp4",
+            teaser_file="teaser.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+        url = reverse("events:download_movie", kwargs={"pk": event.pk})
+
+        teaser = self.client.get(url, {"v": "teaser"})
+        unknown = self.client.get(url, {"v": "inconnu"})
+
+        self.assertEqual(b"".join(teaser.streaming_content), b"teaser-bytes")
+        self.assertIn("teaser", teaser["Content-Disposition"])
+        self.assertEqual(b"".join(unknown.streaming_content), b"film-bytes")
+
     def test_event_detail_displays_automatic_movie_schedule(self):
         event = Event.objects.create(
             organizer=self.user,

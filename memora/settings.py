@@ -533,6 +533,10 @@ MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
 # Montage du livre d'or : tous les messages en entier, chacun precede d'un carton
 # « De la part de … ». La musique n'est qu'un lit tres discret et descend encore
 # pendant chaque message : on veut entendre ce que les invites disent.
+# Nombre d'encodages FFmpeg simultanes pour le montage du livre d'or (0 = la
+# moitie des coeurs). Preset x264 : veryfast = bon compromis vitesse / poids.
+MEMORA_GUESTBOOK_MONTAGE_WORKERS = env_int("MEMORA_GUESTBOOK_MONTAGE_WORKERS", 0)
+MEMORA_GUESTBOOK_MONTAGE_PRESET = os.getenv("MEMORA_GUESTBOOK_MONTAGE_PRESET", "veryfast")
 MEMORA_GUESTBOOK_MONTAGE_MUSIC_VOLUME = float(
     os.getenv("MEMORA_GUESTBOOK_MONTAGE_MUSIC_VOLUME", "0.12")
 )

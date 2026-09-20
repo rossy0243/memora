@@ -7,7 +7,8 @@
   <h3>Montage du livre d'or</h3>
   <p class="page-heading__meta">
     Tous les messages, en entier, dans l'ordre, chacun précédé d'un carton
-    « De la part de&nbsp;… ». Rendu avec la même exigence que le film souvenir.
+    « De la part de&nbsp;… ».
+    {% if total_message_count %}<strong>{{ total_message_count }} message{{ total_message_count|pluralize }} enregistré{{ total_message_count|pluralize }}.</strong>{% endif %}
   </p>
 
   {% if guestbook_movie and guestbook_movie.is_ready %}
@@ -20,18 +21,29 @@
         <span style="width: 100%"></span>
       </div>
     </div>
-    <video src="{{ guestbook_movie.final_file.url }}" controls preload="metadata" class="guestbook-montage__preview"></video>
+    <video src="{% if guestbook_movie.light_file %}{{ guestbook_movie.light_file.url }}{% else %}{{ guestbook_movie.final_file.url }}{% endif %}" controls playsinline preload="metadata" class="guestbook-montage__preview"></video>
     <p class="page-heading__meta">
       {{ guestbook_movie.message_count }} message{{ guestbook_movie.message_count|pluralize }}
+      {% if guestbook_movie.duration %}&middot; {{ guestbook_movie.duration }}{% endif %}
       {% if guestbook_movie.completed_at %}&middot; prêt le {{ guestbook_movie.completed_at|date:"d/m/Y H:i" }}{% endif %}
     </p>
     <div class="guestbook-montage__actions">
-      <a class="button button--primary" href="{{ guestbook_movie.final_file.url }}" download>Télécharger le montage</a>
+      <a class="button button--primary" href="{% url 'events:download_guestbook_movie' event.pk %}">
+        Télécharger en HD{% if guestbook_movie.final_size %} ({{ guestbook_movie.final_size|filesizeformat }}){% endif %}
+      </a>
+      {% if guestbook_movie.light_file %}
+        <a class="button button--secondary" href="{% url 'events:download_guestbook_movie' event.pk %}?v=light">
+          Version légère{% if guestbook_movie.light_size %} ({{ guestbook_movie.light_size|filesizeformat }}){% endif %}
+        </a>
+      {% endif %}
       <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">
         {% csrf_token %}
         <button class="button button--secondary" type="submit">Regénérer</button>
       </form>
     </div>
+    {% if guestbook_movie.light_file %}
+      <p class="muted-copy">Sur téléphone ou en 4G, la version légère (720p) se télécharge bien plus vite. La lecture ci-dessus utilise déjà cette version.</p>
+    {% endif %}
   {% elif guestbook_movie and guestbook_movie.status == "failed" %}
     <p class="message message--error">La génération a échoué. Vous pouvez la relancer.</p>
     <form method="post" action="{% url 'events:generate_guestbook_movie' event.pk %}">

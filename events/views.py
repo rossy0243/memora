@@ -1,15 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
+from core.downloads import download_response
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from processing.models import GeneratedMovie
 from processing.services import (
@@ -188,37 +188,15 @@ class EventMediaListView(OrganizerEventMixin, ListView):
 
 @login_required
 def guestbook_messages(request, pk):
-    """Historique du livre d'or, cote organisateur — paginable et filtrable par
-    agent : avec plusieurs agents qui enregistrent en parallele, la liste
-    complete d'un gros evenement peut vite devenir trop longue a parcourir."""
+    """Page du livre d'or, cote organisateur : le montage final (lecture,
+    telechargement, progression). Les messages ne sont volontairement pas listes un
+    par un — l'organisateur n'a besoin que de la video finale ; les originaux
+    restent dans le ZIP de l'evenement."""
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
-    queryset = event.guestbook_messages.select_related("recorded_by").all()
-
-    recording_agents = list(
-        event.guestbook_messages.exclude(recorded_by__isnull=True)
-        .values("recorded_by_id", "recorded_by__username", "recorded_by__first_name", "recorded_by__last_name")
-        .distinct()
-        .order_by("recorded_by__username")
-    )
-    selected_agent = request.GET.get("agent") or ""
-    if selected_agent:
-        queryset = queryset.filter(recorded_by_id=selected_agent)
-
-    paginator = Paginator(queryset, 24)
-    page_obj = paginator.get_page(request.GET.get("page"))
-
     return render(
         request,
         "events/guestbook_messages.html",
-        {
-            "event": event,
-            "page_obj": page_obj,
-            "messages_list": page_obj,
-            "is_paginated": page_obj.has_other_pages(),
-            "recording_agents": recording_agents,
-            "selected_agent": selected_agent,
-            **get_guestbook_movie_panel_context(event),
-        },
+        {"event": event, **get_guestbook_movie_panel_context(event)},
     )
 
 
@@ -238,6 +216,21 @@ def guestbook_movie_status_panel(request, pk):
         "events/partials/guestbook_movie_panel.html",
         {"event": event, **get_guestbook_movie_panel_context(event)},
     )
+
+
+@login_required
+def download_guestbook_movie(request, pk):
+    """Telecharge le montage du livre d'or : HD par defaut, `?v=light` pour la
+    version legere (telephone)."""
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    movie = getattr(event, "guestbook_movie", None)
+    if not movie or not movie.is_ready:
+        raise Http404("Montage du livre d'or indisponible.")
+
+    base_name = slugify(event.couple_name or event.title) or "livre-dor"
+    if request.GET.get("v") == "light" and movie.light_file:
+        return download_response(movie.light_file, f"memora-livre-dor-{base_name}-leger.mp4")
+    return download_response(movie.final_file, f"memora-livre-dor-{base_name}.mp4")
 
 
 @login_required
@@ -388,18 +381,14 @@ def download_event_movie(request, pk):
     if not movie:
         raise Http404("Film souvenir indisponible.")
 
-    try:
-        movie.final_file.open("rb")
-    except Exception as exc:
-        if not is_storage_error(exc):
-            raise
-        recover_from_storage_error()
-        return HttpResponse(STORAGE_UNAVAILABLE_MESSAGE, status=503, content_type="text/plain")
+    # ?v=full / ?v=teaser : les declinaisons, servies de la meme facon rapide.
+    variants = {"full": (movie.full_file, "integrale"), "teaser": (movie.teaser_file, "teaser")}
+    field, suffix = variants.get(request.GET.get("v"), (None, ""))
+    if field:
+        base = _movie_download_filename(event, movie).rsplit(".", 1)[0]
+        return download_response(field, f"{base}-{suffix}.mp4")
 
-    filename = _movie_download_filename(event, movie)
-    response = FileResponse(movie.final_file, content_type="video/mp4")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+    return download_response(movie.final_file, _movie_download_filename(event, movie))
 
 
 def get_movie_panel_context(event):

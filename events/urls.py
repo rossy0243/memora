@@ -16,6 +16,7 @@ urlpatterns = [
         name="generate_guestbook_movie",
     ),
     path("<int:pk>/livre-dor/statut/", views.guestbook_movie_status_panel, name="guestbook_movie_status"),
+    path("<int:pk>/livre-dor/telecharger/", views.download_guestbook_movie, name="download_guestbook_movie"),
     path("<int:pk>/medias/<int:upload_pk>/selection-film/", views.toggle_movie_selection, name="toggle_movie_selection"),
     path("<int:pk>/medias/<int:upload_pk>/moderation/", views.set_media_moderation_status, name="set_media_moderation"),
     path("<int:pk>/modifier/", views.EventUpdateView.as_view(), name="update"),

@@ -50,7 +50,7 @@
                     <strong>Version intégrale</strong>
                     <span>Tous les souvenirs retenus{% if ready_movie.full_duration %}, {{ ready_movie.full_duration }}{% endif %}.</span>
                   </div>
-                  <a class="button button--secondary button--compact" href="{{ ready_movie.full_file.url }}" download>Télécharger</a>
+                  <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.full_file.url }}{% else %}{{ movie_download_url }}?v=full{% endif %}" {% if is_public_movie_page %}download{% endif %}>Télécharger</a>
                 </article>
               {% endif %}
               {% if ready_movie.teaser_file %}
@@ -59,7 +59,7 @@
                     <strong>Teaser vertical</strong>
                     <span>Format mobile, pensé pour le partage{% if ready_movie.teaser_duration %}, {{ ready_movie.teaser_duration }}{% endif %}.</span>
                   </div>
-                  <a class="button button--secondary button--compact" href="{{ ready_movie.teaser_file.url }}" download>Télécharger</a>
+                  <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_file.url }}{% else %}{{ movie_download_url }}?v=teaser{% endif %}" {% if is_public_movie_page %}download{% endif %}>Télécharger</a>
                 </article>
               {% endif %}
             </div>

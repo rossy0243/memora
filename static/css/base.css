@@ -3716,7 +3716,7 @@ body.capture-review-open {
 
 .guestbook-montage__preview {
   width: 100%;
-  max-width: 480px;
+  max-width: 720px;
   aspect-ratio: 16 / 9;
   object-fit: contain;
   border-radius: 14px;
@@ -3733,6 +3733,16 @@ body.capture-review-open {
 
 .guestbook-montage__actions form {
   margin: 0;
+}
+
+/* Sur telephone : un bouton par ligne, faciles a viser du pouce. */
+@media (max-width: 719px) {
+  .guestbook-montage__actions > *,
+  .guestbook-montage__actions .button {
+    flex: 1 1 100%;
+    width: 100%;
+    text-align: center;
+  }
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
