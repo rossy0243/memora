@@ -31,6 +31,10 @@ class Command(BaseCommand):
         parser.add_argument("--size", default="1080x1920", help="Resolution des messages sources.")
         parser.add_argument("--fps", type=int, default=47)
         parser.add_argument(
+            "--profile", action="store_true",
+            help="Chronometre les etapes d'UN message (decodage, filtres, encodage) au lieu du montage.",
+        )
+        parser.add_argument(
             "--codec", choices=["vp9", "h264"], default="vp9",
             help="vp9 = webm de MediaRecorder (telephone de l'agent), sans duree dans l'en-tete.",
         )
@@ -48,6 +52,8 @@ class Command(BaseCommand):
         with tempfile.TemporaryDirectory(prefix="memora_bench_") as tmp:
             work = Path(tmp)
             source = self._make_source(work, options)
+            if options["profile"]:
+                return self._profile(work, source, encoder)
 
             names = ["Camille & Noé", "Tante Jeanne", "Élodie-Marie Ouédraogo", "Les voisins du 4ème", ""]
             messages = [
@@ -115,3 +121,38 @@ class Command(BaseCommand):
             check=True,
         )
         return source
+
+    def _profile(self, work, source, encoder):
+        ffmpeg = settings.MEMORA_FFMPEG_BINARY
+        grade = montage._grade_filter(None)
+        graph = (
+            f"[0:v]fps=30,split=2[bgsrc][fgsrc];"
+            "[bgsrc]scale=480:270:force_original_aspect_ratio=increase,crop=480:270,gblur=sigma=6,"
+            "colorchannelmixer=rr=0.45:gg=0.45:bb=0.45,scale=1920:1080,setsar=1[bg];"
+            "[fgsrc]scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1[fg];"
+            "[bg][fg]overlay=(W-w)/2:(H-h)/2"
+        )
+
+        def timed(label, args):
+            started = time.monotonic()
+            subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source), *args], check=True)
+            self.stdout.write(f"  {label:44s} {time.monotonic() - started:6.1f}s")
+
+        self.stdout.write(f"profil d'UN message ({source.name}), encodeur={encoder}")
+        timed("decodage seul", ["-map", "0:v", "-f", "null", "-"])
+        timed("decodage + fps=30", ["-vf", "fps=30", "-f", "null", "-"])
+        timed("+ fond floute + cadrage + overlay", ["-filter_complex", graph + "[v]", "-map", "[v]", "-f", "null", "-"])
+        timed("+ etalonnage hue/lutyuv", ["-filter_complex", f"{graph},{grade}[v]", "-map", "[v]", "-f", "null", "-"])
+        timed("audio loudnorm seul", ["-vn", "-af", "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000", "-f", "null", "-"])
+        timed(
+            "TOUT : filtres + encodage x264 (4 threads)",
+            ["-filter_complex", f"{graph},{grade},format=yuv420p[v]", "-map", "[v]",
+             *montage._video_encode_args(encoder, crf=montage.HD_CRF, max_kbps=montage.HD_MAX_KBPS, threads=4),
+             str(source.with_suffix(".out.mp4"))],
+        )
+        timed(
+            "encodage seul depuis un 1080p pret (4 threads)",
+            ["-vf", "scale=1920:1080,fps=30,format=yuv420p",
+             *montage._video_encode_args(encoder, crf=montage.HD_CRF, max_kbps=montage.HD_MAX_KBPS, threads=4),
+             str(source.with_suffix(".enc.mp4"))],
+        )
