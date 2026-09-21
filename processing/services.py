@@ -310,7 +310,7 @@ def score_movie_candidate(upload):
 
     if upload.duration:
         seconds = upload.duration.total_seconds()
-        if 3 <= seconds <= settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
+        if 3 <= seconds <= settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS + settings.MEMORA_VIDEO_DURATION_TOLERANCE_SECONDS:
             score += 8
         elif seconds < 3:
             score -= 10

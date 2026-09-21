@@ -237,7 +237,7 @@ def _score_upload(upload, metrics, provider_payload=None):
         energy_score += 14
         if upload.duration:
             seconds = upload.duration.total_seconds()
-            if 4 <= seconds <= settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
+            if 4 <= seconds <= settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS + settings.MEMORA_VIDEO_DURATION_TOLERANCE_SECONDS:
                 emotion_score += 6
                 energy_score += 4
             elif seconds < 2:

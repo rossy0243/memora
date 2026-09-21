@@ -160,6 +160,10 @@ DATABASES = {
 }
 
 
+# Verifie le mot de passe comme d'habitude, mais refuse apres trop d'echecs (connexion ET /admin/) :
+# voir core/throttle.py.
+AUTHENTICATION_BACKENDS = ["core.throttle.ThrottledModelBackend"]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -178,7 +182,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "fr-fr"
 
-TIME_ZONE = "Europe/Paris"
+# Fuseau des evenements (ouverture du lien a minuit, film a J+1 12 h). Kinshasa : UTC+1 toute l'annee,
+# sans heure d'ete (Paris avancait d'une heure en ete, puis de deux heures en hiver par rapport a Kinshasa).
+TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Africa/Kinshasa")
 
 USE_I18N = True
 
@@ -373,7 +379,9 @@ MEMORA_ALLOWED_UPLOAD_CONTENT_TYPES = {
     "mov": ["video/quicktime", "video/mp4"],
     "webm": ["video/webm"],
 }
-MEMORA_MAX_UPLOAD_SIZE = env_int("MEMORA_MAX_UPLOAD_SIZE", 250 * 1024 * 1024)
+# Une video de 10 s pese ~10 Mo (jusqu'a ~30 Mo en 4K) : 64 Mo suffisent largement. 250 Mo laissaient un
+# visiteur malveillant remplir le stockage (facture R2) avec quelques envois.
+MEMORA_MAX_UPLOAD_SIZE = env_int("MEMORA_MAX_UPLOAD_SIZE", 64 * 1024 * 1024)
 MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE = env_int(
     "MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE",
     80 * 1024 * 1024,
@@ -387,7 +395,9 @@ MEMORA_COVER_IMAGE_MAX_HEIGHT = env_int("MEMORA_COVER_IMAGE_MAX_HEIGHT", 1200)
 MEMORA_MAX_CUSTOM_MUSIC_SIZE = env_int("MEMORA_MAX_CUSTOM_MUSIC_SIZE", 20 * 1024 * 1024)
 MEMORA_MAX_CUSTOM_MUSIC_DURATION_SECONDS = env_int("MEMORA_MAX_CUSTOM_MUSIC_DURATION_SECONDS", 600)
 MEMORA_SESSION_UPLOAD_LIMIT = env_int("MEMORA_SESSION_UPLOAD_LIMIT", 5)
-MEMORA_IP_UPLOAD_LIMIT = env_int("MEMORA_IP_UPLOAD_LIMIT", 80)
+# Par adresse IP et par evenement. Tous les invites d'une salle partagent souvent UNE adresse (Wi-Fi du lieu,
+# reseau mobile partage) : 100 invites x 5 souvenirs = 500 envois. La limite vise l'abus, pas la salle.
+MEMORA_IP_UPLOAD_LIMIT = env_int("MEMORA_IP_UPLOAD_LIMIT", 1000)
 MEMORA_EVENT_UPLOAD_LIMIT = env_int("MEMORA_EVENT_UPLOAD_LIMIT", 3000)
 MEMORA_UPLOAD_COOLDOWN_SECONDS = env_int("MEMORA_UPLOAD_COOLDOWN_SECONDS", 8)
 MEMORA_TRUST_X_FORWARDED_FOR = env_bool("MEMORA_TRUST_X_FORWARDED_FOR", False)
@@ -407,6 +417,10 @@ MEMORA_FFPROBE_BINARY = os.getenv("MEMORA_FFPROBE_BINARY", "ffprobe")
 MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS = int(
     os.getenv("MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS", "10")
 )
+# Marge sur la duree maximale : un telephone qui arrete l'enregistrement a 10 s pile produit un
+# fichier de 10,02 a 10,3 s (arret du flux, pistes audio/video decalees). Sans marge, un invite
+# qui laisse filmer jusqu'au bout voit son envoi refuse APRES avoir envoye 10 Mo.
+MEMORA_VIDEO_DURATION_TOLERANCE_SECONDS = env_float("MEMORA_VIDEO_DURATION_TOLERANCE_SECONDS", 1.0)
 # Livre d'or agent : messages plus longs qu'un candid de soiree, mais toujours bornes.
 MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS = int(
     os.getenv("MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS", "20")
@@ -422,6 +436,19 @@ MEMORA_MEDIA_PURGE_BACKSTOP_DAYS = env_int("MEMORA_MEDIA_PURGE_BACKSTOP_DAYS", 3
 # longtemps que la matiere brute — c'est le produit livre a l'organisateur —
 # puis purges eux aussi, a event_date + ce nombre de jours (+ grace).
 MEMORA_DELIVERABLE_RETENTION_DAYS = env_int("MEMORA_DELIVERABLE_RETENTION_DAYS", 90)
+# Tant que le film d'un evenement paye n'est pas termine, ses souvenirs ne sont pas masques
+# avant event_date + retention + ce delai : un film en echec doit pouvoir etre relance apres
+# le J+7, sinon le masquage le rendrait impossible a refaire.
+MEMORA_MEDIA_MASK_WAIT_FOR_MOVIE_DAYS = env_int("MEMORA_MEDIA_MASK_WAIT_FOR_MOVIE_DAYS", 14)
+# Rappel a l'organisateur : nombre de jours avant le retrait de ses souvenirs bruts, et avant la
+# suppression definitive de son film.
+MEMORA_RETENTION_REMINDER_DAYS = env_int("MEMORA_RETENTION_REMINDER_DAYS", 2)
+MEMORA_DELIVERABLE_REMINDER_DAYS = env_int("MEMORA_DELIVERABLE_REMINDER_DAYS", 14)
+# Alertes d'exploitation (film en echec, tache arretee, sauvegarde absente...) : adresses separees
+# par des virgules ; a defaut, l'adresse d'assistance de la configuration Memora.
+MEMORA_ALERT_EMAILS = [item.strip() for item in os.getenv("MEMORA_ALERT_EMAILS", "").split(",") if item.strip()]
+# Sauvegardes quotidiennes de la base (fichier JSON compresse sur le stockage R2) : combien garder.
+MEMORA_BACKUP_KEEP = env_int("MEMORA_BACKUP_KEEP", 14)
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)
 MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)

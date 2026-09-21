@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
@@ -286,6 +287,16 @@ def public_event_preview(request, slug, access_key):
     return redirect("uploads:create", slug=event.slug, access_key=event.public_access_key)
 
 
+def _safe_next_url(request, default):
+    """`next` fourni par le formulaire, mais seulement s'il reste sur ce site (pas de redirection ouverte)."""
+    candidate = request.POST.get("next", "")
+    if candidate and url_has_allowed_host_and_scheme(
+        candidate, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return candidate
+    return default
+
+
 @login_required
 @require_POST
 def toggle_movie_selection(request, pk, upload_pk):
@@ -300,8 +311,7 @@ def toggle_movie_selection(request, pk, upload_pk):
     upload.is_selected_for_movie = not upload.is_selected_for_movie
     upload.save(update_fields=["is_selected_for_movie"])
 
-    next_url = request.POST.get("next") or reverse("events:media_list", kwargs={"pk": event.pk})
-    return redirect(next_url)
+    return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 
 
 @login_required
@@ -321,8 +331,7 @@ def set_media_moderation_status(request, pk, upload_pk):
             upload.is_selected_for_movie = False
         upload.save(update_fields=["moderation_status", "is_selected_for_movie"])
 
-    next_url = request.POST.get("next") or reverse("events:media_list", kwargs={"pk": event.pk})
-    return redirect(next_url)
+    return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 
 
 @login_required

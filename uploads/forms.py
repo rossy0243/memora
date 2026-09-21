@@ -27,6 +27,23 @@ IMAGE_CONTENT_TYPE_BY_FORMAT = {
 }
 
 
+def _looks_like_video(media_file, extension):
+    """Le contenu est-il bien une video MP4/MOV ou WebM ? Verifie les premiers octets, pas seulement
+    l'extension : ffprobe/ffmpeg devinent le format d'apres le CONTENU, et un fichier « .mp4 » qui serait
+    en realite une liste de lecture (HLS, concat) pourrait leur faire ouvrir des adresses ou des fichiers."""
+    position = media_file.tell() if hasattr(media_file, "tell") else None
+    try:
+        media_file.seek(0)
+        head = media_file.read(64)
+    finally:
+        if position is not None:
+            media_file.seek(position)
+    if extension == "webm":
+        return head.startswith(bytes([0x1A, 0x45, 0xDF, 0xA3]))  # en-tete EBML (Matroska/WebM)
+    # MP4 / MOV : une « boite » ISO commence par sa taille (4 octets) puis son type (ftyp, moov, mdat...).
+    return len(head) >= 8 and head[4:8] in {b"ftyp", b"moov", b"mdat", b"free", b"wide", b"skip", b"styp", b"pnot"}
+
+
 def _probe_video_duration(media_file):
     try:
         return probe_video_duration(media_file, settings.MEMORA_FFPROBE_BINARY)
@@ -137,6 +154,8 @@ class GuestUploadForm(forms.ModelForm):
             if media_file.size > settings.MEMORA_MAX_UPLOAD_SIZE:
                 raise forms.ValidationError("Cette image est trop lourde.")
         elif extension in settings.MEMORA_VIDEO_EXTENSIONS:
+            if not _looks_like_video(media_file, extension):
+                raise forms.ValidationError("Ce format n'est pas accepté.")
             duration_seconds = self._client_duration_seconds()
             try:
                 duration_seconds = _probe_video_duration(media_file)
@@ -144,7 +163,7 @@ class GuestUploadForm(forms.ModelForm):
                 if not duration_seconds or media_file.size > settings.MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE:
                     raise forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée.")
 
-            if duration_seconds > settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS:
+            if duration_seconds > settings.MEMORA_MAX_VIDEO_UPLOAD_DURATION_SECONDS + settings.MEMORA_VIDEO_DURATION_TOLERANCE_SECONDS:
                 raise forms.ValidationError("Cette vidéo dépasse 10 secondes.")
             self.media_duration = timedelta(seconds=duration_seconds)
 

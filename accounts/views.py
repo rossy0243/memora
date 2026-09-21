@@ -11,11 +11,13 @@ from django.contrib.auth.views import (
     PasswordResetView,
     LoginView,
 )
-from django.http import Http404, StreamingHttpResponse
+from django.http import Http404, HttpResponseRedirect, StreamingHttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from core import throttle
 from core.models import SiteConfiguration
 
 from .export import account_export_filename, iter_account_export_zip_chunks
@@ -32,6 +34,15 @@ class RoleAwareLoginView(LoginView):
     """
 
     template_name = "accounts/login.html"
+
+    def form_invalid(self, form):
+        # Tentatives repetees : on le dit clairement (la protection elle-meme est dans
+        # core.throttle.ThrottledModelBackend, qui couvre aussi /admin/).
+        until = throttle.locked_until(self.request, self.request.POST.get("username", ""))
+        if until:
+            minutes = max(int((until - timezone.now()).total_seconds() // 60) + 1, 1)
+            form.add_error(None, f"Trop de tentatives échouées. Réessayez dans {minutes} min.")
+        return super().form_invalid(form)
 
     def get_default_redirect_url(self):
         if hasattr(self.request.user, "agent_profile"):
@@ -152,6 +163,13 @@ class OrganizerPasswordResetView(PasswordResetView):
     subject_template_name = "accounts/password_reset_subject.txt"
     from_email = settings.DEFAULT_FROM_EMAIL
     success_url = reverse_lazy("accounts:password_reset_done")
+
+    def form_valid(self, form):
+        # Rafale de demandes (e-mail bombing) : on repond comme si tout allait bien, sans rien envoyer
+        # ni reveler quoi que ce soit.
+        if not throttle.allow_reset_request(self.request, form.cleaned_data["email"]):
+            return HttpResponseRedirect(self.get_success_url())
+        return super().form_valid(form)
 
 
 class OrganizerPasswordResetDoneView(PasswordResetDoneView):

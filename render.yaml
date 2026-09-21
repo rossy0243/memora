@@ -278,6 +278,10 @@ services:
           type: web
           name: memora-web
           envVarKey: DJANGO_EMAIL_HOST_PASSWORD
+      # Alertes d'exploitation (film en echec/bloque/en retard, tache arretee, sauvegarde absente) :
+      # voir docs/EXPLOITATION.md.
+      - key: MEMORA_ALERT_EMAILS
+        value: contact@memoracd.site
       - *env_email_from
       - *env_ssl_redirect
       - *env_session_secure
@@ -393,6 +397,8 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     schedule: "15 3 * * *"
-    dockerCommand: python manage.py cleanup_expired_media
+    # Entretien quotidien : nettoyage des medias expires, rappels aux organisateurs, sauvegarde de la
+    # base sur R2, controle d'exploitation (alertes). Voir core/management/commands/run_daily_maintenance.py.
+    dockerCommand: python manage.py run_daily_maintenance
     autoDeployTrigger: commit
     envVars: *worker_env

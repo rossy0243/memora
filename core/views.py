@@ -56,6 +56,14 @@ def privacy_policy(request):
 
 
 def health(request):
+    """Page de sante. `?crons=1` verifie aussi que la tache des films tourne encore : a donner a un
+    service de surveillance externe (UptimeRobot...) qui previent si la page ne repond plus « ok »."""
+    if request.GET.get("crons"):
+        from core.operations import film_cron_status
+
+        alive, sentence = film_cron_status()
+        if not alive:
+            return HttpResponse(f"tache des films : {sentence}", content_type="text/plain", status=503)
     return HttpResponse("ok", content_type="text/plain")
 
 

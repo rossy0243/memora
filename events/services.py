@@ -225,6 +225,21 @@ def reset_event_content(event):
     return counts
 
 
+def media_removal_date(event):
+    """Date a laquelle les souvenirs bruts de l'evenement sont retires (masques, puis purges).
+
+    event_date + duree de conservation. Tant que le film d'un evenement PAYE n'est pas termine, on
+    attend MEMORA_MEDIA_MASK_WAIT_FOR_MOVIE_DAYS de plus : un film en echec doit pouvoir etre relance
+    apres le J+7, sinon le masquage le rendrait impossible a refaire.
+    """
+    from datetime import timedelta
+
+    removal = event.event_date + timedelta(days=event.media_retention_days)
+    if event.is_paid and not event.generated_movies.filter(status="completed").exists():
+        removal += timedelta(days=settings.MEMORA_MEDIA_MASK_WAIT_FOR_MOVIE_DAYS)
+    return removal
+
+
 def purge_event_media(event, *, include_deliverables=True):
     """Supprime de R2 tous les fichiers rattaches a un evenement.
 

@@ -300,6 +300,16 @@ class Event(models.Model):
         null=True,
         help_text="Date d'envoi du recu de paiement a l'organisateur. Vide = pas encore envoye.",
     )
+    retention_reminder_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Rappel envoye a l'organisateur avant le retrait de ses souvenirs bruts. Vide = pas encore envoye.",
+    )
+    deliverable_reminder_sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Rappel envoye a l'organisateur avant la suppression definitive de son film. Vide = pas encore envoye.",
+    )
     is_active = models.BooleanField(default=True)
     guest_preview_enabled = models.BooleanField(
         "ouvert aux invités avant la date (test)",

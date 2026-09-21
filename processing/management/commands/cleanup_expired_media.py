@@ -23,6 +23,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from events.models import Event
+from events.services import media_removal_date
 from guestbook.models import GuestBookMessage, GuestBookMovie
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload
@@ -68,18 +70,16 @@ class Command(BaseCommand):
         )
 
     def _mask_expired_uploads(self, today, now, dry_run):
-        uploads = (
-            GuestUpload.objects.filter(is_deleted=False)
-            .select_related("event")
-            .only("id", "event__event_date", "event__media_retention_days")
-        )
-        expired_ids = [
-            upload.id
-            for upload in uploads.iterator()
-            if upload.event.event_date
-            + timedelta(days=upload.event.media_retention_days)
-            <= today
+        # Par evenement (pas par upload) : la date de retrait depend aussi de l'etat du film
+        # (voir events.services.media_removal_date).
+        expired_events = [
+            event.pk
+            for event in Event.objects.filter(guest_uploads__is_deleted=False).distinct()
+            if media_removal_date(event) <= today
         ]
+        expired_ids = list(
+            GuestUpload.objects.filter(is_deleted=False, event_id__in=expired_events).values_list("id", flat=True)
+        )
         # Lignes deja masquees mais sans horodatage (donnees anterieures a ce
         # champ) : on les adopte pour que le delai de grace parte de maintenant.
         legacy = GuestUpload.objects.filter(is_deleted=True, deleted_at__isnull=True)

@@ -22,6 +22,10 @@ from .services import normalize_moment_label, sync_event_upload_categories
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
 
+# Les videos sont verifiees sur leurs premiers octets (voir uploads.forms._looks_like_video).
+MP4_HEAD = bytes([0, 0, 0, 24]) + b"ftypmp42" + bytes(16)
+WEBM_HEAD = bytes([0x1A, 0x45, 0xDF, 0xA3]) + bytes(60)
+
 
 def make_test_image_bytes(image_format="JPEG"):
     buffer = BytesIO()
@@ -672,7 +676,7 @@ class GuestUploadViewTests(TestCase):
 
     @override_settings(MEMORA_MAX_UPLOAD_SIZE=4)
     def test_rejects_oversized_file(self):
-        media = SimpleUploadedFile("video.mp4", b"12345", content_type="video/mp4")
+        media = SimpleUploadedFile("video.mp4", MP4_HEAD + b"12345", content_type="video/mp4")
 
         response = self.client.post(
             self.upload_url(),
@@ -685,9 +689,20 @@ class GuestUploadViewTests(TestCase):
         self.assertContains(response, "Cette vidéo est trop lourde.")
         self.assertEqual(GuestUpload.objects.count(), 0)
 
-    @patch("uploads.forms._probe_video_duration", return_value=11)
+    @patch("uploads.forms._probe_video_duration", return_value=10.3)
+    def test_a_video_recorded_to_the_automatic_stop_is_accepted(self, _probe_video_duration):
+        """Un telephone qui coupe l'enregistrement a 10 s pile produit 10,0x a 10,3 s : refuser
+        cet envoi APRES 10 Mo montes serait une mauvaise surprise pour l'invite."""
+        media = SimpleUploadedFile("video.mp4", MP4_HEAD + b"video", content_type="video/mp4")
+
+        response = self.client.post(self.upload_url(), {"media_file": media})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(GuestUpload.objects.count(), 1)
+
+    @patch("uploads.forms._probe_video_duration", return_value=12)
     def test_rejects_video_longer_than_ten_seconds(self, _probe_video_duration):
-        media = SimpleUploadedFile("video.mp4", b"video", content_type="video/mp4")
+        media = SimpleUploadedFile("video.mp4", MP4_HEAD + b"video", content_type="video/mp4")
 
         response = self.client.post(
             self.upload_url(),
@@ -702,7 +717,7 @@ class GuestUploadViewTests(TestCase):
 
     @patch("uploads.forms._probe_video_duration", return_value=9.5)
     def test_stores_video_duration_when_upload_is_allowed(self, _probe_video_duration):
-        media = SimpleUploadedFile("video.mp4", b"video", content_type="video/mp4")
+        media = SimpleUploadedFile("video.mp4", MP4_HEAD + b"video", content_type="video/mp4")
 
         response = self.client.post(
             self.upload_url(),
@@ -721,7 +736,7 @@ class GuestUploadViewTests(TestCase):
         side_effect=forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée."),
     )
     def test_accepts_memora_camera_duration_when_ffprobe_cannot_read_video(self, _probe_video_duration):
-        media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
+        media = SimpleUploadedFile("video.webm", WEBM_HEAD + b"video", content_type="video/webm")
 
         response = self.client.post(
             self.upload_url(),
@@ -736,13 +751,13 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(upload.media_type, GuestUpload.MediaType.VIDEO)
         self.assertEqual(upload.duration.total_seconds(), 8.25)
 
-    @override_settings(MEMORA_MAX_UPLOAD_SIZE=50, MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE=4)
+    @override_settings(MEMORA_MAX_UPLOAD_SIZE=200, MEMORA_CLIENT_DURATION_FALLBACK_MAX_SIZE=4)
     @patch(
         "uploads.forms._probe_video_duration",
         side_effect=forms.ValidationError("La durée de cette vidéo ne peut pas être vérifiée."),
     )
     def test_rejects_client_duration_fallback_for_large_unreadable_video(self, _probe_video_duration):
-        media = SimpleUploadedFile("video.webm", b"video", content_type="video/webm")
+        media = SimpleUploadedFile("video.webm", WEBM_HEAD + b"video", content_type="video/webm")
 
         response = self.client.post(
             self.upload_url(),

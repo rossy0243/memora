@@ -283,7 +283,8 @@ def get_upload_limit_error(event, session_key, ip_address):
         if session_key and recent_uploads.filter(session_key=session_key).exists():
             return "Patientez quelques secondes avant d'envoyer un autre souvenir."
 
-        if ip_address and recent_uploads.filter(ip_address=ip_address).exists():
-            return "Patientez quelques secondes avant d'envoyer un autre souvenir."
+        # Pas de pause par adresse IP : tous les invites d'une meme salle (Wi-Fi du lieu, reseau mobile
+        # partage par l'operateur) partagent la meme adresse, et une pause commune limiterait TOUTE la
+        # salle a un souvenir toutes les 8 s. La pause est donc par invite (cookie de session) seulement.
 
     return ""

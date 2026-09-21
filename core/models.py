@@ -370,3 +370,19 @@ class SiteConfiguration(models.Model):
             getattr(settings, "MEMORA_CONFIG_CACHE_SECONDS", 60),
         )
         return config
+
+
+class OperationalState(models.Model):
+    """Petit registre cle/valeur pour l'exploitation : dernieres executions des taches planifiees
+    (« battements de coeur ») et alertes deja envoyees, pour ne prevenir qu'une fois par probleme."""
+
+    key = models.CharField(max_length=120, unique=True)
+    value = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "etat d'exploitation"
+        verbose_name_plural = "etats d'exploitation"
+
+    def __str__(self):
+        return self.key

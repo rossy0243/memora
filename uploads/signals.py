@@ -8,5 +8,6 @@ from .services import create_default_categories_for_event
 
 @receiver(post_save, sender=Event)
 def create_event_upload_categories(sender, instance, created, **kwargs):
-    if created:
+    # `raw` = chargement d'une sauvegarde : les categories sont deja dans le fichier.
+    if created and not kwargs.get("raw"):
         create_default_categories_for_event(instance)
