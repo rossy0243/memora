@@ -6,10 +6,12 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import CommissionLedger, OrganizerProfile
 from core.models import SiteConfiguration
 from events.models import Event, EventPlan, EventType
+from events.services import send_payment_receipt_email
 
 
 def make_ambassador(user):
@@ -131,6 +133,63 @@ class FirstEventDiscountTests(TestCase):
         self.assertEqual(entry.amount, 672)
         self.assertEqual(event.price_amount, 6715)
 
+
+    def test_the_discount_survives_later_saves_of_the_paid_event(self):
+        """Regression : chaque enregistrement d'un evenement paye relance le calcul des
+        commissions. Le 2e enregistrement (envoi du recu, reglage admin...) prenait la remise
+        deja consommee pour celle d'un AUTRE evenement et remettait le prix plein."""
+        self._refer()
+        event = self._event()
+        event.payment_status = Event.PaymentStatus.PAID
+        event.save()
+
+        event.save()  # meme instance, enregistrement suivant
+        Event.objects.get(pk=event.pk).save()  # instance rechargee (autre requete)
+        event.receipt_sent_at = timezone.now()
+        event.save(update_fields=["receipt_sent_at", "updated_at"])  # envoi du recu
+
+        event.refresh_from_db()
+        self.assertEqual(event.discount_amount, 1185)
+        self.assertEqual(event.price_amount, 6715)
+        self.assertEqual(CommissionLedger.objects.filter(event=event).count(), 1)
+
+    def test_receipt_email_after_payment_keeps_the_discounted_price(self):
+        self.newcomer.email = "nouveau@example.com"  # sans e-mail, aucun recu n'est envoye
+        self.newcomer.save(update_fields=["email"])
+        self._refer()
+        event = self._event()
+        event.payment_status = Event.PaymentStatus.PAID
+        event.save()
+
+        send_payment_receipt_email(event)
+
+        event.refresh_from_db()
+        self.assertIsNotNone(event.receipt_sent_at)
+        self.assertEqual(event.price_amount, 6715)
+        self.assertEqual(event.discount_amount, 1185)
+
+    def test_saving_again_after_a_race_keeps_each_event_at_its_own_price(self):
+        self._refer()
+        first = self._event(title="Course E")
+        second = self._event(title="Course F")
+        Event.objects.filter(pk=second.pk).update(
+            discount_amount=first.discount_amount,
+            discount_percent=first.discount_percent,
+            price_amount=first.price_amount,
+        )
+        second.refresh_from_db()
+        first.payment_status = Event.PaymentStatus.PAID
+        first.save()
+        second.payment_status = Event.PaymentStatus.PAID
+        second.save()
+
+        Event.objects.get(pk=first.pk).save()
+        Event.objects.get(pk=second.pk).save()
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((first.price_amount, first.discount_amount), (6715, 1185))
+        self.assertEqual((second.price_amount, second.discount_amount), (7900, 0))
 
     def test_a_race_cannot_grant_two_discounts(self):
         """Deux creations simultanees ne doivent pas donner deux remises.
@@ -291,3 +350,52 @@ class PromoCodeFormTests(TestCase):
         response = self.client.get(reverse("events:create"))
 
         self.assertContains(response, self.ambassador_profile.referral_code)
+
+
+class AuditWelcomeDiscountsCommandTests(TestCase):
+    """L'audit repere un evenement dont la remise a ete annulee, et laisse les autres tranquilles."""
+
+    def setUp(self):
+        cache.clear()
+        self.event_type, _ = EventType.objects.get_or_create(
+            code="wedding", defaults={"label": "Mariage", "sort_order": 1}
+        )
+        self.ambassador = get_user_model().objects.create_user(username="amb-audit", password="secret")
+        make_ambassador(self.ambassador)
+        self.newcomer = get_user_model().objects.create_user(username="nouveau-audit", password="secret")
+        profile = OrganizerProfile.for_user(self.newcomer)
+        profile.referred_by = self.ambassador
+        profile.save(update_fields=["referred_by", "updated_at"])
+
+    def _run(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("audit_welcome_discounts", stdout=out)
+        return out.getvalue()
+
+    def _paid_discounted_event(self):
+        event = Event.objects.create(
+            organizer=self.newcomer, title="Audit", event_type=self.event_type, event_date=date(2026, 9, 1),
+            plan=EventPlan.objects.get(code="classique"),
+        )
+        event.payment_status = Event.PaymentStatus.PAID
+        event.save()
+        return event
+
+    def test_a_healthy_discounted_event_is_not_flagged(self):
+        self._paid_discounted_event()
+
+        self.assertIn("Aucun evenement touche.", self._run())
+
+    def test_an_event_whose_discount_was_wiped_is_flagged(self):
+        event = self._paid_discounted_event()
+        # Etat laisse par l'ancien defaut : prix plein, remise a zero, code conserve.
+        Event.objects.filter(pk=event.pk).update(price_amount=event.full_price_amount, discount_amount=0, discount_percent=0)
+
+        report = self._run()
+
+        self.assertIn("1 suspect(s)", report)
+        self.assertIn(f"evenement {event.pk}", report)

@@ -24,6 +24,21 @@ def _revert_first_event_discount(event):
     event.discount_percent = 0
 
 
+def _another_paid_event_holds_discount(event):
+    """Vrai si un AUTRE evenement paye du meme organisateur porte deja la remise de bienvenue."""
+    from events.models import Event
+
+    return (
+        Event.objects.filter(
+            organizer=event.organizer,
+            payment_status=Event.PaymentStatus.PAID,
+            discount_amount__gt=0,
+        )
+        .exclude(pk=event.pk)
+        .exists()
+    )
+
+
 def record_event_commissions(event):
     """Crée les commissions liées à un événement payé et met à jour le palier. Idempotent."""
     if not event.pk or not event.is_paid:
@@ -45,8 +60,13 @@ def record_event_commissions(event):
         # figerait une remise. Au paiement, un seul evenement peut consommer la
         # remise ; tout autre evenement remise repasse au plein tarif avant que
         # les commissions ne soient calculees.
+        #
+        # Cette fonction tourne a CHAQUE enregistrement d'un evenement paye (envoi du
+        # recu, modification, reglages admin...). Si la remise est deja consommee, il
+        # faut donc distinguer « consommee par CET evenement » (on ne touche a rien) de
+        # « consommee par un AUTRE evenement » (ce cas-ci repasse au plein tarif).
         if event.discount_amount:
-            if not organizer_profile.consume_first_event_discount():
+            if not organizer_profile.consume_first_event_discount() and _another_paid_event_holds_discount(event):
                 _revert_first_event_discount(event)
 
         # Commission sur l'événement propre : réservée aux ambassadeurs désignés par Memora.
