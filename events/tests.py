@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 import shutil
 import tempfile
@@ -11,19 +11,24 @@ import zlib
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
+from accounts.models import AgentProfile
 from core.models import SiteConfiguration
+from guestbook.models import GuestBookAssignment, GuestBookMessage, GuestBookMovie
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, MomentTemplate, UploadCategory
 
 from .brand_assets import ASSETS
 from .models import Event, EventPlan, EventType
+from .services import EventResetRefused, reset_event_content
 from .qr_kit import (
     brand_contact_items,
     build_qr_kit_zip,
@@ -1906,6 +1911,152 @@ class BrandAssetsTests(TestCase):
 
         self.assertEqual(width, height)
         self.assertNotRegex(ASSETS["memora-logo-icone"][0](), r"<rect[^>]*rx=")  # pas de coins arrondis : la plateforme decoupe
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class ResetEventContentTests(TestCase):
+    """Vider un evenement de test : tout le contenu part, l'evenement et son QR code restent."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(username="admin-reset", email="a@b.c", password="secret")
+        organizer = get_user_model().objects.create_user(username="orga-reset", password="secret")
+        agent = get_user_model().objects.create_user(username="agent-reset", password="secret")
+        AgentProfile.objects.create(user=agent)
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage a vider",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=timezone.localdate() + timedelta(days=5),
+            welcome_message="Bienvenue",
+        )
+        self.event.mark_paid(provider="test")
+        self.event.cover_image.save("cover.jpg", SimpleUploadedFile("cover.jpg", b"cover"), save=False)
+        self.event.guest_preview_enabled = True
+        self.event.save()
+        category = self.event.upload_categories.first()
+        self.upload = GuestUpload(
+            event=self.event,
+            category=category,
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="p.jpg",
+            file_size=5,
+        )
+        self.upload.media_file.save("p.jpg", SimpleUploadedFile("p.jpg", b"photo"), save=True)
+        self.movie = GeneratedMovie(event=self.event, status=GeneratedMovie.Status.COMPLETED)
+        self.movie.final_file.save("film.mp4", SimpleUploadedFile("film.mp4", b"film"), save=False)
+        self.movie.save()
+        self.message = GuestBookMessage(event=self.event, original_filename="m.mp4", file_size=3, recorded_by=agent)
+        self.message.media_file.save("m.mp4", SimpleUploadedFile("m.mp4", b"msg"), save=True)
+        self.montage = GuestBookMovie(event=self.event)
+        self.montage.final_file.save("montage.mp4", SimpleUploadedFile("montage.mp4", b"montage"), save=False)
+        self.montage.save()
+        self.assignment = GuestBookAssignment.objects.create(
+            event=self.event, agent=agent, started_at=timezone.now(), ended_at=timezone.now()
+        )
+        self.change_url = reverse("admin:events_event_change", args=[self.event.pk])
+        self.reset_url = reverse("admin:events_event_reset_content", args=[self.event.pk])
+
+    def _stored(self, field):
+        return field.storage.exists(field.name)
+
+    def test_reset_removes_all_content_and_keeps_the_event_and_its_qr_code(self):
+        before = (self.event.slug, self.event.public_access_key, self.event.get_public_url())
+        cover_name = self.event.cover_image.name
+        # Noms relevés avant : un champ vidé perd son nom.
+        files = [
+            (field.storage, field.name)
+            for field in (self.upload.media_file, self.movie.final_file, self.message.media_file, self.montage.final_file)
+        ]
+        self.assertTrue(all(storage.exists(name) for storage, name in files))
+
+        counts = reset_event_content(self.event)
+
+        self.assertEqual(
+            counts, {"uploads": 1, "movies": 1, "guestbook_messages": 1, "guestbook_movie": 1, "files": 4}
+        )
+        self.assertFalse(any(storage.exists(name) for storage, name in files))
+        self.assertFalse(self.event.guest_uploads.exists())
+        self.assertFalse(self.event.generated_movies.exists())
+        self.assertFalse(self.event.guestbook_messages.exists())
+        self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
+        # L'evenement, son lien (donc le QR code imprime) et son reglage sont intacts.
+        self.event.refresh_from_db()
+        self.assertEqual((self.event.slug, self.event.public_access_key, self.event.get_public_url()), before)
+        self.assertEqual(self.event.cover_image.name, cover_name)
+        self.assertTrue(self._stored(self.event.cover_image))
+        self.assertTrue(self.event.is_paid)
+        self.assertTrue(self.event.guest_preview_enabled)
+        self.assertEqual(self.event.welcome_message, "Bienvenue")
+        self.assertTrue(self.event.upload_categories.exists())
+        # La mission de l'agent est remise a « a demarrer ».
+        self.assignment.refresh_from_db()
+        self.assertIsNone(self.assignment.started_at)
+        self.assertIsNone(self.assignment.ended_at)
+
+    def test_the_guest_link_still_works_after_the_reset(self):
+        create_url = reverse(
+            "uploads:create", kwargs={"slug": self.event.slug, "access_key": self.event.public_access_key}
+        )
+        reset_event_content(self.event)
+
+        self.assertContains(self.client.get(create_url), "start-camera-photo-button")
+
+    def test_a_real_event_outside_test_mode_is_never_emptied(self):
+        self.event.guest_preview_enabled = False
+        self.event.save()
+
+        with self.assertRaises(EventResetRefused):
+            reset_event_content(self.event)
+
+        self.assertTrue(self.event.guest_uploads.exists())
+        self.assertTrue(self._stored(self.upload.media_file))
+
+    def test_button_shows_only_in_test_mode_and_needs_the_typed_confirmation(self):
+        self.client.login(username="admin-reset", password="secret")
+        self.assertContains(self.client.get(self.change_url), "Vider le contenu de test")
+
+        self.client.post(self.reset_url, {"confirm": "oui"})
+        self.assertTrue(self.event.guest_uploads.exists())
+
+        response = self.client.post(self.reset_url, {"confirm": "VIDER"}, follow=True)
+        self.assertRedirects(response, self.change_url)
+        self.assertFalse(self.event.guest_uploads.exists())
+        self.assertContains(response, "Contenu de test supprime")
+        self.assertContains(response, "QR code sont inchanges")
+
+        self.event.guest_preview_enabled = False
+        self.event.save()
+        self.assertNotContains(self.client.get(self.change_url), "Vider le contenu de test")
+
+    def test_admin_view_refuses_a_real_event_and_anonymous_visitors(self):
+        self.event.guest_preview_enabled = False
+        self.event.save()
+        self.client.login(username="admin-reset", password="secret")
+
+        response = self.client.post(self.reset_url, {"confirm": "VIDER"}, follow=True)
+        self.assertContains(response, "Par securite")
+        self.assertTrue(self.event.guest_uploads.exists())
+
+        self.assertEqual(self.client.get(self.reset_url).status_code, 405)
+        anonymous = self.client_class().post(self.reset_url, {"confirm": "VIDER"})
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertIn("/admin/login/", anonymous["Location"])
+
+    def test_command_previews_then_deletes_and_refuses_real_events(self):
+        out = StringIO()
+        call_command("reset_event_content", str(self.event.pk), stdout=out)
+        self.assertIn("Apercu seulement", out.getvalue())
+        self.assertTrue(self.event.guest_uploads.exists())
+
+        out = StringIO()
+        call_command("reset_event_content", str(self.event.pk), "--yes", stdout=out)
+        self.assertIn("SUPPRIME : 1 souvenir(s)", out.getvalue())
+        self.assertIn(self.event.get_public_url(), out.getvalue())
+        self.assertFalse(self.event.guest_uploads.exists())
+
+        Event.objects.filter(pk=self.event.pk).update(guest_preview_enabled=False)
+        with self.assertRaises(CommandError):
+            call_command("reset_event_content", str(self.event.pk), "--yes", stdout=StringIO())
 
 
 class GuestTestAdminTests(TestCase):

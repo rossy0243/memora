@@ -148,6 +148,83 @@ def generate_event_qr_code(event, public_url):
     return event.qr_code_image
 
 
+def _drop_file(event, instance, field_name):
+    """Supprime un fichier du stockage (R2). False s'il n'y en avait pas ou si le stockage refuse."""
+    import logging
+
+    field = getattr(instance, field_name, None)
+    if not field:
+        return False
+    try:
+        field.delete(save=False)
+    except Exception as exc:  # storage indisponible : on n'interrompt pas
+        logging.getLogger(__name__).warning(
+            "drop file failed event=%s pk=%s field=%s error=%s",
+            event.pk, getattr(instance, "pk", "?"), field_name, exc,
+        )
+        return False
+    return True
+
+
+class EventResetRefused(Exception):
+    """La remise a zero n'est permise que pour un evenement en mode test invites."""
+
+
+def reset_event_content(event):
+    """Vide le CONTENU d'un evenement de test : l'evenement et son QR code restent intacts.
+
+    Supprime souvenirs des invites, films generes, messages et montage du livre d'or
+    (fichiers R2 puis lignes) et remet a zero les missions des agents. Conserve
+    l'evenement lui-meme : lien et cle d'acces (donc le QR code), titre, date, couverture,
+    musique, formule, paiement, moments et agents affectes.
+
+    Securite : refuse tout evenement qui n'est pas en mode test invites, pour ne jamais
+    effacer par erreur les souvenirs d'un vrai evenement.
+    """
+    from django.db import transaction
+
+    if not event.guest_preview_enabled:
+        raise EventResetRefused(
+            "Par securite, seul un evenement en mode test invites peut etre vide. "
+            "Activez d'abord « Activer pour test »."
+        )
+
+    counts = {
+        "uploads": event.guest_uploads.count(),
+        "movies": event.generated_movies.count(),
+        "guestbook_messages": event.guestbook_messages.count(),
+        "guestbook_movie": 0,
+        "files": 0,
+    }
+
+    for upload in event.guest_uploads.all().iterator():
+        counts["files"] += _drop_file(event, upload, "media_file")
+    for movie in event.generated_movies.all().iterator():
+        for field_name in ("final_file", "full_file", "teaser_file"):
+            counts["files"] += _drop_file(event, movie, field_name)
+    for message in event.guestbook_messages.all().iterator():
+        counts["files"] += _drop_file(event, message, "media_file")
+    montage = getattr(event, "guestbook_movie", None)
+    if montage:
+        counts["guestbook_movie"] = 1
+        for field_name in ("final_file", "light_file"):
+            counts["files"] += _drop_file(event, montage, field_name)
+
+    with transaction.atomic():
+        # Uploads avant tout : GuestUpload.category est un FK PROTECT (voir delete_event).
+        event.guest_uploads.all().delete()
+        event.generated_movies.all().delete()
+        event.guestbook_messages.all().delete()
+        if montage:
+            montage.delete()
+        event.guestbook_assignments.update(started_at=None, ended_at=None)
+
+    import logging
+
+    logging.getLogger(__name__).info("reset_event_content event=%s counts=%s", event.pk, counts)
+    return counts
+
+
 def purge_event_media(event, *, include_deliverables=True):
     """Supprime de R2 tous les fichiers rattaches a un evenement.
 
@@ -162,18 +239,7 @@ def purge_event_media(event, *, include_deliverables=True):
     counts = {"uploads": 0, "guestbook": 0, "deliverables": 0, "event": 0}
 
     def drop(instance, field_name):
-        field = getattr(instance, field_name, None)
-        if not field:
-            return False
-        try:
-            field.delete(save=False)
-        except Exception as exc:  # storage indisponible : on n'interrompt pas
-            logger.warning(
-                "purge_event_media failed event=%s pk=%s field=%s error=%s",
-                event.pk, getattr(instance, "pk", "?"), field_name, exc,
-            )
-            return False
-        return True
+        return _drop_file(event, instance, field_name)
 
     for upload in event.guest_uploads.exclude(media_file=""):
         if drop(upload, "media_file"):

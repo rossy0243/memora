@@ -9,7 +9,13 @@ from core.models import SiteConfiguration
 from guestbook.models import GuestBookAssignment
 
 from .models import Event, EventPlan, EventType
-from .services import delete_event, purge_event_media, send_payment_receipt_email
+from .services import (
+    EventResetRefused,
+    delete_event,
+    purge_event_media,
+    reset_event_content,
+    send_payment_receipt_email,
+)
 
 
 @admin.register(EventPlan)
@@ -244,7 +250,12 @@ class EventAdmin(admin.ModelAdmin):
                 "<path:object_id>/basculer-test-invites/",
                 self.admin_site.admin_view(require_POST(self.toggle_guest_test)),
                 name="events_event_toggle_guest_test",
-            )
+            ),
+            path(
+                "<path:object_id>/vider-contenu-test/",
+                self.admin_site.admin_view(require_POST(self.reset_test_content)),
+                name="events_event_reset_content",
+            ),
         ]
         return custom + super().get_urls()
 
@@ -265,6 +276,33 @@ class EventAdmin(admin.ModelAdmin):
         else:
             self.message_user(request, "Test referme : le lien attend a nouveau la date de l'evenement.")
         return redirect(reverse("admin:events_event_change", args=[event.pk]))
+
+    def reset_test_content(self, request, object_id):
+        """Bouton de la fiche evenement : vide les souvenirs, films et livre d'or d'un test.
+
+        L'evenement, son lien et son QR code ne changent pas : on peut refaire un essai
+        avec le meme QR imprime.
+        """
+        event = get_object_or_404(Event, pk=object_id)
+        change_url = reverse("admin:events_event_change", args=[event.pk])
+        if not self.has_delete_permission(request, event):
+            return redirect("admin:index")
+        if request.POST.get("confirm") != "VIDER":
+            self.message_user(request, "Confirmation absente : rien n'a ete supprime.", level=messages.WARNING)
+            return redirect(change_url)
+        try:
+            counts = reset_event_content(event)
+        except EventResetRefused as exc:
+            self.message_user(request, str(exc), level=messages.ERROR)
+            return redirect(change_url)
+        self.message_user(
+            request,
+            f"Contenu de test supprime : {counts['uploads']} souvenir(s), {counts['movies']} film(s), "
+            f"{counts['guestbook_messages']} message(s) livre d'or"
+            f"{' + le montage' if counts['guestbook_movie'] else ''}. "
+            "L'evenement et son QR code sont inchanges.",
+        )
+        return redirect(change_url)
 
     @admin.action(description="Purger les fichiers R2 (garder l'evenement)")
     def purge_r2_files(self, request, queryset):
