@@ -139,7 +139,7 @@
     <div class="section-heading reveal">
       <div>
         <p class="section__label">Souvenirs reçus</p>
-        <h2>Médias invités</h2>
+        <h2>Tous les souvenirs</h2>
       </div>
       <div class="section-actions">
         {% if has_guestbook %}
@@ -150,25 +150,6 @@
       </div>
     </div>
 
-    {% if latest_uploads %}
-      <div class="media-grid reveal-group">
-        {% for upload in latest_uploads %}
-          <article class="media-tile">
-            {% if upload.media_type == "image" %}
-              <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
-            {% else %}
-              <div class="media-tile__video">
-                <span>Vidéo</span>
-              </div>
-            {% endif %}
-            <div>
-              <span>{{ upload.category.label }}</span>
-              <strong>{{ upload.original_filename }}</strong>
-            </div>
-          </article>
-        {% endfor %}
-      </div>
-    {% endif %}
   </section>
 </section>
 {% endblock %}

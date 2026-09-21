@@ -739,7 +739,11 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Code AMOUR2026")
         self.assertContains(response, "AMOUR2026")
         self.assertContains(response, event.public_access_key)
-        self.assertContains(response, "Médias invités")
+        self.assertContains(response, "Tous les souvenirs")
+        # Plus de tableau de vignettes en bas de page : il allongeait la page a chaque souvenir et doublait la liste
+        # « Derniers souvenirs ». L'organisateur garde « Voir tous les médias » et le ZIP.
+        self.assertNotContains(response, "media-tile")
+        self.assertContains(response, "Voir tous les médias")
         self.assertContains(response, "Derniers souvenirs")
         self.assertContains(response, "photo.jpg")
         self.assertContains(response, "video.mp4")
