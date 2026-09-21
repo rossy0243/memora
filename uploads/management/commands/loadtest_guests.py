@@ -355,6 +355,9 @@ class Command(BaseCommand):
             subset = [r["seconds"] for r in ok if r["kind"] == kind]
             if subset:
                 self.say(f"    {kind} : {len(subset)} reussis, attente serveur mediane {statistics.median(subset):.2f} s, p90 {_percentile(subset, 90):.2f} s")
+        distinct_ips = run.event.guest_uploads.values("ip_address").distinct().count()
+        self.say(f"  adresses IP distinctes vues par le serveur : {distinct_ips}"
+                 + (" (les fausses adresses envoyees par les invites simules sont ignorees : l'adresse reelle est utilisee)" if run.distinct_ips and distinct_ips <= 2 else ""))
         pages = [r["seconds"] for r in run.records if r["kind"] == "page"]
         page_fail = sum(1 for r in run.records if r["kind"] == "page" and not r["ok"])
         if pages:

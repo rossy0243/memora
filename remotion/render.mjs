@@ -58,6 +58,11 @@ async function main() {
     ? Number(process.env.REMOTION_CONCURRENCY)
     : null;
 
+  // Echelle du rendu (1 = 1920x1080 pour le film, 1080x1920 pour le teaser). 0.6667 = 1280x720 : environ
+  // 2,25 fois moins de pixels a peindre par le rendu logiciel (pas de GPU sur Render), donc bien plus vite.
+  // REMOTION_SCALE ne change que la taille du fichier final, pas le montage.
+  const scale = process.env.REMOTION_SCALE ? Number(process.env.REMOTION_SCALE) : 1;
+
   // Licence Remotion : le jour ou Memora depasse 3 personnes, poser la cle du
   // dashboard remotion.pro (page « License keys ») dans REMOTION_LICENSE_KEY.
   // Absente = licence gratuite, comportement inchange. La telemetrie de licence
@@ -120,6 +125,7 @@ async function main() {
     inputProps,
     chromiumOptions,
     concurrency,
+    ...(scale && scale !== 1 ? { scale } : {}),
     ...(offthreadCacheMb ? { offthreadVideoCacheSizeInBytes: offthreadCacheMb * 1024 * 1024 } : {}),
     // L'option n'est passee que si la cle existe : aucun impact tant que la
     // licence gratuite s'applique.

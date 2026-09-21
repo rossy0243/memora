@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django import forms
 from django.conf import settings
-from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.files.uploadedfile import SimpleUploadedFile, UploadedFile
 from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
@@ -361,6 +361,10 @@ class EventForm(forms.ModelForm):
         cover_image = self.cleaned_data.get("cover_image")
         if not cover_image:
             return cover_image
+        if not isinstance(cover_image, UploadedFile):
+            # Pas de nouvelle image : Django rend celle deja enregistree. Elle a ete validee a son envoi ;
+            # la revalider ici la faisait rejeter (« format non accepte ») a chaque modification de l'evenement.
+            return cover_image
 
         if cover_image.size > settings.MEMORA_MAX_COVER_IMAGE_SIZE:
             raise forms.ValidationError("Cette image est trop lourde. Choisissez une image de 8 Mo maximum.")
@@ -401,6 +405,8 @@ class EventForm(forms.ModelForm):
         music_file = self.cleaned_data.get("custom_music_file")
         if not music_file:
             return music_file
+        if not isinstance(music_file, UploadedFile):
+            return music_file  # deja enregistree et validee : on ne la retelecharge pas pour la reanalyser
 
         extension = Path(music_file.name).suffix.lower()
         if extension not in SUPPORTED_AUDIO_EXTENSIONS:
