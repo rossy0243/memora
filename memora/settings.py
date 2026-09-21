@@ -447,6 +447,12 @@ MEMORA_DELIVERABLE_REMINDER_DAYS = env_int("MEMORA_DELIVERABLE_REMINDER_DAYS", 1
 # Alertes d'exploitation (film en echec, tache arretee, sauvegarde absente...) : adresses separees
 # par des virgules ; a defaut, l'adresse d'assistance de la configuration Memora.
 MEMORA_ALERT_EMAILS = [item.strip() for item in os.getenv("MEMORA_ALERT_EMAILS", "").split(",") if item.strip()]
+# Notifications WhatsApp au proprietaire (nouvel evenement, alertes critiques) : voir core/notifications.py.
+# Sans cle, la fonction est desactivee.
+MEMORA_NOTIFY_WHATSAPP_APIKEY = os.getenv("MEMORA_NOTIFY_WHATSAPP_APIKEY", "")
+MEMORA_NOTIFY_WHATSAPP_PHONE = os.getenv("MEMORA_NOTIFY_WHATSAPP_PHONE", "")
+# Comptes d'essai et d'outillage (tests de charge, repetitions, parcours automatises) : jamais notifies.
+MEMORA_NOTIFY_IGNORE_PREFIXES = ("loadtest-", "rehearsal-", "e2e", "kit-check", "prev-check", "reset-check", "shot-")
 # Sauvegardes quotidiennes de la base (fichier JSON compresse sur le stockage R2) : combien garder.
 MEMORA_BACKUP_KEEP = env_int("MEMORA_BACKUP_KEEP", 14)
 MEMORA_MOVIE_IMAGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_IMAGE_DURATION_SECONDS", 3)

@@ -183,6 +183,10 @@ def send_alert(issue, now=None):
         return False
     OperationalState.objects.update_or_create(key=key, defaults={"value": {"sent_at": now.isoformat(), "title": issue.title}})
     logger.warning("Alert sent key=%s title=%s", issue.key, issue.title)
+    # Doublon WhatsApp, court : un film en echec un soir d'evenement doit se voir tout de suite.
+    from .notifications import notify_owner
+
+    notify_owner("Memora - alerte\n" + issue.title + "\n" + issue.detail.splitlines()[0][:200])
     return True
 
 

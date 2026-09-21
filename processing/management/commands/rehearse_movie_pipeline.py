@@ -22,6 +22,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+import uuid
 from datetime import datetime, time as dtime, timedelta
 from pathlib import Path
 
@@ -48,7 +49,7 @@ from processing.services import (
 )
 from uploads.models import GuestUpload
 
-BOT_USERNAME = "rehearsal-bot"
+BOT_USERNAME = "rehearsal-bot"  # suffixe aleatoire ajoute a chaque execution : plusieurs repetitions peuvent tourner en parallele
 TITLE_PREFIX = "Répétition générale"
 
 
@@ -152,7 +153,8 @@ class Command(BaseCommand):
 
     # -- graine ---------------------------------------------------------------------------------
     def _create_event(self):
-        user, _ = get_user_model().objects.get_or_create(username=BOT_USERNAME)
+        self.bot_username = f"{BOT_USERNAME}-{uuid.uuid4().hex[:6]}"
+        user, _ = get_user_model().objects.get_or_create(username=self.bot_username)
         user.set_unusable_password()
         user.email = self.options["email"] or ""
         user.save()
@@ -397,7 +399,7 @@ class Command(BaseCommand):
             self.say(f"  {len(self.temp_names)} planche(s)-contact conservee(s) sous rehearsal/ (quelques Ko, a supprimer quand vous voulez).")
         try:
             delete_event(event)
-            bot = get_user_model().objects.filter(username=BOT_USERNAME).first()
+            bot = get_user_model().objects.filter(username=self.bot_username).first()
             if bot and not bot.events.exists():
                 bot.delete()
             self.say("  evenement de test, fichiers et lignes supprimes.")

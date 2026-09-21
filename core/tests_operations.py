@@ -257,3 +257,19 @@ class DailyMaintenanceTests(TestCase):
         self.assertEqual(calls, ["cleanup_expired_media", "send_retention_reminders", "backup_database_to_storage"])
         self.assertIn("rappels de conservation", str(raised.exception))
         self.assertIsNotNone(operations.last_beat(operations.MAINTENANCE_CRON))
+
+
+class LegalDatesCommandTests(TestCase):
+    def test_dates_can_be_fixed_and_are_shown_on_the_legal_pages(self):
+        from django.urls import reverse
+
+        out = StringIO()
+        call_command("set_legal_dates", "--cgu", "2026-09-21", "--privacy", "2026-09-22", stdout=out)
+
+        self.assertIn("modifie", out.getvalue())
+        self.assertContains(self.client.get(reverse("core:terms")), "En vigueur au 21/09/2026")
+        self.assertContains(self.client.get(reverse("core:privacy")), "En vigueur au 22/09/2026")
+
+    def test_an_invalid_date_is_refused(self):
+        with self.assertRaises(CommandError):
+            call_command("set_legal_dates", "--cgu", "21/09/2026", stdout=StringIO())
