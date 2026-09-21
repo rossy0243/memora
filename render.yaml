@@ -15,7 +15,9 @@ services:
     name: memora-web
     runtime: docker
     region: frankfurt
-    plan: starter
+    # standard (1 CPU, 2 Go) et non starter (0,5 CPU, 512 Mo) : test de charge du 21/09/2026 -> avec 100 invites
+    # qui envoient une video en meme temps, 2 travailleurs synchrones + 512 Mo saturaient (502, page inaccessible).
+    plan: standard
     dockerfilePath: ./Dockerfile
     dockerContext: .
     preDeployCommand: python manage.py migrate

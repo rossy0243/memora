@@ -20,4 +20,4 @@ RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "gunicorn memora.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --timeout 300 --access-logfile - --error-logfile -"]
+CMD ["sh", "-c", "gunicorn memora.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-3} --worker-class gthread --threads ${GUNICORN_THREADS:-8} --timeout 300 --access-logfile - --error-logfile -"]
