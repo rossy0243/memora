@@ -1817,10 +1817,14 @@ h2 {
 .live-dashboard__quick {
   display: grid;
   gap: 16px;
+  /* Chaque bloc garde sa hauteur naturelle : sans cela, le bloc le plus court s'etirait a la hauteur de
+     l'aperçu du QR (vertical, comme une affiche) et repartissait ses lignes avec de grands vides. */
+  align-items: start;
 }
 
 .quick-panel {
   display: grid;
+  align-content: start;
   gap: 14px;
   padding: 18px;
 }
