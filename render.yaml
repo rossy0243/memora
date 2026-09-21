@@ -116,7 +116,7 @@ services:
         value: "True"
       - &env_max_upload
         key: MEMORA_MAX_UPLOAD_SIZE
-        value: "262144000"
+        value: "67108864"  # 64 Mo : une video de 10 s pese ~10 Mo (voir memora/settings.py)
       - &env_max_cover_image
         key: MEMORA_MAX_COVER_IMAGE_SIZE
         value: "8388608"
@@ -125,7 +125,7 @@ services:
         value: "5"
       - &env_ip_upload_limit
         key: MEMORA_IP_UPLOAD_LIMIT
-        value: "80"
+        value: "1000"  # tous les invites d'une salle partagent souvent UNE adresse IP (voir memora/settings.py)
       - &env_event_upload_limit
         key: MEMORA_EVENT_UPLOAD_LIMIT
         value: "3000"
