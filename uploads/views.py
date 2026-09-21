@@ -1,7 +1,10 @@
 import logging
 
+from django.core.cache import cache
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from events.access import has_guest_access, upcoming_event_response
@@ -99,3 +102,21 @@ def guest_upload_thanks(request, slug, access_key):
     if not has_guest_access(request, event):
         return redirect(event.get_public_url())
     return render(request, "uploads/guest_upload_thanks.html", {"event": event})
+
+
+@require_POST
+def preview_diagnostic(request, slug, access_key):
+    """Rapport technique anonyme quand un telephone ne relit pas son propre enregistrement.
+
+    Sert a comprendre les cas rares (formats video de certains iPhone) : une ligne de log,
+    au plus quelques rapports par heure et par adresse, rien de personnel.
+    """
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key)
+    if not has_guest_access(request, event):
+        return HttpResponse(status=403)
+    throttle_key = f"preview-diagnostic:{get_client_ip(request)}"
+    count = cache.get(throttle_key, 0)
+    if count < 10:
+        cache.set(throttle_key, count + 1, 3600)
+        logger.warning("Guest preview diagnostic event=%s report=%s", event.pk, request.POST.get("report", "")[:2000])
+    return HttpResponse(status=204)

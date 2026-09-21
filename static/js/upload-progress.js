@@ -38,6 +38,9 @@
   const cameraSentCount = document.getElementById("camera-sent-count");
   const initialSubmitLabel = submitButton ? submitButton.textContent : "";
   let previewUrl = "";
+  let retryPreviewUrl = "";
+  let lastRecorderType = "";
+  let previewToken = 0;
   let cameraStream = null;
   let facingMode = "environment";
   let recorder = null;
@@ -64,9 +67,63 @@
       URL.revokeObjectURL(previewUrl);
       previewUrl = "";
     }
+    if (retryPreviewUrl) {
+      URL.revokeObjectURL(retryPreviewUrl);
+      retryPreviewUrl = "";
+    }
+  }
+
+  // Rapport technique envoye au serveur quand le telephone n'arrive pas a relire son
+  // propre enregistrement : type reel, code d'erreur, formats connus du navigateur.
+  // Sert a comprendre les cas rares (iPhone) ; rien de personnel n'est envoye.
+  function reportPreviewProblem(file, stage) {
+    const url = form.dataset.diagnosticUrl;
+    if (!url || !window.fetch || !window.FormData || !previewVideo) {
+      return;
+    }
+    try {
+      const recorderSupport = {};
+      [
+        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+        "video/mp4",
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/webm",
+      ].forEach(function (type) {
+        recorderSupport[type] =
+          window.MediaRecorder && MediaRecorder.isTypeSupported ? MediaRecorder.isTypeSupported(type) : null;
+      });
+      const report = {
+        stage: stage,
+        fileType: file.type,
+        size: file.size,
+        recorderType: lastRecorderType,
+        videoError: previewVideo.error ? previewVideo.error.code + ":" + (previewVideo.error.message || "") : null,
+        readyState: previewVideo.readyState,
+        networkState: previewVideo.networkState,
+        duration: String(previewVideo.duration),
+        canPlay: {
+          mp4: previewVideo.canPlayType("video/mp4"),
+          webm: previewVideo.canPlayType("video/webm"),
+          h264: previewVideo.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),
+        },
+        recorderSupport: recorderSupport,
+        ua: navigator.userAgent,
+      };
+      const data = new FormData();
+      data.append("report", JSON.stringify(report));
+      const token = form.querySelector("[name=csrfmiddlewaretoken]");
+      if (token) {
+        data.append("csrfmiddlewaretoken", token.value);
+      }
+      window.fetch(url, { method: "POST", body: data, keepalive: true, credentials: "same-origin" }).catch(function () {});
+    } catch (error) {
+      /* le rapport est facultatif */
+    }
   }
 
   function clearPreview() {
+    previewToken += 1;
     resetPreviewUrl();
     closeCaptureReview();
     if (capturePreview) {
@@ -499,6 +556,7 @@
       }
       const recordedSeconds = recordingStartedAt ? (Date.now() - recordingStartedAt) / 1000 : maxRecordingSeconds;
       const recordedType = recorder.mimeType || mimeType || "video/webm";
+      lastRecorderType = (mimeType || "(defaut)") + " -> " + (recorder.mimeType || "?");
       const extension = recordedType.indexOf("mp4") >= 0 ? "mp4" : "webm";
       const blob = new Blob(recordedChunks, { type: recordedType });
       pendingPoster = captureLiveFrame();
@@ -655,6 +713,7 @@
       }
 
       if (isVideo && previewVideo) {
+        const token = ++previewToken;
         const poster = pendingPoster;
         pendingPoster = "";
         const sizeLabel = formatFileSize(file.size);
@@ -664,8 +723,7 @@
           previewVideo.poster = poster;
         }
         previewVideo.controls = false;
-        // « #t=0.001 » force l'affichage de la 1re image sur iOS meme sans lecture.
-        previewVideo.src = previewUrl + "#t=0.001";
+        previewVideo.src = previewUrl;
         previewVideo.hidden = false;
         previewVideo.muted = true;
         previewVideo.loop = true;
@@ -677,6 +735,9 @@
           previewDetails.textContent = sizeLabel ? "Vidéo prête - " + sizeLabel + "." : "Vidéo prête.";
         }
         previewVideo.addEventListener("loadedmetadata", function handleMetadata() {
+          if (token !== previewToken) {
+            return;
+          }
           const duration = previewVideo.duration;
           if (duration && Number.isFinite(duration)) {
             setClientDuration(duration);
@@ -688,22 +749,39 @@
           retryPreviewPlayback();
         }, { once: true });
         previewVideo.addEventListener("playing", function handlePlaying() {
+          if (token !== previewToken) {
+            return;
+          }
           if (previewPlaybackTimer) {
             window.clearTimeout(previewPlaybackTimer);
             previewPlaybackTimer = null;
           }
           previewVideo.controls = false;
-          if (previewDetails && previewVideo.muted) {
-            previewDetails.textContent = previewDetails.textContent.replace(/\.$/, "") + ". Touchez la vidéo pour le son.";
+          if (previewDetails) {
+            const played = ["Vidéo prête", formatDuration(previewVideo.duration), sizeLabel].filter(Boolean).join(" - ");
+            previewDetails.textContent = previewVideo.muted ? played + ". Touchez la vidéo pour le son." : played + ".";
           }
-        }, { once: true });
-        // Filet de securite : la lecture n'a pas demarre (autoplay refuse, economie
-        // d'energie...) -> commandes natives pour lancer l'apercu d'un toucher. Si le
-        // navigateur ne sait pas du tout relire son enregistrement, on le dit ; l'affiche
-        // reste visible et le fichier, lui, est bien capture et peut etre envoye.
-        function explainUnreadablePreview() {
-          if (!previewVideo.getAttribute("src") || !previewDetails) {
+        });
+        // Filet de securite. Si le telephone ne lit pas l'enregistrement, on retente une
+        // fois avec un type MIME simple (certains navigateurs refusent « ...;codecs=... »),
+        // puis on garde l'image d'affiche, on propose les commandes natives (un toucher
+        // suffit parfois a debloquer la lecture sur iPhone) et on le dit clairement. Le
+        // fichier, lui, est bien capture et peut etre envoye.
+        let retried = false;
+        function retryWithPlainType() {
+          retried = true;
+          const plainType = file.type.indexOf("mp4") >= 0 ? "video/mp4" : "video/webm";
+          retryPreviewUrl = URL.createObjectURL(new Blob([file], { type: plainType }));
+          previewVideo.src = retryPreviewUrl;
+          previewVideo.load();
+        }
+        let settled = false;
+        function explainUnreadablePreview(stage) {
+          if (settled || token !== previewToken || !previewVideo.getAttribute("src") || !previewDetails) {
             return;
+          }
+          if (previewVideo.error) {
+            stage = "error";
           }
           if (previewVideo.readyState > 0) {
             if (previewVideo.paused) {
@@ -712,17 +790,36 @@
             }
             return;
           }
-          previewVideo.controls = false;
-          previewDetails.textContent =
-            "Aperçu animé indisponible sur cet appareil, mais la vidéo est bien enregistrée" +
-            (sizeLabel ? " (" + sizeLabel + ")" : "") + ". Vous pouvez l'envoyer.";
+          previewVideo.controls = stage === "timeout";
+          if (stage === "timeout") {
+            previewDetails.textContent = "Vidéo prête" + (sizeLabel ? " - " + sizeLabel : "") + ". Touchez ▶ pour la revoir.";
+          } else {
+            previewDetails.textContent =
+              "Aperçu animé indisponible sur cet appareil, mais la vidéo est bien enregistrée" +
+              (sizeLabel ? " (" + sizeLabel + ")" : "") + ". Vous pouvez l'envoyer.";
+          }
           if (/[?&]debug=1/.test(window.location.search)) {
             const code = previewVideo.error ? previewVideo.error.code : "-";
             previewDetails.textContent += " [" + (file.type || "?") + " erreur=" + code + "]";
           }
+          if (stage === "error") {
+            settled = true;
+          }
+          reportPreviewProblem(file, stage);
         }
-        previewVideo.addEventListener("error", explainUnreadablePreview, { once: true });
-        previewPlaybackTimer = window.setTimeout(explainUnreadablePreview, 2500);
+        previewVideo.addEventListener("error", function handleError() {
+          if (token !== previewToken) {
+            return;
+          }
+          if (!retried) {
+            retryWithPlainType();
+            return;
+          }
+          explainUnreadablePreview("error");
+        });
+        previewPlaybackTimer = window.setTimeout(function () {
+          explainUnreadablePreview("timeout");
+        }, 2500);
         previewVideo.load();
       }
     });

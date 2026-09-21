@@ -6,10 +6,12 @@ from unittest.mock import patch
 
 from django import forms
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
@@ -541,7 +543,7 @@ class GuestUploadViewTests(TestCase):
         commandes natives si l'autoplay est refuse ; un toucher active le son."""
         script = (settings.BASE_DIR / "static" / "js" / "upload-progress.js").read_text(encoding="utf-8")
 
-        for fragment in ("captureLiveFrame", "previewVideo.poster", "retryPreviewPlayback", "previewVideo.controls = true", "#t=0.001"):
+        for fragment in ("captureLiveFrame", "previewVideo.poster", "retryPreviewPlayback", "previewVideo.controls = true", "retryWithPlainType", "reportPreviewProblem"):
             self.assertIn(fragment, script, fragment)
 
     def test_cover_photo_is_framed_towards_the_top_so_faces_are_not_cut(self):
@@ -839,3 +841,45 @@ class ReviewScreenStylesTests(TestCase):
         # « display: block » sur ces elements l'emportait sur l'attribut hidden : l'image vide
         # gardait sa place et repoussait la video -> apercu noir sur tous les navigateurs.
         self.assertIn("#capture-preview-image[hidden],\n#capture-preview-video[hidden] {\n  display: none;", css)
+
+
+class PreviewDiagnosticTests(TestCase):
+    """Rapport technique envoye par un telephone qui ne relit pas son enregistrement."""
+
+    def setUp(self):
+        cache.clear()  # la limite par adresse vit dans le cache
+        organizer = get_user_model().objects.create_user(username="orga-diag", password="secret")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Diagnostic",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+        )
+        self.url = reverse("uploads:preview_diagnostic", kwargs={"slug": self.event.slug, "access_key": self.event.public_access_key})
+
+    def test_report_is_logged_without_a_response_body(self):
+        with self.assertLogs("uploads.views", level="WARNING") as logs:
+            response = self.client.post(self.url, {"report": '{"stage": "error", "videoError": "4:"}'})
+
+        self.assertEqual(response.status_code, 204)
+        self.assertIn('"videoError": "4:"', logs.output[0])
+
+    def test_reports_are_limited_per_address(self):
+        with self.assertLogs("uploads.views", level="WARNING") as logs:
+            for _ in range(15):
+                self.client.post(self.url, {"report": "x"})
+
+        self.assertEqual(len(logs.output), 10)
+
+    def test_only_post_and_only_the_right_key(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+        wrong = reverse("uploads:preview_diagnostic", kwargs={"slug": self.event.slug, "access_key": "mauvaise-cle"})
+        self.assertEqual(self.client.post(wrong, {"report": "x"}).status_code, 404)
+
+    def test_form_points_the_script_at_the_diagnostic_url(self):
+        self.event.mark_paid(provider="test")
+        self.event.event_date = timezone.localdate()
+        self.event.save()
+        create_url = reverse("uploads:create", kwargs={"slug": self.event.slug, "access_key": self.event.public_access_key})
+
+        self.assertContains(self.client.get(create_url), f'data-diagnostic-url="{self.url}"')
