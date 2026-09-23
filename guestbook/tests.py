@@ -280,6 +280,28 @@ class GuestbookViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_inspect_assignments_command_flags_a_shift_started_before_the_event(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("inspect_assignments", stdout=out)
+        self.assertNotIn("DEMARREE AVANT", out.getvalue())
+
+        self.assignment.started_at = timezone.now()
+        self.assignment.save(update_fields=["started_at"])
+        # started_at (maintenant) precede event_date (2026-07-08) uniquement si "maintenant" est
+        # bien avant cette date ; on force plutot l'inverse pour rendre le test independant de la
+        # date d'execution : un evenement futur avec une mission demarree aujourd'hui.
+        self.event.event_date = timezone.localdate() + timedelta(days=30)
+        self.event.save(update_fields=["event_date"])
+
+        out = StringIO()
+        call_command("inspect_assignments", str(self.event.pk), stdout=out)
+
+        self.assertIn("DEMARREE AVANT LA DATE DE L'EVENEMENT", out.getvalue())
+
 
 class GuestBookMontageTests(TestCase):
     def setUp(self):
