@@ -25,6 +25,7 @@
   const recordingTimer = document.getElementById("camera-recording-timer");
   const lensToggleButton = document.getElementById("lens-toggle-button");
   const modeToggleButton = document.getElementById("mode-toggle-button");
+  const flashToggleButton = document.getElementById("flash-toggle-button");
   const cameraActionButton = document.getElementById("camera-action-button");
   const closeCameraButton = document.getElementById("close-camera-button");
   const progress = form.querySelector(".upload-progress");
@@ -43,6 +44,8 @@
   let previewToken = 0;
   let cameraStream = null;
   let facingMode = "environment";
+  let flashOn = false;
+  let flashSupported = false;
   let recorder = null;
   let recordedChunks = [];
   let recordingTimeout = null;
@@ -347,6 +350,58 @@
     }
   }
 
+  // Flash / torche : uniquement disponible sur certains telephones Android, avec la camera
+  // arriere (jamais en selfie). On decouvre la capacite APRES coup, sur le flux obtenu — la
+  // demande initiale ne doit jamais echouer a cause d'un flash absent.
+  function currentVideoTrack() {
+    return cameraStream ? cameraStream.getVideoTracks()[0] : null;
+  }
+
+  function updateFlashUi() {
+    if (!flashToggleButton) {
+      return;
+    }
+    flashToggleButton.hidden = !flashSupported;
+    flashToggleButton.classList.toggle("is-active", flashOn);
+    flashToggleButton.setAttribute("aria-pressed", flashOn ? "true" : "false");
+    flashToggleButton.setAttribute("aria-label", flashOn ? "Éteindre le flash" : "Allumer le flash");
+  }
+
+  function detectFlashSupport() {
+    flashOn = false;
+    flashSupported = false;
+    const track = currentVideoTrack();
+    if (track && typeof track.getCapabilities === "function") {
+      try {
+        const capabilities = track.getCapabilities();
+        flashSupported = !!(capabilities && capabilities.torch);
+      } catch {
+        // Certains navigateurs (Safari iOS) n'exposent pas les capacites : le bouton reste cache.
+      }
+    }
+    updateFlashUi();
+  }
+
+  async function setFlash(nextFlashOn) {
+    const track = currentVideoTrack();
+    if (!track || !flashSupported) {
+      return;
+    }
+    try {
+      await track.applyConstraints({ advanced: [{ torch: nextFlashOn }] });
+      flashOn = nextFlashOn;
+    } catch {
+      // Le telephone a refuse la commande (torche coupee par le systeme...) : l'etat ne change pas.
+    }
+    updateFlashUi();
+  }
+
+  if (flashToggleButton) {
+    flashToggleButton.addEventListener("click", function () {
+      setFlash(!flashOn);
+    });
+  }
+
   function stopCamera(options) {
     const hidePanel = !options || options.hidePanel !== false;
     if (recordingTimeout) {
@@ -366,6 +421,10 @@
       });
       cameraStream = null;
     }
+    // La torche s'eteint avec la piste qui la pilotait : l'etat affiche doit suivre.
+    flashOn = false;
+    flashSupported = false;
+    updateFlashUi();
     if (liveVideo) {
       liveVideo.srcObject = null;
     }
@@ -399,6 +458,7 @@
     try {
       cameraStream = await requestCameraStream();
       liveVideo.srcObject = cameraStream;
+      detectFlashSupport();
       setCameraStatus(facingMode === "user" ? "Selfie actif" : "Caméra arrière active");
       updateCameraUi();
     } catch (error) {

@@ -60,7 +60,10 @@
       <div class="camera-panel" id="camera-panel" role="dialog" aria-modal="true" aria-label="Caméra livre d'or" hidden>
         <div class="camera-panel__topbar">
           <span>Livre d'or</span>
-          <button class="camera-close" type="button" id="close-camera-button" aria-label="Fermer la caméra">Fermer</button>
+          <div class="camera-panel__topbar-actions">
+            <button class="camera-flash-button" type="button" id="flash-toggle-button" aria-label="Allumer le flash" aria-pressed="false" hidden>&#9889;</button>
+            <button class="camera-close" type="button" id="close-camera-button" aria-label="Fermer la caméra">Fermer</button>
+          </div>
         </div>
 
         <div class="camera-live">

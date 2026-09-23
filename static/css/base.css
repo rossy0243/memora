@@ -3070,6 +3070,12 @@ body.camera-open {
   font-weight: 900;
 }
 
+.camera-panel__topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .camera-close {
   min-height: 40px;
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -3079,6 +3085,28 @@ body.camera-open {
   background: rgba(255, 255, 255, 0.12);
   font: inherit;
   font-weight: 900;
+}
+
+/* Bouton flash : icone seule, meme famille visuelle que « Fermer ». Cache par defaut
+   (attribut hidden) : il n'apparait que si le telephone confirme une torche pilotable
+   (camera arriere avec flash, la plupart des selfies n'en ont pas). */
+.camera-flash-button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.camera-flash-button.is-active {
+  border-color: rgba(216, 180, 106, 0.7);
+  color: var(--color-ink);
+  background: var(--color-champagne);
 }
 
 .camera-live {

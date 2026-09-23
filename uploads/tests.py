@@ -550,6 +550,25 @@ class GuestUploadViewTests(TestCase):
         for fragment in ("captureLiveFrame", "previewVideo.poster", "retryPreviewPlayback", "previewVideo.controls = true", "retryWithPlainType", "reportPreviewProblem"):
             self.assertIn(fragment, script, fragment)
 
+    def test_flash_button_is_wired_on_both_camera_screens(self):
+        """Le bouton flash n'existe que si le telephone confirme une torche pilotable (camera arriere
+        avec flash) : cache par defaut dans le gabarit, revele via getCapabilities().torch, jamais
+        propose en selfie. La demande de camera ne doit jamais echouer a cause d'un flash absent."""
+        for js_name, html_name in (
+            ("upload-progress.js", "uploads/guest_upload_form.html"),
+            ("guestbook-capture.js", "guestbook/capture.html"),
+        ):
+            script = (settings.BASE_DIR / "static" / "js" / js_name).read_text(encoding="utf-8")
+            template = (settings.BASE_DIR / "templates" / html_name).read_text(encoding="utf-8")
+
+            self.assertIn('id="flash-toggle-button"', template, html_name)
+            self.assertIn("hidden>", template.split('id="flash-toggle-button"')[1][:120], html_name)
+            for fragment in ("getCapabilities", "torch", "applyConstraints", "detectFlashSupport", "flashSupported"):
+                self.assertIn(fragment, script, f"{js_name}: {fragment}")
+
+        css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
+        self.assertIn(".camera-flash-button", css)
+
     def test_cover_photo_is_framed_towards_the_top_so_faces_are_not_cut(self):
         css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
 
