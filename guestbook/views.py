@@ -54,6 +54,13 @@ def guestbook_capture(request, pk):
     assignment = _get_assignment(request, pk)
     event = assignment.event
 
+    # Le stand n'ouvre que le jour J (l'equipe peut avancer la date pour un essai avec
+    # « Activer pour test », meme reglage que le parcours invite : event.is_upcoming le
+    # prend en compte). Sans ce garde-fou, un agent qui ouvre sa mission en avance
+    # enregistre des messages de test qui se retrouveraient dans le montage final.
+    if event.is_upcoming:
+        return render(request, "guestbook/mission_not_started.html", {"event": event})
+
     if assignment.ended_at:
         return render(request, "guestbook/shift_closed.html", {"event": event})
 

@@ -91,6 +91,61 @@ class GuestbookViewTests(TestCase):
         self.assignment.refresh_from_db()
         self.assertIsNotNone(self.assignment.started_at)
 
+    def test_agent_cannot_capture_before_the_event_day(self):
+        """Regression : un agent qui ouvrait sa mission en avance demarrait le service et
+        pouvait enregistrer des messages de test, qui se seraient retrouves dans le montage
+        final au meme titre que les vrais messages du jour J."""
+        self.event.event_date = timezone.localdate() + timedelta(days=5)
+        self.event.save(update_fields=["event_date"])
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "n'ouvre pas encore")
+        self.assertNotContains(response, "id=\"start-camera-button\"")
+        self.assignment.refresh_from_db()
+        self.assertIsNone(self.assignment.started_at)
+
+    def test_agent_cannot_post_a_message_before_the_event_day_either(self):
+        self.event.event_date = timezone.localdate() + timedelta(days=5)
+        self.event.save(update_fields=["event_date"])
+        self.client.login(username="agent1", password="secret")
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+
+        response = self.client.post(self.capture_url(), {"media_file": media})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "n'ouvre pas encore")
+        self.assertEqual(GuestBookMessage.objects.filter(event=self.event).count(), 0)
+
+    def test_test_mode_lets_an_agent_rehearse_before_the_event_day(self):
+        """Meme bascule que le parcours invite (« Activer pour test ») : l'equipe peut ouvrir
+        le stand en avance pour un essai, sans attendre le jour J."""
+        self.event.event_date = timezone.localdate() + timedelta(days=5)
+        self.event.guest_preview_enabled = True
+        self.event.save(update_fields=["event_date", "guest_preview_enabled"])
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "id=\"start-camera-button\"")
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.started_at)
+
+    def test_agent_home_flags_missions_that_have_not_opened_yet(self):
+        self.event.event_date = timezone.localdate() + timedelta(days=5)
+        self.event.save(update_fields=["event_date"])
+        self.client.login(username="agent1", password="secret")
+
+        from django.utils.formats import date_format
+
+        response = self.client.get(reverse("guestbook:agent_home"))
+
+        self.assertContains(response, f"Ouvre le {date_format(self.event.event_date)}")
+        self.assertNotContains(response, "À démarrer")
+
     @patch("guestbook.forms._probe_video_duration", return_value=18)
     def test_agent_records_a_message(self, _probe_video_duration):
         self.client.login(username="agent1", password="secret")
