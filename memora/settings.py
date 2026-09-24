@@ -464,6 +464,9 @@ MEMORA_MOVIE_FULL_DURATION_SECONDS = env_int("MEMORA_MOVIE_FULL_DURATION_SECONDS
 MEMORA_MOVIE_TEASER_DURATION_SECONDS = env_int("MEMORA_MOVIE_TEASER_DURATION_SECONDS", 60)
 MEMORA_MOVIE_TEASER_WIDTH = env_int("MEMORA_MOVIE_TEASER_WIDTH", 1080)
 MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
+# Plafond de souvenirs par invite (ses mieux notes) : montrer le plus d'invites possible dans le teaser
+# et l'integrale. Le film heros n'est pas plafonne.
+MEMORA_MOVIE_MAX_PER_GUEST = {"teaser": 1, "full": 2}
 MEMORA_MOVIE_VARIANTS_ENABLED = env_bool("MEMORA_MOVIE_VARIANTS_ENABLED", True)
 # Declinaisons produites en plus du film heros. L'integrale montee ("full") est
 # retiree par defaut : le ZIP des fichiers originaux joue ce role (meilleure

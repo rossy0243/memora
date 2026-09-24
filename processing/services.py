@@ -239,8 +239,56 @@ def _reject_unusable_uploads(uploads):
     return kept, rejected
 
 
-def get_movie_candidate_uploads(event, max_duration=None):
-    """Selection des medias. Par defaut la duree du film heros (court = dense = emouvant)."""
+def _guest_groups(uploads):
+    """Regroupe les souvenirs par invite. Deux souvenirs sont du meme invite s'ils partagent la session,
+    le cookie d'appareil ou l'identifiant du navigateur (meme logique que la limite d'envois), donc un
+    invite qui a vide ses cookies en cours de soiree reste un seul invite."""
+    parent = {}
+
+    def find(key):
+        while parent.setdefault(key, key) != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    for upload in uploads:
+        own = ("upload", upload.pk)
+        for kind, value in (
+            ("session", upload.session_key),
+            ("cookie", upload.device_cookie),
+            ("device", upload.device_id),
+        ):
+            if value:
+                parent[find(own)] = find((kind, value))
+    groups = {}
+    for upload in uploads:
+        groups.setdefault(find(("upload", upload.pk)), []).append(upload)
+    return list(groups.values())
+
+
+def _limit_per_guest(uploads, max_per_guest, needed_seconds):
+    """Au plus `max_per_guest` souvenirs par invite (ses mieux notes), pour que le film montre le
+    plus d'invites possible. Si cela ne suffit pas a remplir la duree voulue, on complete avec les
+    meilleurs souvenirs restants : un film court en materiel n'est jamais raccourci."""
+    kept, rest = [], []
+    for group in _guest_groups(uploads):
+        ranked = _sort_movie_candidates(group)
+        kept.extend(ranked[:max_per_guest])
+        rest.extend(ranked[max_per_guest:])
+
+    total = sum(_estimated_movie_clip_duration(upload) for upload in kept)
+    for upload in _sort_movie_candidates(rest):
+        if total >= needed_seconds:
+            break
+        kept.append(upload)
+        total += _estimated_movie_clip_duration(upload)
+    return kept
+
+
+def get_movie_candidate_uploads(event, max_duration=None, max_per_guest=None):
+    """Selection des medias. Par defaut la duree du film heros (court = dense = emouvant).
+
+    `max_per_guest` : plafond de souvenirs par invite (teaser : 1, integrale : 2) ; None = sans plafond."""
     max_duration = max_duration or settings.MEMORA_MOVIE_HERO_DURATION_SECONDS
 
     uploads = list(
@@ -253,6 +301,8 @@ def get_movie_candidate_uploads(event, max_duration=None):
     )
 
     uploads, _rejected = _reject_unusable_uploads(uploads)
+    if max_per_guest:
+        uploads = _limit_per_guest(uploads, max_per_guest, max_duration)
 
     videos = _sort_movie_candidates(
         upload for upload in uploads if upload.media_type == GuestUpload.MediaType.VIDEO
@@ -1431,7 +1481,11 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
         try:
             if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
                 continue
-            variant_uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
+            variant_uploads = list(
+                get_movie_candidate_uploads(
+                    event, max_duration=max_duration, max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable)
+                )
+            )
             if not variant_uploads:
                 continue
             _update_movie_progress(movie, progress, "Déclinaisons premium (intégrale et teaser).")
@@ -1519,7 +1573,11 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
         try:
             if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
                 continue
-            uploads = list(get_movie_candidate_uploads(event, max_duration=max_duration))
+            uploads = list(
+                get_movie_candidate_uploads(
+                    event, max_duration=max_duration, max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable)
+                )
+            )
             if not uploads:
                 continue
 

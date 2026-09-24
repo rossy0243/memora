@@ -269,6 +269,46 @@ class MovieGenerationServiceTests(TestCase):
             ),
         )
 
+    def _guest_video(self, name, session, size, device_id=""):
+        upload = self.create_upload(name, GuestUpload.MediaType.VIDEO, file_size=size, duration=timedelta(seconds=10))
+        GuestUpload.objects.filter(pk=upload.pk).update(session_key=session, device_id=device_id)
+        return upload
+
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    def test_teaser_shows_as_many_guests_as_possible_instead_of_one_prolific_guest(self):
+        heavy = [self._guest_video(f"a{i}.mp4", "guest-a", 30_000_000 + i) for i in range(3)]
+        for s in "bcd":
+            self._guest_video(f"{s}.mp4", f"guest-{s}", 5_000_000)
+
+        without_cap = list(get_movie_candidate_uploads(self.event, max_duration=30))
+        with_cap = list(get_movie_candidate_uploads(self.event, max_duration=30, max_per_guest=1))
+
+        self.assertCountEqual(without_cap, heavy)  # sans plafond, un seul invite occupe tout le film
+        self.assertEqual(len(with_cap), 3)
+        self.assertEqual(len({u.session_key for u in with_cap}), 3)  # trois invites differents
+        self.assertEqual(sum(1 for u in with_cap if u.session_key == "guest-a"), 1)
+
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    def test_the_per_guest_cap_never_shortens_a_film_that_lacks_material(self):
+        for i in range(3):
+            self._guest_video(f"a{i}.mp4", "guest-a", 10_000_000 + i)
+        self._guest_video("b.mp4", "guest-b", 5_000_000)
+
+        selected = list(get_movie_candidate_uploads(self.event, max_duration=40, max_per_guest=1))
+
+        self.assertEqual(len(selected), 4)  # 2 invites seulement : on complete avec les meilleurs restants
+
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    def test_a_guest_who_cleared_cookies_still_counts_as_one_guest(self):
+        first = self._guest_video("a1.mp4", "session-1", 30_000_000, device_id="d" * 36)
+        second = self._guest_video("a2.mp4", "session-2", 29_000_000, device_id="d" * 36)  # autre session, meme appareil
+        other = self._guest_video("b.mp4", "session-b", 5_000_000)
+
+        selected = list(get_movie_candidate_uploads(self.event, max_duration=20, max_per_guest=1))
+
+        self.assertCountEqual(selected, [first, other])
+        self.assertNotIn(second, selected)
+
     @override_settings(
         MEMORA_MOVIE_MAX_DURATION_SECONDS=20,
         MEMORA_MOVIE_HERO_DURATION_SECONDS=20,
