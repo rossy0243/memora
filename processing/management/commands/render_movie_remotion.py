@@ -33,11 +33,34 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("event_id", type=int, nargs="?")
         parser.add_argument("--list", action="store_true", help="Liste les evenements et leurs souvenirs.")
+        parser.add_argument("--inventory", action="store_true", help="Liste les videos presentes sur le stockage, dossier par dossier.")
         parser.add_argument("--upload-sample", action="store_true", help="Depose le MP4 sur le stockage (samples/) et affiche un lien.")
         parser.add_argument("--deliverable", choices=list(_DELIVERABLE_DURATION), default="hero")
         parser.add_argument("--output", default=None)
 
     def handle(self, *args, **options):
+        if options["inventory"]:
+            from django.core.files.storage import default_storage
+
+            def walk(folder):
+                directories, files = default_storage.listdir(folder)
+                for name in files:
+                    yield f"{folder}/{name}" if folder else name
+                for name in directories:
+                    yield from walk(f"{folder}/{name}" if folder else name)
+
+            folders = {}
+            for path in walk(""):
+                if path.lower().endswith((".mp4", ".mov", ".webm")):
+                    entry = folders.setdefault(path.rsplit("/", 1)[0], [0, 0])
+                    entry[0] += 1
+                    try:
+                        entry[1] += default_storage.size(path)
+                    except Exception:
+                        pass
+            for folder, (count, size) in sorted(folders.items()):
+                self.stdout.write(f"{folder}: {count} video(s), {size / 1e6:.1f} Mo")
+            return
         if options["list"]:
             for event in Event.objects.order_by("pk"):
                 uploads = event.guest_uploads.filter(is_deleted=False)
