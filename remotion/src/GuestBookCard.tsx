@@ -18,7 +18,14 @@ export const GuestBookCard: React.FC<GuestBookCardProps> = ({
   if (kind === "name") {
     return <NameCard name={name} durationInFrames={durationInFrames} />;
   }
+  // Signature « Memora » sur l'intro et la fin ; le sceau ferme le livre d'or comme le film.
   return (
-    <TitleCard title={title} subtitle={subtitle} durationInFrames={durationInFrames} />
+    <TitleCard
+      title={title}
+      subtitle={subtitle}
+      durationInFrames={durationInFrames}
+      showSeal={kind === "outro"}
+      brandLine
+    />
   );
 };

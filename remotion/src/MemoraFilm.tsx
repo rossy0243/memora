@@ -255,7 +255,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
 
       <FilmGrain />
 
-      {watermark ? <Watermark /> : null}
+      {watermark ? <Watermark topInset={cinematicBars ? barHeight : 0} /> : null}
 
       {cinematicBars && barHeight > 0 ? (
         <>

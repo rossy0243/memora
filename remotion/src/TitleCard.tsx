@@ -19,13 +19,15 @@ export const TitleCard: React.FC<{
   // Le sceau ne marque que la sortie : une signature de cloture, pas un logo
   // repete a chaque carton.
   showSeal?: boolean;
+  // Signature « Memora » en bas du carton (livre d'or) : pour ceux qui ne connaissent pas le logo.
+  brandLine?: boolean;
   // Ouverture a froid : le fond n'est plus le degrade encre, mais le plan qui
   // joue derriere (passe par le parent). Le texte se pose alors sur un voile
   // au lieu d'un carton plein, et n'apparait qu'apres `revealDelay` frames —
   // le temps de laisser l'emotion du plan respirer seule.
   transparentBg?: boolean;
   revealDelay?: number;
-}> = ({ title, subtitle, durationInFrames, showSeal, transparentBg, revealDelay = 0 }) => {
+}> = ({ title, subtitle, durationInFrames, showSeal, brandLine, transparentBg, revealDelay = 0 }) => {
   ensureFonts();
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -152,6 +154,26 @@ export const TitleCard: React.FC<{
             {subtitle}
           </div>
           {rule}
+        </div>
+      ) : null}
+
+      {brandLine ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: minSide * 0.06,
+            textAlign: "center",
+            opacity: subtitleOpacity * 0.85,
+            color: "#f4d9d5",
+            fontFamily: `"${TITLE_FONT}", Georgia, serif`,
+            fontSize: minSide * 0.042,
+            fontWeight: 700,
+            letterSpacing: minSide * 0.003,
+          }}
+        >
+          Memora
         </div>
       ) : null}
     </AbsoluteFill>

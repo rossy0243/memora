@@ -1446,16 +1446,10 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
     remotion_data["deliverables"]["hero"] = {"ok": True, "clips": len(uploads)}
     movie.render_provider = "remotion"
 
-    output_path = temp_path / f"memora_{_clean_name(event.title)}.mp4"
-    badge_data = _build_badge_data(event)
-    _update_movie_progress(movie, 74, "Ajout du badge premium de l'événement.")
-    try:
-        final_output_path = _apply_event_badge(hero_path, output_path, event, ffmpeg_binary, temp_path)
-        badge_data["applied"] = final_output_path == output_path
-    except Exception as exc:
-        final_output_path = hero_path
-        badge_data["error"] = str(exc)
-    movie.edit_decision_data["badge"] = badge_data
+    # Le logo « Memora » est desormais incruste par Remotion sur tous les livrables (haut a droite) :
+    # l'ancien bandeau du bas (ffmpeg) fait double emploi et passait inapercu sur telephone.
+    final_output_path = hero_path
+    movie.edit_decision_data["badge"] = {**_build_badge_data(event), "applied": False, "replaced_by": "remotion-watermark"}
 
     _update_movie_progress(movie, 80, "Enregistrement de la vidéo finale.")
     with final_output_path.open("rb") as output_file:

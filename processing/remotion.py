@@ -261,11 +261,10 @@ def build_film_props(
         # sur le livrable qu'on regarde ensemble, pas sur l'integrale (archive)
         # ni le teaser (deja vertical plein cadre).
         "cinematicBars": deliverable == "hero",
-        # Watermark permanent : uniquement le teaser, le format que les invites
-        # partagent (WhatsApp, stories...) — c'est la ou la marque doit rester
-        # visible du debut a la fin, pas seulement sur le sceau du carton final
-        # que peu de monde regarde jusqu'au bout sur les reseaux.
-        "watermark": deliverable == "teaser",
+        # Logo permanent en haut a droite, avec le mot « Memora », sur tous les livrables :
+        # la marque reste visible du debut a la fin (et pas seulement sur le sceau du carton
+        # final), pour ceux qui ne connaissent pas le monogramme.
+        "watermark": True,
         # Ouverture a froid : quel plan (index dans `clips`) sert de fond muet au
         # carton d'intro. Le meilleur score plutot que le premier chronologique —
         # voir _select_cold_open_index.

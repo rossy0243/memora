@@ -602,7 +602,17 @@ class MovieGenerationServiceTests(TestCase):
         self.assertTrue(movie.full_file.name)
         self.assertTrue(movie.teaser_file.name)
         self.assertTrue(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["ok"])
-        self.assertTrue(movie.edit_decision_data["badge"]["applied"])
+        # L'ancien bandeau ffmpeg du bas est remplace par le logo incruste par Remotion.
+        self.assertFalse(movie.edit_decision_data["badge"]["applied"])
+        self.assertEqual(movie.edit_decision_data["badge"]["replaced_by"], "remotion-watermark")
+
+    def test_the_logo_is_burned_in_on_every_deliverable(self):
+        from processing.remotion import build_film_props
+
+        upload = self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+        for deliverable in ("hero", "full", "teaser"):
+            props = build_film_props(self.event, [upload], None, deliverable=deliverable)
+            self.assertTrue(props["watermark"], deliverable)
 
     @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
     @patch("processing.services.shutil.which", return_value="ffmpeg")

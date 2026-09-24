@@ -11,12 +11,13 @@ import { TITLE_FONT } from "./fonts";
 // le souvenir lui-meme). En HAUT (le bas du cadre passait inapercu sur telephone) et
 // accompagnee du mot « Memora » : ceux qui ne connaissent pas le monogramme
 // comprennent d'ou vient la video.
-export const Watermark: React.FC = () => {
+export const Watermark: React.FC<{ topInset?: number }> = ({ topInset = 0 }) => {
   const { width, height } = useVideoConfig();
   const minSide = Math.min(width, height);
   const size = minSide * 0.125;
   const margin = minSide * 0.05;
-  const topOffset = Math.max(height * 0.055, margin);
+  // topInset : hauteur des bandeaux cinema du film heros, sous lesquels le logo doit se poser.
+  const topOffset = Math.max(height * 0.055, margin) + topInset;
 
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
