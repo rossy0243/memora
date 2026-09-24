@@ -14,9 +14,11 @@ from .forms import GuestUploadForm
 from .services import (
     ensure_session_key,
     get_client_ip,
+    get_device_identity,
     get_or_create_default_upload_category,
     get_upload_limit_error,
     get_upload_quota,
+    remember_device,
 )
 
 
@@ -34,13 +36,14 @@ def guest_upload_create(request, slug, access_key):
         return redirect(event.get_public_url())
 
     session_key = ensure_session_key(request)
-    upload_quota = get_upload_quota(event, session_key)
+    identity = get_device_identity(request)
+    upload_quota = get_upload_quota(event, session_key, identity)
 
     if request.method == "POST":
         form = GuestUploadForm(request.POST, request.FILES, event=event)
         if form.is_valid():
             ip_address = get_client_ip(request)
-            limit_error = get_upload_limit_error(event, session_key, ip_address)
+            limit_error = get_upload_limit_error(event, session_key, ip_address, identity)
 
             if limit_error:
                 logger.warning("Guest upload blocked for event=%s reason=%s", event.pk, limit_error)
@@ -57,6 +60,9 @@ def guest_upload_create(request, slug, access_key):
                 upload.ip_address = ip_address
                 upload.user_agent = request.META.get("HTTP_USER_AGENT", "")[:1000]
                 upload.session_key = session_key
+                upload.device_cookie = identity["device_cookie"]
+                upload.device_id = identity["device_id"]
+                upload.device_signature = identity["device_signature"]
                 try:
                     upload.save()
                 except Exception as exc:
@@ -67,28 +73,34 @@ def guest_upload_create(request, slug, access_key):
                     form.add_error("media_file", STORAGE_UNAVAILABLE_MESSAGE)
                 else:
                     logger.info("Guest upload accepted event=%s upload=%s type=%s", event.pk, upload.pk, upload.media_type)
-                    return redirect(
-                        reverse(
-                            "uploads:thanks",
-                            kwargs={
-                                "slug": event.slug,
-                                "access_key": event.public_access_key,
-                            },
-                        )
+                    return remember_device(
+                        redirect(
+                            reverse(
+                                "uploads:thanks",
+                                kwargs={
+                                    "slug": event.slug,
+                                    "access_key": event.public_access_key,
+                                },
+                            )
+                        ),
+                        identity,
                     )
     else:
         form = GuestUploadForm(event=event)
 
-    return render(
-        request,
-        "uploads/guest_upload_form.html",
-        {
-            "event": event,
-            "form": form,
-            "upload_quota": upload_quota,
-            # Un point par souvenir permis ; au-dela de 8, le texte suffit.
-            "quota_slots": range(upload_quota["limit"]) if upload_quota["limit"] <= 8 else [],
-        },
+    return remember_device(
+        render(
+            request,
+            "uploads/guest_upload_form.html",
+            {
+                "event": event,
+                "form": form,
+                "upload_quota": upload_quota,
+                # Un point par souvenir permis ; au-dela de 8, le texte suffit.
+                "quota_slots": range(upload_quota["limit"]) if upload_quota["limit"] <= 8 else [],
+            },
+        ),
+        identity,
     )
 
 

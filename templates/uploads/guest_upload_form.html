@@ -30,6 +30,8 @@
 
   <form id="guest-upload-form" method="post" enctype="multipart/form-data" class="guest-upload-form" action="{% url 'uploads:create' event.slug event.public_access_key %}" data-remaining="{{ upload_quota.remaining }}" data-thanks-url="{% url 'uploads:thanks' event.slug event.public_access_key %}" data-diagnostic-url="{% url 'uploads:preview_diagnostic' event.slug event.public_access_key %}">
     {% csrf_token %}
+    <input type="hidden" name="device_id" id="device-id" value="">
+    <input type="hidden" name="device_sig" id="device-sig" value="">
     {{ form.client_duration_seconds }}
     {{ form.non_field_errors }}
 

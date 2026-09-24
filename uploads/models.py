@@ -128,6 +128,11 @@ class GuestUpload(models.Model):
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     user_agent = models.TextField(blank=True)
     session_key = models.CharField(max_length=80, blank=True)
+    # Identifiants d'appareil (cookie serveur, stockage du navigateur, empreinte materielle) : ils
+    # relient les envois d'un meme invite meme s'il vide ses cookies ou revient plus tard.
+    device_cookie = models.CharField(max_length=64, blank=True, db_index=True)
+    device_id = models.CharField(max_length=64, blank=True, db_index=True)
+    device_signature = models.CharField(max_length=32, blank=True)
     moderation_status = models.CharField(
         max_length=16,
         choices=ModerationStatus.choices,

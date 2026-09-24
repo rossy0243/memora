@@ -314,6 +314,72 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
         self.assertTrue(upload.session_key)
 
+    def _post_photo(self, client, device_id="", name="p.jpg"):
+        return client.post(self.upload_url(), {"media_file": make_test_image_file(name), "device_id": device_id, "device_sig": "abcdef0123456789"})
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=2)
+    def test_clearing_cookies_does_not_reset_the_guest_limit(self):
+        """Le compteur suit l'appareil, pas seulement le cookie de session : vider ses cookies (mais
+        pas le stockage du navigateur) ou perdre la session ne redonne pas de souvenirs."""
+        from django.test import Client
+
+        device = "a" * 36
+        first = Client()
+        self.assertRedirects(self._post_photo(first, device), self.thanks_url())
+        self.assertRedirects(self._post_photo(first, device), self.thanks_url())
+
+        # Cookies vides = nouvelle session et nouveau cookie d'appareil, mais meme identifiant du navigateur.
+        wiped = Client()
+        response = self._post_photo(wiped, device)
+        self.assertContains(response, "limite de 2 souvenirs")
+        self.assertEqual(GuestUpload.objects.filter(event=self.event).count(), 2)
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=2)
+    def test_losing_the_browser_id_is_caught_by_the_device_cookie(self):
+        """Storage vide mais cookie serveur conserve : toujours reconnu."""
+        from django.test import Client
+
+        client = Client()
+        self._post_photo(client, "b" * 36)
+        self._post_photo(client, "b" * 36)
+        client.cookies.pop("sessionid", None)  # session perdue, cookie d'appareil garde
+
+        response = self._post_photo(client, "")
+        self.assertContains(response, "limite de 2 souvenirs")
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=2)
+    def test_another_guest_with_the_same_phone_model_is_never_blocked(self):
+        """Deux telephones identiques partagent la meme empreinte materielle : l'empreinte est
+        enregistree mais ne bloque jamais, pour ne pas priver un invite honnete."""
+        from django.test import Client
+
+        for _ in range(2):
+            self._post_photo(Client(), "c" * 36 if _ == 0 else "d" * 36)
+        for _ in range(2):
+            self._post_photo(Client(), "e" * 36 if _ == 0 else "f" * 36)
+
+        self.assertEqual(GuestUpload.objects.filter(event=self.event, device_signature="abcdef0123456789").count(), 4)
+
+    @override_settings(MEMORA_UPLOAD_COOLDOWN_SECONDS=0, MEMORA_SESSION_UPLOAD_LIMIT=2)
+    def test_junk_device_values_are_ignored(self):
+        from django.test import Client
+
+        client = Client()
+        response = client.post(self.upload_url(), {"media_file": make_test_image_file("j.jpg"), "device_id": "<script>", "device_sig": "zz"})
+        self.assertRedirects(response, self.thanks_url())
+        upload = GuestUpload.objects.get(event=self.event)
+        self.assertEqual(upload.device_id, "")
+        self.assertEqual(upload.device_signature, "")
+
+    def test_the_device_cookie_is_set_by_the_server_and_kept(self):
+        response = self.client.get(self.upload_url())
+
+        cookie = response.cookies["memora_device"]
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie["max-age"], 60 * 60 * 24 * 365)
+        second = self.client.get(self.upload_url())
+        self.assertNotIn("memora_device", second.cookies)  # deja pose : on ne le change pas
+
     @patch("uploads.models.GuestUpload.save", side_effect=OSError("storage down"))
     def test_guest_upload_storage_error_returns_form_error(self, _upload_save):
         media = make_test_image_file("photo.jpg")

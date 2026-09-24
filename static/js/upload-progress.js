@@ -4,6 +4,76 @@
     return;
   }
 
+  // Identifiant d'appareil : garde dans le stockage du navigateur ET dans un cookie, pour que vider
+  // l'un des deux ne fasse pas oublier a Memora combien de souvenirs cet invite a deja envoyes.
+  // L'empreinte materielle (ecran, processeur, langue...) n'est qu'enregistree, jamais bloquante.
+  (function fillDeviceFields() {
+    const idField = document.getElementById("device-id");
+    const sigField = document.getElementById("device-sig");
+    function readStored() {
+      let value = "";
+      try {
+        value = window.localStorage.getItem("memora_device") || "";
+      } catch {
+        value = "";
+      }
+      if (!value) {
+        const match = document.cookie.match(/(?:^|; )memora_cid=([A-Za-z0-9_-]{16,64})/);
+        value = match ? match[1] : "";
+      }
+      return value;
+    }
+    function randomToken() {
+      const bytes = new Uint8Array(18);
+      (window.crypto || window.msCrypto).getRandomValues(bytes);
+      return Array.from(bytes, function (b) {
+        return b.toString(16).padStart(2, "0");
+      }).join("");
+    }
+    function hashText(text) {
+      let h1 = 0xdeadbeef;
+      let h2 = 0x41c6ce57;
+      for (let i = 0; i < text.length; i += 1) {
+        const ch = text.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return ((h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0"));
+    }
+    try {
+      let id = readStored();
+      if (!id) {
+        id = randomToken();
+      }
+      try {
+        window.localStorage.setItem("memora_device", id);
+      } catch {
+        // Navigation privee : le cookie ci-dessous prend le relais.
+      }
+      document.cookie = "memora_cid=" + id + "; max-age=31536000; path=/; SameSite=Lax";
+      if (idField) {
+        idField.value = id;
+      }
+      if (sigField) {
+        const parts = [
+          window.screen ? window.screen.width + "x" + window.screen.height + "x" + window.screen.colorDepth : "",
+          window.devicePixelRatio || "",
+          navigator.hardwareConcurrency || "",
+          navigator.deviceMemory || "",
+          navigator.maxTouchPoints || 0,
+          navigator.platform || "",
+          navigator.language || "",
+          (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "",
+        ];
+        sigField.value = hashText(parts.join("|"));
+      }
+    } catch {
+      // Sans identifiant, le serveur retombe sur la session et le cookie d'appareil.
+    }
+  })();
+
   const fileInput = form.querySelector("input[type='file']");
   const clientDurationInput = document.getElementById("client-duration-seconds");
   const capturePreview = document.getElementById("capture-preview");

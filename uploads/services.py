@@ -1,5 +1,8 @@
 from django.conf import settings
-from django.db.models import F, Max
+import re
+import secrets
+
+from django.db.models import F, Max, Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -238,15 +241,63 @@ def ensure_session_key(request):
     return request.session.session_key
 
 
-def get_upload_quota(event, session_key):
-    limit = settings.MEMORA_SESSION_UPLOAD_LIMIT
-    used = 0
+DEVICE_COOKIE_NAME = "memora_device"
+DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+_DEVICE_TOKEN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
+_DEVICE_SIGNATURE = re.compile(r"^[0-9a-f]{8,32}$")
+
+
+def _clean(value, pattern):
+    value = (value or "").strip()
+    return value if pattern.match(value) else ""
+
+
+def get_device_identity(request):
+    """Ce qui permet de reconnaitre un invite : cookie de session, cookie d'appareil pose par le
+    serveur, identifiant garde par la page (stockage du navigateur) et empreinte materielle.
+
+    L'empreinte est seulement enregistree (des telephones identiques la partagent) : elle ne bloque
+    personne, elle permet de reperer un abus apres coup."""
+    cookie_id = _clean(request.COOKIES.get(DEVICE_COOKIE_NAME), _DEVICE_TOKEN)
+    return {
+        "device_cookie": cookie_id or secrets.token_urlsafe(24),
+        "is_new_cookie": not cookie_id,
+        "device_id": _clean(request.POST.get("device_id"), _DEVICE_TOKEN),
+        "device_signature": _clean(request.POST.get("device_sig"), _DEVICE_SIGNATURE),
+    }
+
+
+def remember_device(response, identity):
+    if identity["is_new_cookie"]:
+        response.set_cookie(
+            DEVICE_COOKIE_NAME,
+            identity["device_cookie"],
+            max_age=DEVICE_COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="Lax",
+            secure=settings.SESSION_COOKIE_SECURE,
+        )
+    return response
+
+
+def _guest_uploads(event, session_key, identity):
+    """Les souvenirs deja envoyes par CET invite : meme session OU meme appareil (cookie serveur ou
+    identifiant du navigateur). Vider ses cookies ne remet donc plus le compteur a zero."""
+    uploads = GuestUpload.objects.filter(event=event, is_deleted=False)
+    identity = identity or {}
+    match = Q(pk__in=[])
     if session_key:
-        used = GuestUpload.objects.filter(
-            event=event,
-            is_deleted=False,
-            session_key=session_key,
-        ).count()
+        match |= Q(session_key=session_key)
+    if identity.get("device_cookie"):
+        match |= Q(device_cookie=identity["device_cookie"])
+    if identity.get("device_id"):
+        match |= Q(device_id=identity["device_id"])
+    return uploads.filter(match)
+
+
+def get_upload_quota(event, session_key, identity=None):
+    limit = settings.MEMORA_SESSION_UPLOAD_LIMIT
+    used = _guest_uploads(event, session_key, identity).count()
     remaining = max(limit - used, 0)
     return {
         "limit": limit,
@@ -256,7 +307,7 @@ def get_upload_quota(event, session_key):
     }
 
 
-def get_upload_limit_error(event, session_key, ip_address):
+def get_upload_limit_error(event, session_key, ip_address, identity=None):
     event_uploads = GuestUpload.objects.filter(event=event, is_deleted=False)
 
     # Quota de la formule, avec marge de tolerance : on ne bloque jamais un invite
@@ -268,7 +319,8 @@ def get_upload_limit_error(event, session_key, ip_address):
             "L'organisateur peut passer à une formule supérieure pour en collecter plus."
         )
 
-    if session_key and event_uploads.filter(session_key=session_key).count() >= settings.MEMORA_SESSION_UPLOAD_LIMIT:
+    guest_uploads = _guest_uploads(event, session_key, identity)
+    if guest_uploads.count() >= settings.MEMORA_SESSION_UPLOAD_LIMIT:
         label = "souvenir" if settings.MEMORA_SESSION_UPLOAD_LIMIT == 1 else "souvenirs"
         return f"Vous avez atteint la limite de {settings.MEMORA_SESSION_UPLOAD_LIMIT} {label} pour cet événement."
 
@@ -278,9 +330,7 @@ def get_upload_limit_error(event, session_key, ip_address):
     cooldown_seconds = settings.MEMORA_UPLOAD_COOLDOWN_SECONDS
     if cooldown_seconds > 0:
         cooldown_after = timezone.now() - timezone.timedelta(seconds=cooldown_seconds)
-        recent_uploads = event_uploads.filter(uploaded_at__gte=cooldown_after)
-
-        if session_key and recent_uploads.filter(session_key=session_key).exists():
+        if guest_uploads.filter(uploaded_at__gte=cooldown_after).exists():
             return "Patientez quelques secondes avant d'envoyer un autre souvenir."
 
         # Pas de pause par adresse IP : tous les invites d'une meme salle (Wi-Fi du lieu, reseau mobile
