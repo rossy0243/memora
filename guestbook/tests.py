@@ -119,6 +119,44 @@ class GuestbookViewTests(TestCase):
         self.assertContains(response, "n'ouvre pas encore")
         self.assertEqual(GuestBookMessage.objects.filter(event=self.event).count(), 0)
 
+    def test_agent_stand_ignores_the_guest_opening_hour(self):
+        """L'heure d'ouverture du QR invites (ex. 20 h) ne retarde pas l'agent, qui arrive avant eux."""
+        self.event.event_date = timezone.localdate()
+        self.event.guest_opening_time = (timezone.localtime() + timedelta(hours=2)).time().replace(microsecond=0)
+        self.event.save(update_fields=["event_date", "guest_opening_time"])
+        if not self.event.is_upcoming:  # passage de minuit : le cas n'existe pas
+            self.skipTest("l'heure future tombe le lendemain")
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertContains(response, 'id="start-camera-button"')
+
+    def test_reopen_command_resets_an_empty_shift_only(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        self.assignment.started_at = timezone.now()
+        self.assignment.ended_at = timezone.now()
+        self.assignment.save(update_fields=["started_at", "ended_at"])
+
+        call_command("reopen_guestbook_shift", str(self.event.pk), "agent1", stdout=StringIO())
+        self.assignment.refresh_from_db()
+        self.assertIsNone(self.assignment.started_at)
+        self.assertIsNone(self.assignment.ended_at)
+
+        GuestBookMessage.objects.create(
+            event=self.event, media_file="x/a.mp4", original_filename="a.mp4", file_size=1, recorded_by=self.agent
+        )
+        self.assignment.ended_at = timezone.now()
+        self.assignment.save(update_fields=["ended_at"])
+        with self.assertRaises(CommandError):
+            call_command("reopen_guestbook_shift", str(self.event.pk), "agent1", stdout=StringIO())
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.ended_at)
+
     def test_test_mode_lets_an_agent_rehearse_before_the_event_day(self):
         """Meme bascule que le parcours invite (« Activer pour test ») : l'equipe peut ouvrir
         le stand en avance pour un essai, sans attendre le jour J."""

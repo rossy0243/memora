@@ -3,7 +3,7 @@
     python manage.py inspect_assignments [event_id]
 
 Utile pour verifier, avant ou pendant un evenement, qu'aucun agent n'a demarre son service en
-avance (voir le garde-fou `event.is_upcoming` dans `guestbook.views.guestbook_capture`).
+avance (voir le garde-fou `event.is_upcoming_for_agent` dans `guestbook.views.guestbook_capture`).
 """
 from django.core.management.base import BaseCommand
 
@@ -32,7 +32,7 @@ class Command(BaseCommand):
             )
             self.stdout.write(
                 f"evenement={event.pk} « {event.title} » date={event.event_date} "
-                f"a_venir={event.is_upcoming} test={event.guest_preview_enabled} | "
+                f"a_venir={event.is_upcoming_for_agent} test={event.guest_preview_enabled} | "
                 f"agent={assignment.agent.username} demarree={assignment.started_at or '-'} "
                 f"terminee={assignment.ended_at or '-'} messages={event.guestbook_messages.count()}"
                 + (" *** DEMARREE AVANT LA DATE DE L'EVENEMENT ***" if started_before_event else "")

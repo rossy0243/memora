@@ -10,7 +10,7 @@
 <section class="app-shell">
   <div class="empty-state">
     <h2>Le stand n'ouvre pas encore pour {{ event.title }}.</h2>
-    <p>Cette mission commence le {{ event.event_date }}{% if event.guest_opening_time %} à {{ event.guest_opening_time|time:"G\hi" }}{% endif %}. Revenez à ce moment-là pour enregistrer les messages du livre d'or.</p>
+    <p>Cette mission commence le {{ event.event_date }}. Revenez ce jour-là pour enregistrer les messages du livre d'or.</p>
     <a class="button button--secondary" href="{% url 'guestbook:agent_home' %}">Retour à mes missions</a>
   </div>
 </section>

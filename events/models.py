@@ -383,6 +383,12 @@ class Event(models.Model):
         return timezone.make_aware(datetime.combine(self.event_date, self.guest_opening_time or time.min))
 
     @property
+    def is_upcoming_for_agent(self):
+        """Le stand de l'agent du livre d'or s'ouvre le jour J des minuit, quelle que soit
+        l'heure d'ouverture choisie pour les invites (l'agent arrive avant eux)."""
+        return not self.guest_preview_enabled and timezone.localdate() < self.event_date
+
+    @property
     def is_upcoming(self):
         """Vrai tant que l'ouverture (jour J, a l'heure choisie) n'est pas arrivee : la
         collecte est payee mais pas encore ouverte aux invites. L'equipe peut l'ouvrir
