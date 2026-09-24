@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, time
 from decimal import Decimal
 
 from django.conf import settings
@@ -320,6 +321,15 @@ class Event(models.Model):
             "date). À retirer une fois le test terminé."
         ),
     )
+    guest_opening_time = models.TimeField(
+        "heure d'ouverture du QR code",
+        blank=True,
+        null=True,
+        help_text=(
+            "Heure (le jour de l'événement) à partir de laquelle les invités peuvent prendre des "
+            "photos et vidéos avec le QR code. Vide = dès minuit."
+        ),
+    )
     media_retention_days = models.PositiveIntegerField(default=7)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -367,11 +377,17 @@ class Event(models.Model):
         return self.is_active and self.is_paid
 
     @property
+    def guest_opens_at(self):
+        """Moment (fuseau du site) ou la collecte s'ouvre : le jour J a l'heure choisie par
+        l'organisateur, sinon a minuit."""
+        return timezone.make_aware(datetime.combine(self.event_date, self.guest_opening_time or time.min))
+
+    @property
     def is_upcoming(self):
-        """Vrai tant que le jour de l'evenement n'est pas arrive (fuseau du site) :
-        la collecte est payee mais pas encore ouverte aux invites. L'equipe peut
-        l'ouvrir avant l'heure pour un essai (`guest_preview_enabled`)."""
-        return not self.guest_preview_enabled and timezone.localdate() < self.event_date
+        """Vrai tant que l'ouverture (jour J, a l'heure choisie) n'est pas arrivee : la
+        collecte est payee mais pas encore ouverte aux invites. L'equipe peut l'ouvrir
+        avant l'heure pour un essai (`guest_preview_enabled`)."""
+        return not self.guest_preview_enabled and timezone.now() < self.guest_opens_at
 
     @property
     def formatted_price(self):

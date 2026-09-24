@@ -156,6 +156,7 @@ class EventAdmin(admin.ModelAdmin):
                     "guest_access_code",
                     "qr_code_image",
                     "is_active",
+                    "guest_opening_time",
                     "guest_preview_enabled",
                 )
             },

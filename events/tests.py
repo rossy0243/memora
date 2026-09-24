@@ -1699,6 +1699,39 @@ class UpcomingEventTests(TestCase):
         self.assertFalse(self._event(days_from_today=0).is_upcoming)
         self.assertFalse(self._event(days_from_today=-2).is_upcoming)
 
+    def test_the_qr_code_only_opens_at_the_chosen_hour_on_the_day(self):
+        """Un invite qui a deja le lien ne peut pas filmer avant la soiree : le jour J, la collecte
+        reste fermee jusqu'a l'heure choisie par l'organisateur."""
+        from datetime import time
+
+        event = self._event(days_from_today=0)
+        now = timezone.localtime()
+        later = (now + timedelta(hours=2)).time().replace(microsecond=0)
+        earlier = (now - timedelta(hours=2)).time().replace(microsecond=0)
+        # Cas limites de minuit : on ne teste l'heure future que si elle reste le meme jour.
+        if (now + timedelta(hours=2)).date() == now.date():
+            event.guest_opening_time = later
+            event.save()
+            self.assertTrue(event.is_upcoming)
+            response = self.client.get(self._upload_url(event))
+            self.assertContains(response, "Rendez-vous le")
+            self.assertContains(response, f"à {later.hour}h{later:%M}")
+            self.assertNotContains(response, "start-camera-photo-button")
+        if (now - timedelta(hours=2)).date() == now.date():
+            event.guest_opening_time = earlier
+            event.save()
+            self.assertFalse(event.is_upcoming)
+            self.assertContains(self.client.get(self._upload_url(event)), "start-camera-photo-button")
+        event.guest_opening_time = time(23, 59)
+        event.guest_preview_enabled = True
+        event.save()
+        self.assertFalse(event.is_upcoming)  # le mode test de l'equipe passe toujours
+
+    def test_the_organizer_can_set_the_opening_hour_in_the_event_form(self):
+        from events.forms import EventForm
+
+        self.assertIn("guest_opening_time", EventForm.Meta.fields)
+
 
 class QrKitTests(TestCase):
     """Pack QR : le QR en grand, la phrase d'invitation et la marque Memora, sur fond transparent."""

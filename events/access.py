@@ -1,4 +1,3 @@
-from datetime import datetime, time
 from hashlib import sha256
 import math
 
@@ -24,8 +23,7 @@ def upcoming_event_response(request, event):
     """
     if not event.is_upcoming or is_event_preview_user(request, event):
         return None
-    opens_at = timezone.make_aware(datetime.combine(event.event_date, time.min))
-    return render(request, "events/public_event_upcoming.html", {"event": event, "opens_at": opens_at})
+    return render(request, "events/public_event_upcoming.html", {"event": event, "opens_at": event.guest_opens_at})
 
 
 def event_access_session_key(event):

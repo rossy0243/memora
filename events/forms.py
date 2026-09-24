@@ -160,6 +160,7 @@ class EventForm(forms.ModelForm):
             "promo_code",
             "moments",
             "event_date",
+            "guest_opening_time",
             "cover_image",
             "welcome_message",
             "custom_music_file",
@@ -167,6 +168,7 @@ class EventForm(forms.ModelForm):
         )
         widgets = {
             "event_date": forms.DateInput(attrs={"type": "date"}),
+            "guest_opening_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
             "welcome_message": forms.Textarea(attrs={"rows": 4}),
         }
         labels = {
@@ -174,6 +176,7 @@ class EventForm(forms.ModelForm):
             "couple_name": "Nom affiché aux invités",
             "event_type": "Type d'événement",
             "event_date": "Date de l'événement",
+            "guest_opening_time": "Heure d'ouverture du QR code (optionnel)",
             "cover_image": "Image de couverture",
             "welcome_message": "Message d'accueil",
             "custom_music_file": "Votre propre musique (optionnel)",
@@ -184,6 +187,10 @@ class EventForm(forms.ModelForm):
             "couple_name": "Pour un mariage : Camille & Noé. Pour un autre événement : Anniversaire de Lina, Gala Memora...",
             "event_type": "Les moments proposés aux invités s'adaptent au type choisi.",
             "event_date": "Les médias seront conservés 7 jours après cette date.",
+            "guest_opening_time": (
+                "Avant cette heure, le QR code affiche « Rendez-vous le… » : un invité qui a déjà le "
+                "lien ne peut pas filmer avant la soirée. Laissez vide pour ouvrir dès minuit."
+            ),
             "welcome_message": "Une phrase courte suffit. Elle apparaît sur la page invitée.",
             "custom_music_file": (
                 "Remplace la musique choisie automatiquement pour votre film souvenir. "

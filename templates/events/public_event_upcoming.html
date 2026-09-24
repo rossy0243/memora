@@ -18,8 +18,8 @@
   <div class="public-event__shade" aria-hidden="true"></div>
   <div class="public-event__content" data-opens-at="{{ opens_at|date:'c' }}">
     <p class="eyebrow">{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</p>
-    <h1>Rendez-vous le {{ event.event_date|date:"j F" }}</h1>
-    <p class="tagline">Le partage des souvenirs ouvrira le jour de l'événement. Gardez ce lien : ce jour-là, il vous mènera directement à l'appareil photo.</p>
+    <h1>Rendez-vous le {{ event.event_date|date:"j F" }}{% if event.guest_opening_time %} à {{ event.guest_opening_time|time:"G\hi" }}{% endif %}</h1>
+    <p class="tagline">Le partage des souvenirs ouvrira {% if event.guest_opening_time %}à cette heure-là, le jour de l'événement{% else %}le jour de l'événement{% endif %}. Gardez ce lien : à l'ouverture, il vous mènera directement à l'appareil photo.</p>
     <p class="microcopy">À très vite !</p>
   </div>
 </section>
