@@ -254,9 +254,9 @@ def _guest_groups(uploads):
     for upload in uploads:
         own = ("upload", upload.pk)
         for kind, value in (
-            ("session", upload.session_key),
-            ("cookie", upload.device_cookie),
-            ("device", upload.device_id),
+            ("session", getattr(upload, "session_key", "")),
+            ("cookie", getattr(upload, "device_cookie", "")),
+            ("device", getattr(upload, "device_id", "")),
         ):
             if value:
                 parent[find(own)] = find((kind, value))
@@ -1218,6 +1218,10 @@ def _order_by_narrative_arc(uploads):
         return uploads
 
     chapters = assign_time_chapters(uploads)
+    guest_of = {}
+    for index, guest_group in enumerate(_guest_groups(uploads)):
+        for upload in guest_group:
+            guest_of[upload.pk] = index
     groups = {}
     for upload in uploads:
         rank = chapters[upload.pk][0]
@@ -1229,9 +1233,28 @@ def _order_by_narrative_arc(uploads):
         videos = [u for u in group if u.media_type == GuestUpload.MediaType.VIDEO]
         photos = [u for u in group if u.media_type == GuestUpload.MediaType.IMAGE]
         # On garde l'alternance a l'interieur d'un chapitre pour eviter les blocs de videos.
-        ordered.extend(_weave_photos_between_videos(videos, photos) if videos and photos else group)
+        woven = _weave_photos_between_videos(videos, photos) if videos and photos else group
+        ordered.extend(_separate_same_guest(woven, guest_of))
 
     return ordered
+
+
+def _separate_same_guest(items, guest_of):
+    """Evite que deux souvenirs du meme invite se suivent, sans en retirer aucun : on ne fait que
+    reordonner. On garde autant que possible l'alternance photo/video et l'ordre de qualite."""
+    remaining = list(items)
+    result = []
+    while remaining:
+        last_guest = guest_of.get(result[-1].pk) if result else None
+        wanted_type = remaining[0].media_type
+        choice = next(
+            (i for i, u in enumerate(remaining) if guest_of.get(u.pk) != last_guest and u.media_type == wanted_type),
+            None,
+        )
+        if choice is None:
+            choice = next((i for i, u in enumerate(remaining) if guest_of.get(u.pk) != last_guest), 0)
+        result.append(remaining.pop(choice))
+    return result
 
 
 def _movie_beat_interval(event, uploads):

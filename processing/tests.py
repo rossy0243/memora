@@ -272,6 +272,7 @@ class MovieGenerationServiceTests(TestCase):
     def _guest_video(self, name, session, size, device_id=""):
         upload = self.create_upload(name, GuestUpload.MediaType.VIDEO, file_size=size, duration=timedelta(seconds=10))
         GuestUpload.objects.filter(pk=upload.pk).update(session_key=session, device_id=device_id)
+        upload.session_key, upload.device_id = session, device_id
         return upload
 
     @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
@@ -289,6 +290,28 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(sum(1 for u in with_cap if u.session_key == "guest-a"), 1)
 
     @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0, MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED=True)
+    def test_clips_of_the_same_guest_are_spread_out_without_losing_any(self):
+        from processing.services import _order_by_narrative_arc
+
+        prolific = [self._guest_video(f"a{i}.mp4", "guest-a", 10_000_000) for i in range(4)]
+        others = [self._guest_video(f"{s}.mp4", f"guest-{s}", 5_000_000) for s in "bcd"]
+
+        ordered = _order_by_narrative_arc(prolific + others)
+
+        self.assertCountEqual(ordered, prolific + others)  # aucun souvenir perdu
+        sessions = [u.session_key for u in ordered]
+        adjacent = sum(1 for x, y in zip(sessions, sessions[1:]) if x == y)
+        self.assertEqual(adjacent, 0, sessions)
+
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0, MEMORA_MOVIE_NARRATIVE_ORDER_ENABLED=True)
+    def test_a_single_guest_film_is_left_untouched(self):
+        from processing.services import _order_by_narrative_arc
+
+        clips = [self._guest_video(f"a{i}.mp4", "guest-a", 10_000_000 + i) for i in range(3)]
+
+        self.assertCountEqual(_order_by_narrative_arc(clips), clips)
+
     def test_the_per_guest_cap_never_shortens_a_film_that_lacks_material(self):
         for i in range(3):
             self._guest_video(f"a{i}.mp4", "guest-a", 10_000_000 + i)
