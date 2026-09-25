@@ -218,7 +218,7 @@ class TimeZoneTests(TestCase):
 
         self.assertEqual(settings.TIME_ZONE, "Africa/Kinshasa")
 
-    def test_the_film_is_scheduled_at_noon_kinshasa_time(self):
+    def test_the_film_is_scheduled_at_seven_kinshasa_time(self):
         from processing.services import get_event_movie_schedule_at
 
         organizer = get_user_model().objects.create_user(username="orga-tz", password="secret")
@@ -227,4 +227,4 @@ class TimeZoneTests(TestCase):
         scheduled = get_event_movie_schedule_at(event)
 
         self.assertEqual(scheduled.utcoffset(), timedelta(hours=1))
-        self.assertEqual((scheduled.date().isoformat(), scheduled.hour), ("2026-09-27", 12))
+        self.assertEqual((scheduled.date().isoformat(), scheduled.hour), ("2026-09-27", 7))

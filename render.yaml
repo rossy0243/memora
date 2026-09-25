@@ -163,7 +163,7 @@ services:
         value: "600"
       - &env_movie_autogenerate_hour
         key: MEMORA_MOVIE_AUTOGENERATE_HOUR
-        value: "12"
+        value: "7"
       - &env_movie_encoder
         key: MEMORA_MOVIE_VIDEO_ENCODER
         value: libx264
