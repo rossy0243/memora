@@ -4843,3 +4843,211 @@ body.capture-review-open {
   font-weight: 800;
   text-decoration: none;
 }
+
+/* ---- Guide de premiere visite (invites et agent du livre d'or) ---- */
+.guide {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+}
+
+.guide[hidden] {
+  display: none;
+}
+
+body.guide-open {
+  overflow: hidden;
+}
+
+.guide__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 13, 14, 0.66);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: guide-fade 260ms ease-out both;
+}
+
+.guide__card {
+  position: relative;
+  display: grid;
+  gap: 22px;
+  width: min(100%, 420px);
+  padding: 30px 24px 22px;
+  border: 1px solid rgba(216, 180, 106, 0.3);
+  border-radius: 24px;
+  color: #fdfaf6;
+  background: radial-gradient(130% 120% at 50% 0%, #2b2427 0%, #1a1516 62%, #120e0f 100%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  text-align: center;
+  animation: guide-rise 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.guide__skip {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 0;
+  color: rgba(253, 250, 246, 0.6);
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.guide__slides {
+  display: grid;
+  align-items: start;
+  min-height: 250px;
+}
+
+.guide__slide {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 10px;
+  animation: guide-slide 320ms ease-out both;
+}
+
+.guide__slide[hidden] {
+  display: none;
+}
+
+.guide__icon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(216, 180, 106, 0.4);
+  border-radius: 50%;
+  color: var(--color-champagne);
+  background: radial-gradient(circle at 50% 35%, rgba(216, 180, 106, 0.16), rgba(216, 180, 106, 0.02) 70%);
+}
+
+.guide__icon svg {
+  width: 38px;
+  height: 38px;
+}
+
+.guide__eyebrow {
+  margin: 0;
+  color: var(--color-champagne);
+  font-family: var(--font-accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.guide__title {
+  margin: 0;
+  color: #fdfaf6;
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 6.4vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.guide__text {
+  max-width: 34ch;
+  margin: 2px 0 0;
+  color: rgba(253, 250, 246, 0.76);
+  font-size: 0.97rem;
+  line-height: 1.55;
+}
+
+.guide__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.guide__dots {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.guide__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(253, 250, 246, 0.24);
+  transition: width 200ms ease, background 200ms ease;
+}
+
+.guide__dots i.is-active {
+  width: 22px;
+  border-radius: 999px;
+  background: var(--color-champagne);
+}
+
+.guide__next {
+  min-height: 48px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(159, 79, 95, 0.4);
+  font: inherit;
+  font-weight: 800;
+}
+
+.guide__next:focus-visible,
+.guide__skip:focus-visible,
+.guide-help:focus-visible {
+  outline: 2px solid var(--color-champagne);
+  outline-offset: 3px;
+}
+
+.guide-help {
+  justify-self: start;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  color: var(--color-champagne);
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@keyframes guide-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes guide-rise {
+  from { opacity: 0; transform: translateY(24px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes guide-slide {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (min-width: 640px) {
+  .guide {
+    align-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide__backdrop,
+  .guide__card,
+  .guide__slide {
+    animation: none;
+  }
+}

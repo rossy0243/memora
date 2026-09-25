@@ -55,6 +55,7 @@
         <strong>Enregistrer un message.</strong>
         <p id="camera-permission-note">Le navigateur demandera l'autorisation caméra et micro.</p>
         <button class="button button--primary" type="button" id="start-camera-button">Lancer la caméra</button>
+        <button class="guide-help" type="button" data-guide-open>Guide de l'agent</button>
       </div>
 
       <div class="camera-panel" id="camera-panel" role="dialog" aria-modal="true" aria-label="Caméra livre d'or" hidden>
@@ -121,5 +122,7 @@
 {% endblock %}
 
 {% block scripts %}
+{% include "includes/guide_agent.html" %}
 <script src="{% static 'js/guestbook-capture.js' %}"></script>
+<script src="{% static 'js/guide.js' %}"></script>
 {% endblock %}

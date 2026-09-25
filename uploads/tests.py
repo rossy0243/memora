@@ -616,6 +616,32 @@ class GuestUploadViewTests(TestCase):
         for fragment in ("captureLiveFrame", "previewVideo.poster", "retryPreviewPlayback", "previewVideo.controls = true", "retryWithPlainType", "reportPreviewProblem"):
             self.assertIn(fragment, script, fragment)
 
+    def test_the_first_visit_guide_is_offered_but_never_blocks_the_guest_page(self):
+        """Guide de premiere visite : 3 ecrans caches par defaut (aucun blocage sans JavaScript), rouvrable
+        par un lien, et absent quand la limite est atteinte. Aucun mot sur le film ni sur Memora."""
+        response = self.client.get(self.upload_url())
+
+        self.assertContains(response, 'id="guide"')
+        self.assertContains(response, 'data-guide-key="guest-v1"')
+        self.assertContains(response, "data-guide-open")
+        self.assertContains(response, "Acceptez la caméra et le micro")
+        html = response.content.decode()
+        guide_html = html.split('id="guide"')[1].split("guide__footer")[0].lower()
+        for forbidden in ("film", "montage", "galerie", "memora"):
+            self.assertNotIn(forbidden.replace("film", "film "), guide_html, forbidden)
+        self.assertIn("hidden>", html.split('id="guide"')[1][:260])  # ferme tant que le script ne l'ouvre pas
+        script = (settings.BASE_DIR / "static" / "js" / "guide.js").read_text(encoding="utf-8")
+        for fragment in ("localStorage", "Escape", "camera-open", "memora_guide_"):
+            self.assertIn(fragment, script, fragment)
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1, MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
+    def test_no_guide_once_the_guest_limit_is_reached(self):
+        self.client.post(self.upload_url(), {"media_file": make_test_image_file("g.jpg")})
+
+        response = self.client.get(self.upload_url())
+
+        self.assertNotContains(response, 'id="guide"')
+
     def test_flash_button_is_wired_on_both_camera_screens(self):
         """Le bouton flash n'existe que si le telephone confirme une torche pilotable (camera arriere
         avec flash) : cache par defaut dans le gabarit, revele via getCapabilities().torch, jamais

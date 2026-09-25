@@ -66,6 +66,7 @@
             <button class="button button--primary" type="button" id="start-camera-video-button" aria-label="Ouvrir la caméra en mode vidéo">Vidéo <span class="camera-studio__limit">(10 s max)</span></button>
           </div>
           <p id="camera-permission-note">L'accès caméra et micro vous sera demandé.</p>
+          <button class="guide-help" type="button" data-guide-open>Comment ça marche ?</button>
         {% endif %}
       </div>
 
@@ -144,4 +145,8 @@
 {% block scripts %}
 <script src="{% static 'js/upload-progress.js' %}"></script>
 <script src="{% static 'js/native-photo.js' %}"></script>
+{% if not upload_quota.is_reached %}
+{% include "includes/guide_guest.html" %}
+<script src="{% static 'js/guide.js' %}"></script>
+{% endif %}
 {% endblock %}

@@ -119,6 +119,17 @@ class GuestbookViewTests(TestCase):
         self.assertContains(response, "n'ouvre pas encore")
         self.assertEqual(GuestBookMessage.objects.filter(event=self.event).count(), 0)
 
+    def test_agent_page_offers_a_first_visit_guide_in_french(self):
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertContains(response, 'data-guide-key="agent-v1"')
+        self.assertContains(response, "Posez le téléphone sur le trépied")
+        self.assertContains(response, "Terminez votre service en dernier")
+        self.assertContains(response, "data-guide-open")
+        self.assertNotContains(response, "tendez")
+
     def test_agent_stand_ignores_the_guest_opening_hour(self):
         """L'heure d'ouverture du QR invites (ex. 20 h) ne retarde pas l'agent, qui arrive avant eux."""
         self.event.event_date = timezone.localdate()

@@ -1,0 +1,31 @@
+{# Guide de premiere visite pour l'agent du livre d'or : 3 ecrans. Voir static/js/guide.js. #}
+<div class="guide" id="guide" data-guide-key="agent-v1" data-done-label="Compris" role="dialog" aria-modal="true" aria-labelledby="guide-title" hidden>
+  <div class="guide__backdrop" data-guide-close></div>
+  <div class="guide__card">
+    <button class="guide__skip" type="button" data-guide-close>Passer</button>
+    <div class="guide__slides">
+      <section class="guide__slide" data-guide-slide>
+        <span class="guide__icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="17" y="5" width="14" height="23" rx="3"/><path d="M24 28v5"/><path d="M24 33 14 43M24 33l10 10M24 33v10"/></svg></span>
+        <p class="guide__eyebrow">Installation</p>
+        <h2 class="guide__title" id="guide-title">Posez le téléphone sur le trépied</h2>
+        <p class="guide__text">Cadrez en portrait, face à l'invité. Il n'a rien à toucher : c'est vous qui lancez l'enregistrement.</p>
+      </section>
+      <section class="guide__slide" data-guide-slide hidden>
+        <span class="guide__icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="16"/><circle cx="24" cy="24" r="6" fill="currentColor"/></svg></span>
+        <p class="guide__eyebrow">Un message à la fois</p>
+        <h2 class="guide__title">Lancez, l'enregistrement s'arrête seul</h2>
+        <p class="guide__text">Touchez « Lancer la caméra » puis le bouton rouge : la vidéo s'arrête après {{ max_duration_seconds }} secondes. Vérifiez l'aperçu, ajoutez le nom de l'invité si vous le souhaitez, puis envoyez.</p>
+      </section>
+      <section class="guide__slide" data-guide-slide hidden>
+        <span class="guide__icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="24" cy="24" r="17"/><path d="m16 24.5 6 6 11-12"/></svg></span>
+        <p class="guide__eyebrow">Fin de soirée</p>
+        <h2 class="guide__title">Terminez votre service en dernier</h2>
+        <p class="guide__text">Touchez « Terminer mon service » seulement après le dernier message : le montage du livre d'or démarre alors. Les messages restent secrets, le couple ne découvre que le montage final.</p>
+      </section>
+    </div>
+    <div class="guide__footer">
+      <span class="guide__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <button class="guide__next" type="button" data-guide-next>Suivant</button>
+    </div>
+  </div>
+</div>
