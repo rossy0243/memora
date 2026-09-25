@@ -387,6 +387,99 @@ class GuestBookMontageTests(TestCase):
         self.assertEqual(movie.status, GuestBookMovie.Status.PENDING)
         self.assertEqual(movie.trigger, "agent_end_shift")
 
+    def _second_agent(self, started=True):
+        other = get_user_model().objects.create_user(username="agent-m2", password="secret")
+        AgentProfile.objects.create(user=other)
+        assignment = GuestBookAssignment.objects.create(
+            event=self.event, agent=other, started_at=timezone.now() if started else None
+        )
+        return other, assignment
+
+    def test_montage_waits_for_the_last_agent_to_finish(self):
+        """Avec plusieurs agents, le premier a terminer ne lance pas de montage partiel : le dernier le declenche."""
+        self._add_message()
+        _other, other_assignment = self._second_agent()
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(started_at=timezone.now())
+        self.client.login(username="agent-m", password="secret")
+
+        response = self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}), follow=True)
+
+        self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
+        self.assertContains(response, "quand les autres agents")
+
+        self.client.logout()
+        self.client.login(username="agent-m2", password="secret")
+        self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
+
+        self.assertEqual(GuestBookMovie.objects.get(event=self.event).trigger, "agent_end_shift")
+
+    def test_an_agent_who_never_started_does_not_block_the_montage(self):
+        self._add_message()
+        self._second_agent(started=False)
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(started_at=timezone.now())
+        self.client.login(username="agent-m", password="secret")
+
+        self.client.post(reverse("guestbook:end_shift", kwargs={"pk": self.event.pk}))
+
+        self.assertTrue(GuestBookMovie.objects.filter(event=self.event).exists())
+
+    def test_abandoned_shift_waits_while_another_agent_is_still_recording(self):
+        self._add_message()
+        self._second_agent()  # demarre maintenant, encore ouvert
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
+            started_at=timezone.now() - timedelta(hours=48), ended_at=None
+        )
+
+        queued = queue_abandoned_guestbook_movies()
+
+        self.assertEqual(queued, 0)
+        self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.ended_at)  # clos quand meme
+
+    def test_messages_recorded_during_the_render_trigger_a_catch_up(self):
+        self._add_message("Les voisins")
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
+            started_at=timezone.now(), ended_at=timezone.now()
+        )
+        movie = GuestBookMovie.objects.create(event=self.event)
+
+        def render_while_a_message_arrives(event, messages, output_path, light_output_path=None, progress_callback=None):
+            self._add_message("Tata Jeanne")  # enregistre pendant le rendu
+            return _write_montage_files(output_path, light_output_path)
+
+        with patch(
+            "processing.guestbook_montage.render_guestbook_montage", side_effect=render_while_a_message_arrives
+        ), patch("processing.guestbook_montage.shutil.which", return_value="/usr/bin/ffmpeg"):
+            from processing.guestbook_montage import process_guestbook_movie
+
+            process_guestbook_movie(movie)
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GuestBookMovie.Status.PENDING)
+        self.assertEqual(movie.trigger, "catch_up")
+        self.assertEqual(movie.message_count, 1)
+
+    def test_no_catch_up_while_an_agent_is_still_recording(self):
+        """Le montage partiel n'est pas relance : la fin de service de l'agent encore ouvert le fera."""
+        self._add_message("Les voisins")
+        self._second_agent()
+        movie = GuestBookMovie.objects.create(event=self.event)
+
+        def render_while_a_message_arrives(event, messages, output_path, light_output_path=None, progress_callback=None):
+            self._add_message("Tata Jeanne")
+            return _write_montage_files(output_path, light_output_path)
+
+        with patch(
+            "processing.guestbook_montage.render_guestbook_montage", side_effect=render_while_a_message_arrives
+        ), patch("processing.guestbook_montage.shutil.which", return_value="/usr/bin/ffmpeg"):
+            from processing.guestbook_montage import process_guestbook_movie
+
+            process_guestbook_movie(movie)
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GuestBookMovie.Status.COMPLETED)
+
     def test_ending_shift_without_messages_queues_nothing(self):
         self.client.login(username="agent-m", password="secret")
         self.client.get(reverse("guestbook:capture", kwargs={"pk": self.event.pk}))

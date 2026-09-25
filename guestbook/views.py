@@ -13,7 +13,7 @@ from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, r
 
 from .forms import GuestBookMessageForm
 from .models import GuestBookAssignment
-from .services import queue_guestbook_movie
+from .services import has_open_shifts, queue_guestbook_movie
 
 
 logger = logging.getLogger(__name__)
@@ -115,10 +115,16 @@ def end_shift(request, pk):
     assignment.ended_at = timezone.now()
     assignment.save(update_fields=["ended_at", "updated_at"])
 
-    # Fin de service = declencheur normal du montage integral du livre d'or.
-    # D'autres agents peuvent continuer a enregistrer sur le meme evenement :
-    # le montage sera regenere a leur propre fin de service.
-    if queue_guestbook_movie(assignment.event, trigger="agent_end_shift"):
+    # Fin de service = declencheur normal du montage integral du livre d'or, mais seulement pour le
+    # DERNIER agent : tant qu'un autre enregistre encore, lancer le montage en produirait une version
+    # partielle (visible trop tot) et ses derniers messages risqueraient de ne pas y figurer.
+    if has_open_shifts(assignment.event):
+        messages.success(
+            request,
+            "Service terminé. Le montage du livre d'or démarrera quand les autres agents "
+            "auront terminé leur service.",
+        )
+    elif queue_guestbook_movie(assignment.event, trigger="agent_end_shift"):
         messages.success(
             request,
             "Service terminé. Le montage du livre d'or est lancé, "

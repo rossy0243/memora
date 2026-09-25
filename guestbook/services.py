@@ -18,6 +18,15 @@ from .models import GuestBookAssignment, GuestBookMovie
 logger = logging.getLogger(__name__)
 
 
+def has_open_shifts(event):
+    """Vrai si au moins un agent a demarre son service sur cet evenement sans l'avoir termine.
+
+    Un agent affecte mais qui n'a jamais commence ne bloque pas le montage."""
+    return GuestBookAssignment.objects.filter(
+        event=event, started_at__isnull=False, ended_at__isnull=True
+    ).exists()
+
+
 def queue_guestbook_movie(event, *, trigger):
     """Cree ou rearme le `GuestBookMovie` de l'evenement en attente de rendu.
 
@@ -68,6 +77,9 @@ def queue_abandoned_guestbook_movies():
         assignment.ended_at = now
         assignment.save(update_fields=["ended_at", "updated_at"])
         if assignment.event_id in queued_events:
+            continue
+        # Meme regle que la fin de service : tant qu'un autre agent enregistre encore, on attend.
+        if has_open_shifts(assignment.event):
             continue
         if queue_guestbook_movie(assignment.event, trigger="auto_abandon"):
             queued_events.add(assignment.event_id)

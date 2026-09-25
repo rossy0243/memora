@@ -758,4 +758,14 @@ def process_guestbook_movie(movie):
     )
     _delete_previous_files(movie, previous_names)
     logger.info("Guestbook montage completed movie=%s event=%s messages=%s", movie.pk, event.pk, len(messages))
+
+    # Rattrapage : des messages ont pu etre enregistres pendant le rendu (le montage part des messages
+    # presents au demarrage). Sauf si un agent enregistre encore, sa propre fin de service relancera.
+    from guestbook.services import has_open_shifts
+
+    if event.guestbook_messages.count() > len(messages) and not has_open_shifts(event):
+        movie.status = GuestBookMovie.Status.PENDING
+        movie.trigger = "catch_up"
+        movie.save(update_fields=["status", "trigger", "updated_at"])
+        logger.info("Guestbook montage re-queued (messages added during render) movie=%s event=%s", movie.pk, event.pk)
     return movie
