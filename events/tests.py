@@ -9,6 +9,7 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 import zlib
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.management import call_command
@@ -1064,7 +1065,8 @@ class EventViewTests(TestCase):
 
         response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
 
-        self.assertContains(response, "Génération automatique prévue le 09/07/2026 à 12:00")
+        hour = settings.MEMORA_MOVIE_AUTOGENERATE_HOUR
+        self.assertContains(response, f"Génération automatique prévue le 09/07/2026 à {hour:02d}:00")
         self.assertContains(response, "horaire automatique")
 
     def test_owner_can_poll_movie_status_panel(self):
