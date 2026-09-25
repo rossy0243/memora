@@ -17,13 +17,13 @@
   {% endif %}
   <div class="public-event__shade" aria-hidden="true"></div>
   <div class="public-event__content">
-    <p class="eyebrow">Memora</p>
+    <p class="eyebrow">{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</p>
     {% if not event.is_paid %}
       <h1>Événement pas encore activé</h1>
       <p class="tagline">La collecte des souvenirs sera disponible dès que l'organisateur aura activé l'événement.</p>
     {% else %}
       <h1>Événement clôturé</h1>
-      <p class="tagline">La collecte des souvenirs est terminée. Le film souvenir est en préparation ou déjà disponible auprès de l'organisateur.</p>
+      <p class="tagline">La collecte des souvenirs est terminée.</p>
     {% endif %}
     <p class="microcopy">{% if event.is_paid %}Merci pour vos souvenirs.{% else %}Vous pouvez revenir sur ce lien un peu plus tard.{% endif %}</p>
   </div>
