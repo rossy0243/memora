@@ -38,7 +38,8 @@ class Command(BaseCommand):
     help = "Monte un teaser d'exemple avec des videos deja sur le stockage (rien n'est conserve en base)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--folders", nargs="+", required=True, help="Dossiers du stockage a parcourir (recursif).")
+        parser.add_argument("--folders", nargs="+", default=[], help="Dossiers du stockage a parcourir (recursif).")
+        parser.add_argument("--purge-samples", action="store_true", help="Supprime les exemples deposes sous samples/ (seulement teaser-exemple*.mp4).")
         parser.add_argument("--min-mb", type=float, default=1.0, help="Ignore les videos plus petites (fichiers de test vides).")
         parser.add_argument("--max-files", type=int, default=24)
         parser.add_argument("--couple", default="Camille & Noé", help="Nom affiche dans le film.")
@@ -51,6 +52,15 @@ class Command(BaseCommand):
             yield from self._walk(f"{folder}/{name}")
 
     def handle(self, *args, **options):
+        if options["purge_samples"]:
+            _directories, files = default_storage.listdir("samples")
+            removed = [name for name in files if name.startswith("teaser-exemple") and name.endswith(".mp4")]
+            for name in removed:
+                default_storage.delete(f"samples/{name}")
+            self.stdout.write(f"{len(removed)} exemple(s) supprime(s) : {', '.join(removed) or '-'}")
+            return
+        if not options["folders"]:
+            raise CommandError("Indiquez --folders (ou --purge-samples).")
         paths = []
         for folder in options["folders"]:
             for path in self._walk(folder.strip("/")):
