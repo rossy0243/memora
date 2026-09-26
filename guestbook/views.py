@@ -10,7 +10,6 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
-from events.access import upcoming_event_response
 from events.models import Event
 
 from .forms import GuestBookMessageForm
@@ -150,9 +149,15 @@ def remote_capture(request, slug):
     if not event.remote_guestbook_enabled or not event.can_accept_guest_uploads:
         return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
 
-    upcoming = upcoming_event_response(request, event)
-    if upcoming:
-        return upcoming
+    # Contrairement au QR des invites sur place, pas de garde-fou "pas encore ouvert" : un proche
+    # eloigne peut enregistrer des qu'il est disponible, meme avant le jour J. Seule limite : 22h00
+    # le jour de l'evenement, annoncee sur la page pour que personne ne soit pris de court.
+    if timezone.now() >= event.remote_guestbook_closes_at:
+        return render(
+            request,
+            "guestbook/remote_code_entry.html",
+            {"event": event, "closed": True, "closes_at": event.remote_guestbook_closes_at},
+        )
 
     session_key = _remote_code_session_key(event)
     sent_key = f"{session_key}_sent"
@@ -180,7 +185,11 @@ def remote_capture(request, slug):
                 request.session[session_key] = code.pk
                 return redirect("guestbook_remote_capture", slug=slug)
             code_error = "Ce code n'est pas valide, ou il a déjà servi. Demandez-en un nouveau."
-        return render(request, "guestbook/remote_code_entry.html", {"event": event, "code_error": code_error})
+        return render(
+            request,
+            "guestbook/remote_code_entry.html",
+            {"event": event, "code_error": code_error, "closes_at": event.remote_guestbook_closes_at},
+        )
 
     sent = False
     if request.method == "POST":

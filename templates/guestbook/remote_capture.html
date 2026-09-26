@@ -11,7 +11,7 @@
 {% block site_footer %}{% endblock %}
 
 {% block content %}
-<section class="guest-upload-shell">
+<section class="guest-upload-shell{% if not sent %} guest-upload-shell--fill{% endif %}">
   {% if sent %}
     <div class="guest-confirmation">
       <p class="section__label">Livre d'or à distance</p>
@@ -19,11 +19,15 @@
       <p class="guest-upload-heading__hint">Votre message rejoint le livre d'or de {% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}. Vous pouvez fermer cette page.</p>
     </div>
   {% else %}
-    <header class="guest-upload-heading">
+    <header class="guest-upload-heading guest-upload-heading--hero{% if event.cover_image %} guest-upload-heading--cover{% endif %}">
+      {% if event.cover_image %}
+        <img class="guest-upload-heading__cover" src="{{ event.cover_image.url }}" alt="">
+        <div class="guest-upload-heading__shade" aria-hidden="true"></div>
+      {% endif %}
       <div class="guest-upload-heading__content">
         <p class="section__label">Livre d'or à distance</p>
         <h1>{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</h1>
-        <p class="guest-upload-heading__hint">Filmez votre message &mdash; {{ max_duration_seconds }} secondes max.</p>
+        <p class="guest-upload-heading__welcome">Filmez votre message &mdash; {{ max_duration_seconds }} secondes max.</p>
       </div>
     </header>
 

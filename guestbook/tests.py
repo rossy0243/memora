@@ -801,11 +801,44 @@ class RemoteGuestbookCaptureTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_an_upcoming_event_shows_the_waiting_page_not_the_code_form(self):
+    def test_an_upcoming_event_still_shows_the_code_form_not_the_waiting_page(self):
+        """Contrairement au QR des invites sur place, un proche eloigne peut enregistrer des qu'il
+        est disponible, meme avant le jour J : pas de page « Rendez-vous le... » ici."""
         self.event.event_date = timezone.localdate() + timedelta(days=3)
         self.event.save(update_fields=["event_date"])
 
         response = self.client.get(self._url())
 
-        self.assertContains(response, "Rendez-vous le")
+        self.assertContains(response, "Votre code")
+        self.assertNotContains(response, "Rendez-vous le")
+
+    def test_the_closing_hour_is_announced_on_the_code_page(self):
+        response = self.client.get(self._url())
+
+        self.assertContains(response, "22h00")
+
+    def test_the_page_closes_at_22h00_the_day_of_the_event(self):
+        self.event.event_date = timezone.localdate()
+        self.event.save(update_fields=["event_date"])
+
+        with patch("django.utils.timezone.now", return_value=self.event.remote_guestbook_closes_at + timedelta(minutes=1)):
+            response = self.client.get(self._url())
+
+        self.assertContains(response, "est fermé depuis")
         self.assertNotContains(response, "Votre code")
+
+    def test_the_page_stays_open_right_before_the_closing_hour(self):
+        self.event.event_date = timezone.localdate()
+        self.event.save(update_fields=["event_date"])
+
+        with patch("django.utils.timezone.now", return_value=self.event.remote_guestbook_closes_at - timedelta(minutes=1)):
+            response = self.client.get(self._url())
+
+        self.assertContains(response, "Votre code")
+
+    def test_the_camera_screen_shows_the_cover_photo_like_the_guest_page(self):
+        self.client.post(self._url(), {"code": "4F92K1"})
+
+        response = self.client.get(self._url())
+
+        self.assertContains(response, "guest-upload-heading--hero")

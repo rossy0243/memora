@@ -394,6 +394,13 @@ class Event(models.Model):
         return timezone.make_aware(datetime.combine(self.event_date, self.guest_opening_time or time.min))
 
     @property
+    def remote_guestbook_closes_at(self):
+        """Le livre d'or a distance n'est pas retreint au jour J (un proche eloigne peut enregistrer
+        des qu'il est disponible, meme avant), mais ferme a 22h00 le jour de l'evenement — comme le
+        stand sur place, il n'a plus lieu d'etre une fois la soiree terminee."""
+        return timezone.make_aware(datetime.combine(self.event_date, time(22, 0)))
+
+    @property
     def is_upcoming_for_agent(self):
         """Le stand de l'agent du livre d'or s'ouvre le jour J des minuit, quelle que soit
         l'heure d'ouverture choisie pour les invites (l'agent arrive avant eux)."""

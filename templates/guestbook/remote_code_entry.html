@@ -19,23 +19,30 @@
   <div class="public-event__content public-event__content--access">
     <p class="eyebrow">{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</p>
     <h1>Livre d'or à distance</h1>
-    <p class="tagline">Vous n'avez pas pu être présent(e) ? Entrez le code reçu pour laisser un message vidéo.</p>
+    {% if closed %}
+      <p class="tagline">Le livre d'or à distance est fermé depuis {{ closes_at|time:"G\hi" }} le {{ event.event_date|date:"j F" }}.</p>
+      <p class="microcopy">Merci à celles et ceux qui ont pu envoyer un message.</p>
+    {% else %}
+      <p class="tagline">Vous n'avez pas pu être présent(e) ? Entrez le code reçu pour laisser un message vidéo, à tout moment jusqu'à {{ closes_at|time:"G\hi" }} le {{ event.event_date|date:"j F" }}.</p>
 
-    <form method="post" class="access-form">
-      {% csrf_token %}
-      <label for="remote-code-input">Votre code</label>
-      <input type="text" name="code" id="remote-code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Ex. 4F92K1" required autofocus>
-      {% if code_error %}
-        <p class="access-form__error" role="alert">{{ code_error }}</p>
-      {% endif %}
-      <button class="button button--primary" type="submit">Continuer</button>
-    </form>
-    <p class="microcopy">Pas de code ? Demandez-le à l'organisateur de l'événement.</p>
+      <form method="post" class="access-form">
+        {% csrf_token %}
+        <label for="remote-code-input">Votre code</label>
+        <input type="text" name="code" id="remote-code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Ex. 4F92K1" required autofocus>
+        {% if code_error %}
+          <p class="access-form__error" role="alert">{{ code_error }}</p>
+        {% endif %}
+        <button class="button button--primary" type="submit">Continuer</button>
+      </form>
+      <p class="microcopy">Pas de code ? Demandez-le à l'organisateur de l'événement.</p>
+    {% endif %}
   </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
+{% if not closed %}
 {% include "includes/guide_remote.html" %}
 <script src="{% static 'js/guide.js' %}"></script>
+{% endif %}
 {% endblock %}
