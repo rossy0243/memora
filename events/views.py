@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
@@ -201,7 +202,12 @@ def guestbook_messages(request, pk):
     return render(
         request,
         "events/guestbook_messages.html",
-        {"event": event, **get_guestbook_movie_panel_context(event)},
+        {
+            "event": event,
+            **get_guestbook_movie_panel_context(event),
+            "remote_guestbook_url": request.build_absolute_uri(event.get_remote_guestbook_url()),
+            "remote_guestbook_codes": event.remote_guestbook_codes.all()[:100],
+        },
     )
 
 
@@ -252,6 +258,58 @@ def generate_guestbook_movie(request, pk):
         )
     else:
         messages.info(request, "Aucun message dans le livre d'or à monter pour l'instant.")
+    return redirect("events:guestbook_messages", pk=event.pk)
+
+
+@login_required
+@require_POST
+def generate_remote_guestbook_codes(request, pk):
+    """Genere un lot de codes a usage unique pour le livre d'or a distance, et l'active si besoin.
+
+    L'organisateur transmet chaque code lui-meme (SMS, WhatsApp, appel) a un proche qui ne peut
+    pas etre present ; le lien de la page est le meme pour tout le monde, seul le code proteges."""
+    from guestbook.models import RemoteGuestbookCode
+
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    try:
+        quantity = int(request.POST.get("quantity", 1))
+    except (TypeError, ValueError):
+        quantity = 1
+    quantity = max(1, min(quantity, 50))
+
+    if not event.remote_guestbook_enabled:
+        event.remote_guestbook_enabled = True
+        event.save(update_fields=["remote_guestbook_enabled", "updated_at"])
+
+    RemoteGuestbookCode.generate_batch(event, quantity)
+    messages.success(request, f"{quantity} code{'s' if quantity > 1 else ''} généré{'s' if quantity > 1 else ''}.")
+    return redirect("events:guestbook_messages", pk=event.pk)
+
+
+@login_required
+@require_POST
+def toggle_remote_guestbook_code_sent(request, pk, code_id):
+    """Marque manuellement un code comme deja transmis (ou revient en arriere) : pure memoire pour
+    l'organisateur, sans effet sur la validite du code lui-meme."""
+    from guestbook.models import RemoteGuestbookCode
+
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    code = get_object_or_404(RemoteGuestbookCode, pk=code_id, event=event, used_at__isnull=True)
+    code.sent_at = None if code.sent_at else timezone.now()
+    code.save(update_fields=["sent_at"])
+    return redirect("events:guestbook_messages", pk=event.pk)
+
+
+@login_required
+@require_POST
+def disable_remote_guestbook(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    event.remote_guestbook_enabled = False
+    event.save(update_fields=["remote_guestbook_enabled", "updated_at"])
+    messages.success(
+        request,
+        "Livre d'or à distance suspendu : les codes déjà transmis ne fonctionnent plus tant qu'il n'est pas réactivé.",
+    )
     return redirect("events:guestbook_messages", pk=event.pk)
 
 

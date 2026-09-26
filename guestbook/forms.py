@@ -40,9 +40,11 @@ class GuestBookMessageForm(forms.ModelForm):
             "media_file": "Message video",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, require_name=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["guest_name"].required = False
+        self.fields["guest_name"].required = require_name
+        if require_name:
+            self.fields["guest_name"].widget.attrs["placeholder"] = "Votre prénom"
         self.media_duration = None
 
     def clean_media_file(self):

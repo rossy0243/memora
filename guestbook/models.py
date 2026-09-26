@@ -189,3 +189,64 @@ class GuestBookMovie(models.Model):
     @property
     def is_ready(self):
         return self.status == self.Status.COMPLETED and bool(self.final_file)
+
+
+# Sans 0/O/1/I/L : lisible et sans confusion a l'oral (dicte au telephone) ou a l'ecrit (SMS).
+REMOTE_GUESTBOOK_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+REMOTE_GUESTBOOK_CODE_LENGTH = 6
+
+
+class RemoteGuestbookCode(models.Model):
+    """Code a usage unique donnant acces au livre d'or a distance (proches qui ne peuvent pas venir).
+
+    L'organisateur en genere autant qu'il veut, par lots, et les transmet lui-meme (SMS, WhatsApp,
+    appel) a la personne de son choix. Le code se desactive des qu'un message est envoye avec :
+    il ne protege pas un lien secret (celui-ci reste le meme pour tout le monde), il EST le laissez-passer.
+    """
+
+    event = models.ForeignKey(
+        "events.Event",
+        on_delete=models.CASCADE,
+        related_name="remote_guestbook_codes",
+    )
+    code = models.CharField(max_length=8)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Marque manuelle : l'organisateur a deja transmis ce code a quelqu'un.",
+    )
+    used_at = models.DateTimeField(blank=True, null=True)
+    used_by_name = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Prenom saisi par le proche au moment de l'envoi de son message.",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["event", "code"], name="unique_remote_guestbook_code"),
+        ]
+        verbose_name = "code livre d'or a distance"
+        verbose_name_plural = "codes livre d'or a distance"
+
+    def __str__(self):
+        return f"{self.code} - {self.event}"
+
+    @property
+    def is_used(self):
+        return bool(self.used_at)
+
+    @classmethod
+    def generate_batch(cls, event, quantity):
+        import secrets
+
+        created = []
+        for _ in range(quantity):
+            while True:
+                code = "".join(secrets.choice(REMOTE_GUESTBOOK_CODE_ALPHABET) for _ in range(REMOTE_GUESTBOOK_CODE_LENGTH))
+                if not cls.objects.filter(event=event, code=code).exists():
+                    break
+            created.append(cls.objects.create(event=event, code=code))
+        return created

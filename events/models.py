@@ -202,6 +202,14 @@ class Event(models.Model):
     title = models.CharField(max_length=160)
     slug = models.SlugField(max_length=180, unique=True, blank=True)
     public_access_key = models.SlugField(max_length=32, unique=True, blank=True)
+    remote_guestbook_enabled = models.BooleanField(
+        "livre d'or ouvert aux proches absents",
+        default=False,
+        help_text=(
+            "Ouvre la page « proches absents » (memoracd.site/e/<slug>/proches/), protegee par des "
+            "codes a usage unique que l'organisateur genere lui-meme et transmet un par un."
+        ),
+    )
     couple_name = models.CharField(max_length=160, blank=True)
     event_type = models.ForeignKey(
         EventType,
@@ -355,6 +363,9 @@ class Event(models.Model):
                 "access_key": self.public_access_key,
             },
         )
+
+    def get_remote_guestbook_url(self):
+        return reverse("guestbook_remote_capture", kwargs={"slug": self.slug})
 
     def get_public_movie_url(self):
         return reverse(

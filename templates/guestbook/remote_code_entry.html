@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Livre d'or à distance - {{ event.title }}{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+
+{# Un proche a distance n'est pas un prospect : ni lien d'inscription, ni pied de page marketing. #}
+{% block site_nav %}{% endblock %}
+{% block site_footer %}{% endblock %}
+
+{% block content %}
+<section class="public-event">
+  {% if event.cover_image %}
+    <img class="public-event__image" src="{{ event.cover_image.url }}" alt="">
+  {% else %}
+    <img class="public-event__image" src="{% static 'img/memora-hero.jpg' %}" alt="">
+  {% endif %}
+  <div class="public-event__shade" aria-hidden="true"></div>
+  <div class="public-event__content public-event__content--access">
+    <p class="eyebrow">{% if event.couple_name %}{{ event.couple_name }}{% else %}{{ event.title }}{% endif %}</p>
+    <h1>Livre d'or à distance</h1>
+    <p class="tagline">Vous n'avez pas pu être présent(e) ? Entrez le code reçu pour laisser un message vidéo.</p>
+
+    <form method="post" class="access-form">
+      {% csrf_token %}
+      <label for="remote-code-input">Votre code</label>
+      <input type="text" name="code" id="remote-code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Ex. 4F92K1" required autofocus>
+      {% if code_error %}
+        <p class="access-form__error" role="alert">{{ code_error }}</p>
+      {% endif %}
+      <button class="button button--primary" type="submit">Continuer</button>
+    </form>
+    <p class="microcopy">Pas de code ? Demandez-le à l'organisateur de l'événement.</p>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% include "includes/guide_remote.html" %}
+<script src="{% static 'js/guide.js' %}"></script>
+{% endblock %}

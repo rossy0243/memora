@@ -10,9 +10,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
+from events.access import upcoming_event_response
+from events.models import Event
 
 from .forms import GuestBookMessageForm
-from .models import GuestBookAssignment
+from .models import GuestBookAssignment, RemoteGuestbookCode
 from .services import has_open_shifts, queue_guestbook_movie
 
 
@@ -133,3 +135,93 @@ def end_shift(request, pk):
     else:
         messages.success(request, "Service terminé. Merci pour cette mission !")
     return redirect("guestbook:agent_home")
+
+
+def _remote_code_session_key(event):
+    return f"memora_remote_code_{event.pk}"
+
+
+def remote_capture(request, slug):
+    """Livre d'or a distance : un lien connu de tous (pas secret), verrouille par un code a usage
+    unique que l'organisateur genere et transmet lui-meme a un proche qui ne peut pas etre present.
+    Une fois le code valide, meme camera que le stand ; meme table GuestBookMessage, meme secret que
+    les messages enregistres par l'agent — l'organisateur ne voit jamais que le montage final."""
+    event = get_object_or_404(Event, slug=slug)
+    if not event.remote_guestbook_enabled or not event.can_accept_guest_uploads:
+        return render(request, "events/public_event_unavailable.html", {"event": event}, status=403)
+
+    upcoming = upcoming_event_response(request, event)
+    if upcoming:
+        return upcoming
+
+    session_key = _remote_code_session_key(event)
+    sent_key = f"{session_key}_sent"
+
+    # Apres un envoi reussi, guestbook-capture.js recharge la MEME page en GET (comme au stand :
+    # ecran pret pour le "suivant"). Le code est deja consomme a cet instant ; ce fanion, pose une
+    # seule fois, permet d'afficher quand meme l'ecran de remerciement au lieu de redemander un code.
+    if request.session.get(sent_key):
+        del request.session[sent_key]
+        return render(request, "guestbook/remote_capture.html", {"event": event, "sent": True})
+
+    code = None
+    code_id = request.session.get(session_key)
+    if code_id:
+        code = RemoteGuestbookCode.objects.filter(pk=code_id, event=event, used_at__isnull=True).first()
+        if not code:
+            del request.session[session_key]
+
+    if not code:
+        code_error = ""
+        if request.method == "POST":
+            entered = (request.POST.get("code") or "").strip().upper()
+            code = RemoteGuestbookCode.objects.filter(event=event, code=entered, used_at__isnull=True).first()
+            if code:
+                request.session[session_key] = code.pk
+                return redirect("guestbook_remote_capture", slug=slug)
+            code_error = "Ce code n'est pas valide, ou il a déjà servi. Demandez-en un nouveau."
+        return render(request, "guestbook/remote_code_entry.html", {"event": event, "code_error": code_error})
+
+    sent = False
+    if request.method == "POST":
+        form = GuestBookMessageForm(request.POST, request.FILES, require_name=True)
+        if form.is_valid():
+            media_file = form.cleaned_data["media_file"]
+            message = form.save(commit=False)
+            message.event = event
+            message.original_filename = media_file.name
+            message.file_size = media_file.size
+            message.duration = form.media_duration
+            try:
+                message.save()
+            except Exception as exc:
+                if not is_storage_error(exc):
+                    raise
+                logger.exception("Remote guestbook storage error for event=%s", event.pk)
+                recover_from_storage_error()
+                form.add_error("media_file", STORAGE_UNAVAILABLE_MESSAGE)
+            else:
+                logger.info("Remote guestbook message recorded event=%s message=%s", event.pk, message.pk)
+                code.used_at = timezone.now()
+                code.used_by_name = message.guest_name
+                code.save(update_fields=["used_at", "used_by_name"])
+                del request.session[session_key]
+                request.session[sent_key] = True
+                # Comme la fin de service d'un agent : on ne lance jamais un montage partiel tant
+                # qu'un agent enregistre encore sur place, il le declenchera a son tour.
+                if not has_open_shifts(event):
+                    queue_guestbook_movie(event, trigger="remote_family")
+                sent = True
+    else:
+        form = GuestBookMessageForm(require_name=True)
+
+    return render(
+        request,
+        "guestbook/remote_capture.html",
+        {
+            "event": event,
+            "form": form,
+            "sent": sent,
+            "max_duration_seconds": settings.MEMORA_GUESTBOOK_MAX_VIDEO_DURATION_SECONDS,
+        },
+    )

@@ -3109,6 +3109,12 @@ body.camera-open {
   background: var(--color-champagne);
 }
 
+/* Sans ceci, `display: grid` ci-dessus l'emporte sur l'attribut hidden (meme specificite,
+   regle posee apres) : le bouton restait visible sur tous les telephones sans torche. */
+.camera-flash-button[hidden] {
+  display: none;
+}
+
 .camera-live {
   position: relative;
   overflow: hidden;
@@ -5050,4 +5056,80 @@ body.guide-open {
   .guide__slide {
     animation: none;
   }
+}
+
+/* ---- Livre d'or a distance (proches absents) : panneau organisateur ---- */
+.remote-guestbook-panel code {
+  display: block;
+  margin: 6px 0 10px;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--color-primary-active);
+  background: var(--color-surface-soft);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.remote-guestbook-panel__link {
+  margin: 14px 0 18px;
+}
+
+.remote-guestbook-panel__generate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 4px 0 18px;
+}
+
+.remote-guestbook-panel__generate label {
+  display: grid;
+  gap: 4px;
+}
+
+.remote-guestbook-panel__generate label span {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.remote-guestbook-panel__generate input[type="number"] {
+  width: 84px;
+  min-height: 42px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 0 10px;
+  font: inherit;
+}
+
+.remote-guestbook-codes {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.remote-guestbook-codes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+.remote-guestbook-codes li form {
+  margin-left: auto;
+}
+
+.remote-guestbook-codes__code {
+  min-width: 92px;
+  color: var(--color-ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }

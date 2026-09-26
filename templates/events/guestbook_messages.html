@@ -18,9 +18,71 @@
   </div>
 
   {% include "events/partials/guestbook_movie_panel.html" %}
+
+  <article class="detail-panel remote-guestbook-panel">
+    <h3>Livre d'or à distance</h3>
+    <p class="muted-copy">Pour les proches qui ne peuvent pas être présents : ils enregistrent leur message depuis chez eux, avec un code à usage unique que vous leur transmettez vous-même (SMS, WhatsApp, appel). Le lien est le même pour tout le monde ; c'est le code qui protège l'accès, une seule fois.</p>
+
+    {% if event.remote_guestbook_enabled %}
+      <div class="remote-guestbook-panel__link">
+        <span class="section__label">Lien à donner</span>
+        <code id="remote-guestbook-url">{{ remote_guestbook_url }}</code>
+        <button class="button button--secondary button--compact" type="button" data-copy-target="remote-guestbook-url">Copier le lien</button>
+      </div>
+
+      <form method="post" action="{% url 'events:generate_remote_guestbook_codes' event.pk %}" class="remote-guestbook-panel__generate">
+        {% csrf_token %}
+        <label>
+          <span>Combien de codes ?</span>
+          <input type="number" name="quantity" value="5" min="1" max="50" inputmode="numeric">
+        </label>
+        <button class="button button--primary button--compact" type="submit">Générer</button>
+      </form>
+
+      {% if remote_guestbook_codes %}
+        <ul class="remote-guestbook-codes">
+          {% for code in remote_guestbook_codes %}
+            <li>
+              <code class="remote-guestbook-codes__code">{{ code.code }}</code>
+              {% if code.is_used %}
+                <span class="status-pill status-pill--active">Utilisé{% if code.used_by_name %} — {{ code.used_by_name }}{% endif %}</span>
+              {% elif code.sent_at %}
+                <span class="status-pill">Envoyé</span>
+                <form method="post" action="{% url 'events:toggle_remote_guestbook_code_sent' event.pk code.pk %}">
+                  {% csrf_token %}
+                  <button class="button button--secondary button--compact" type="submit">Marquer non envoyé</button>
+                </form>
+              {% else %}
+                <span class="status-pill status-pill--danger">Pas encore envoyé</span>
+                <form method="post" action="{% url 'events:toggle_remote_guestbook_code_sent' event.pk code.pk %}">
+                  {% csrf_token %}
+                  <button class="button button--primary button--compact" type="submit">Marquer envoyé</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <form method="post" action="{% url 'events:disable_remote_guestbook' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--secondary button--compact" type="submit">Suspendre le livre d'or à distance</button>
+      </form>
+    {% else %}
+      <form method="post" action="{% url 'events:generate_remote_guestbook_codes' event.pk %}" class="remote-guestbook-panel__generate">
+        {% csrf_token %}
+        <label>
+          <span>Combien de codes ?</span>
+          <input type="number" name="quantity" value="5" min="1" max="50" inputmode="numeric">
+        </label>
+        <button class="button button--primary button--compact" type="submit">Activer et générer</button>
+      </form>
+    {% endif %}
+  </article>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script src="{% static 'js/guestbook-movie-status.js' %}"></script>
+<script src="{% static 'js/copy-to-clipboard.js' %}"></script>
 {% endblock %}

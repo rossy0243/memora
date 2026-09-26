@@ -660,6 +660,9 @@ class GuestUploadViewTests(TestCase):
 
         css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")
         self.assertIn(".camera-flash-button", css)
+        # Regression : `.camera-flash-button { display: grid }` a la meme specificite que
+        # `[hidden]` et, pose apres, l'emportait — le bouton restait visible sans torche.
+        self.assertIn(".camera-flash-button[hidden]", css)
 
     def test_cover_photo_is_framed_towards_the_top_so_faces_are_not_cut(self):
         css = (settings.BASE_DIR / "static" / "css" / "base.css").read_text(encoding="utf-8")

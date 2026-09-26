@@ -158,6 +158,7 @@ class EventAdmin(admin.ModelAdmin):
                     "is_active",
                     "guest_opening_time",
                     "guest_preview_enabled",
+                    "remote_guestbook_enabled",
                 )
             },
         ),

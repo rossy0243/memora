@@ -11,7 +11,7 @@ from django.utils import timezone
 from accounts.models import AgentProfile
 from events.models import Event, EventType
 
-from .models import GuestBookAssignment, GuestBookMessage, GuestBookMovie
+from .models import GuestBookAssignment, GuestBookMessage, GuestBookMovie, RemoteGuestbookCode
 from .services import queue_abandoned_guestbook_movies
 
 
@@ -590,3 +590,222 @@ class GuestBookMontageTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.status, GuestBookMovie.Status.COMPLETED)
         self.assertEqual(movie.progress_percent, 100.0)
+
+
+class RemoteGuestbookCodeModelTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(username="orga-remote", password="secret")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Distance",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+        )
+
+    def test_generate_batch_creates_the_right_count_of_unique_codes(self):
+        codes = RemoteGuestbookCode.generate_batch(self.event, 20)
+
+        self.assertEqual(len(codes), 20)
+        self.assertEqual(len({c.code for c in codes}), 20)
+        self.assertEqual(RemoteGuestbookCode.objects.filter(event=self.event).count(), 20)
+
+    def test_codes_avoid_ambiguous_characters(self):
+        codes = RemoteGuestbookCode.generate_batch(self.event, 30)
+
+        for code in codes:
+            for forbidden in "0O1IL":
+                self.assertNotIn(forbidden, code.code, code.code)
+
+
+class RemoteGuestbookOrganizerTests(TestCase):
+    def setUp(self):
+        self.organizer = get_user_model().objects.create_user(username="orga-remote2", password="secret")
+        self.event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Distance 2",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=date(2026, 7, 8),
+        )
+        self.client.login(username="orga-remote2", password="secret")
+
+    def _generate_url(self):
+        return reverse("events:generate_remote_guestbook_codes", kwargs={"pk": self.event.pk})
+
+    def test_generating_codes_enables_the_feature_and_creates_the_batch(self):
+        response = self.client.post(self._generate_url(), {"quantity": 20})
+
+        self.assertRedirects(response, reverse("events:guestbook_messages", kwargs={"pk": self.event.pk}))
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.remote_guestbook_enabled)
+        self.assertEqual(RemoteGuestbookCode.objects.filter(event=self.event).count(), 20)
+
+    def test_quantity_is_clamped_between_one_and_fifty(self):
+        self.client.post(self._generate_url(), {"quantity": 500})
+        self.assertEqual(RemoteGuestbookCode.objects.filter(event=self.event).count(), 50)
+
+        self.client.post(self._generate_url(), {"quantity": -3})
+        self.assertEqual(RemoteGuestbookCode.objects.filter(event=self.event).count(), 51)
+
+    def test_another_organizer_cannot_generate_codes_for_this_event(self):
+        get_user_model().objects.create_user(username="intruder-remote", password="secret")
+        self.client.logout()
+        self.client.login(username="intruder-remote", password="secret")
+
+        response = self.client.post(self._generate_url(), {"quantity": 5})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(RemoteGuestbookCode.objects.filter(event=self.event).count(), 0)
+
+    def test_toggle_sent_marks_and_unmarks(self):
+        code = RemoteGuestbookCode.objects.create(event=self.event, code="ABC234")
+        url = reverse(
+            "events:toggle_remote_guestbook_code_sent", kwargs={"pk": self.event.pk, "code_id": code.pk}
+        )
+
+        self.client.post(url)
+        code.refresh_from_db()
+        self.assertIsNotNone(code.sent_at)
+
+        self.client.post(url)
+        code.refresh_from_db()
+        self.assertIsNone(code.sent_at)
+
+    def test_toggle_sent_refuses_an_already_used_code(self):
+        code = RemoteGuestbookCode.objects.create(event=self.event, code="ABC235", used_at=timezone.now())
+        url = reverse(
+            "events:toggle_remote_guestbook_code_sent", kwargs={"pk": self.event.pk, "code_id": code.pk}
+        )
+
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_disable_stops_new_codes_from_working(self):
+        self.client.post(self._generate_url(), {"quantity": 1})
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.remote_guestbook_enabled)
+
+        self.client.post(reverse("events:disable_remote_guestbook", kwargs={"pk": self.event.pk}))
+
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.remote_guestbook_enabled)
+
+
+class RemoteGuestbookCaptureTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(username="orga-remote3", password="secret")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Distance 3",
+            event_type=EventType.objects.get(code="wedding"),
+            event_date=timezone.localdate(),
+        )
+        self.event.mark_paid(provider="test")
+        self.event.remote_guestbook_enabled = True
+        self.event.save()
+        self.code = RemoteGuestbookCode.objects.create(event=self.event, code="4F92K1")
+
+    def _url(self):
+        return reverse("guestbook_remote_capture", kwargs={"slug": self.event.slug})
+
+    def test_page_asks_for_a_code_first(self):
+        response = self.client.get(self._url())
+
+        self.assertContains(response, "Votre code")
+        self.assertNotContains(response, 'id="start-camera-button"')
+        self.assertContains(response, 'data-guide-key="remote-v1"')
+
+    def test_a_wrong_code_is_rejected_with_a_clear_message(self):
+        response = self.client.post(self._url(), {"code": "ZZZZZZ"})
+
+        self.assertContains(response, "n&#x27;est pas valide")
+        self.assertNotContains(response, 'id="start-camera-button"')
+
+    def test_a_valid_code_unlocks_the_camera(self):
+        response = self.client.post(self._url(), {"code": "4f92k1"}, follow=True)  # insensible a la casse
+
+        self.assertContains(response, 'id="start-camera-button"')
+
+    def test_disabled_feature_blocks_even_with_a_correct_code(self):
+        self.event.remote_guestbook_enabled = False
+        self.event.save(update_fields=["remote_guestbook_enabled"])
+
+        response = self.client.post(self._url(), {"code": "4F92K1"}, follow=True)
+
+        self.assertEqual(response.status_code, 403)
+
+    @patch("guestbook.forms._probe_video_duration", return_value=15)
+    def test_sending_a_message_requires_a_name_and_consumes_the_code(self, _probe):
+        self.client.post(self._url(), {"code": "4F92K1"})
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+
+        # Sans prenom : refuse (pas d'agent pour demander de vive voix qui parle).
+        response = self.client.post(self._url(), {"media_file": media})
+        self.assertEqual(GuestBookMessage.objects.filter(event=self.event).count(), 0)
+        self.assertContains(response, "obligatoire")
+
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+        response = self.client.post(self._url(), {"media_file": media, "guest_name": "Tante Carine"})
+
+        self.assertContains(response, "envoyé")
+        message = GuestBookMessage.objects.get(event=self.event)
+        self.assertEqual(message.guest_name, "Tante Carine")
+        self.assertIsNone(message.recorded_by)
+        self.code.refresh_from_db()
+        self.assertIsNotNone(self.code.used_at)
+        self.assertEqual(self.code.used_by_name, "Tante Carine")
+
+    @patch("guestbook.forms._probe_video_duration", return_value=15)
+    def test_a_used_code_cannot_be_reused(self, _probe):
+        self.client.post(self._url(), {"code": "4F92K1"})
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+        self.client.post(self._url(), {"media_file": media, "guest_name": "Tante Carine"})
+
+        self.client.session.flush()  # simule un nouveau visiteur, sans le code deja en session
+        response = self.client.post(self._url(), {"code": "4F92K1"})
+
+        self.assertContains(response, "n&#x27;est pas valide")
+
+    @patch("guestbook.forms._probe_video_duration", return_value=15)
+    def test_the_reload_after_sending_shows_a_thank_you_screen_not_a_new_code_request(self, _probe):
+        """guestbook-capture.js recharge la meme page en GET apres un envoi reussi (comme au stand) :
+        ce GET doit afficher le remerciement, pas redemander un code."""
+        self.client.post(self._url(), {"code": "4F92K1"})
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+        self.client.post(self._url(), {"media_file": media, "guest_name": "Tante Carine"})
+
+        response = self.client.get(self._url())
+        self.assertContains(response, "envoyé")
+
+        # Un deuxieme GET ne doit plus montrer ce remerciement (fanion consomme) : retour au code.
+        response = self.client.get(self._url())
+        self.assertContains(response, "Votre code")
+
+    @patch("guestbook.forms._probe_video_duration", return_value=15)
+    def test_message_queues_the_montage_only_when_no_agent_shift_is_open(self, _probe):
+        agent = get_user_model().objects.create_user(username="agent-remote", password="secret")
+        AgentProfile.objects.create(user=agent)
+        GuestBookAssignment.objects.create(event=self.event, agent=agent, started_at=timezone.now())
+
+        self.client.post(self._url(), {"code": "4F92K1"})
+        media = SimpleUploadedFile("message.mp4", b"video", content_type="video/mp4")
+        self.client.post(self._url(), {"media_file": media, "guest_name": "Tante Carine"})
+
+        self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
+
+    def test_an_unpaid_event_blocks_the_remote_page(self):
+        self.event.payment_status = Event.PaymentStatus.PENDING
+        self.event.save(update_fields=["payment_status"])
+
+        response = self.client.get(self._url())
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_an_upcoming_event_shows_the_waiting_page_not_the_code_form(self):
+        self.event.event_date = timezone.localdate() + timedelta(days=3)
+        self.event.save(update_fields=["event_date"])
+
+        response = self.client.get(self._url())
+
+        self.assertContains(response, "Rendez-vous le")
+        self.assertNotContains(response, "Votre code")
