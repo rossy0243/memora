@@ -2249,6 +2249,11 @@ h2 {
   gap: 10px;
 }
 
+/* Noms d'agent ("À distance (proches)"...) plus longs qu'une heure ("14h") : premiere colonne elargie. */
+.hourly-breakdown--agents .hourly-breakdown__row {
+  grid-template-columns: minmax(90px, auto) 1fr auto;
+}
+
 .hourly-breakdown__row span,
 .latest-media-row span {
   color: var(--color-muted);

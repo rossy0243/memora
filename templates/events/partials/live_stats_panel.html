@@ -6,7 +6,7 @@
       <p>{{ media_stats.total|default:0 }} souvenir{% if media_stats.total|default:0 > 1 %}s{% endif %} reçu{% if media_stats.total|default:0 > 1 %}s{% endif %}. Gardez le QR code visible, Memora s'occupe du tri et du film souvenir.</p>
       <div class="live-dashboard__signals">
         <span>{{ event.get_event_type_display }}</span>
-        <span>Film J+1 à 12:00</span>
+        <span>Film J+1 à {{ movie_autogenerate_hour }}h00</span>
         {% if event.requires_guest_access_code %}
           <span>Code invité actif</span>
         {% else %}
@@ -38,7 +38,26 @@
       <span>Sélection film</span>
       <strong>{{ media_stats.selected_for_movie|default:0 }}</strong>
     </article>
+    <article class="stat-card">
+      <span>Livre d'or</span>
+      <strong>{{ guestbook_message_count|default:0 }}</strong>
+    </article>
   </div>
+
+  {% if guestbook_by_agent %}
+    <article class="detail-panel">
+      <h3>Livre d'or par agent</h3>
+      <div class="hourly-breakdown hourly-breakdown--agents">
+        {% for row in guestbook_by_agent %}
+          <div class="hourly-breakdown__row">
+            <span>{{ row.label }}{% if row.is_open %} &middot; en service{% endif %}</span>
+            <div class="hourly-breakdown__bar" aria-hidden="true"><span style="width: {{ row.bar_percent }}%"></span></div>
+            <strong>{{ row.count }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  {% endif %}
 
   <article class="detail-panel">
     <h3>Souvenirs par heure</h3>

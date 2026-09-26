@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -514,7 +515,45 @@ def get_live_stats_context(event):
         "media_stats": stats,
         "hourly_breakdown": hourly_breakdown,
         "live_stats_url": reverse("events:live_stats", kwargs={"pk": event.pk}),
+        "guestbook_message_count": event.guestbook_messages.count(),
+        "guestbook_by_agent": build_guestbook_agent_breakdown(event),
+        "movie_autogenerate_hour": settings.MEMORA_MOVIE_AUTOGENERATE_HOUR,
     }
+
+
+def build_guestbook_agent_breakdown(event):
+    """Nombre de messages par agent, plus les envois a distance (proches, sans agent) : suivi en
+    direct du travail de chaque agent, pas seulement le total du livre d'or."""
+    counts_by_agent_id = {}
+    remote_count = 0
+    for recorded_by_id in event.guestbook_messages.values_list("recorded_by_id", flat=True):
+        if recorded_by_id:
+            counts_by_agent_id[recorded_by_id] = counts_by_agent_id.get(recorded_by_id, 0) + 1
+        else:
+            remote_count += 1
+
+    max_count = max([*counts_by_agent_id.values(), remote_count, 0])
+    rows = []
+    for assignment in event.guestbook_assignments.select_related("agent").order_by("agent__username"):
+        count = counts_by_agent_id.get(assignment.agent_id, 0)
+        rows.append(
+            {
+                "label": assignment.agent.get_short_name() or assignment.agent.username,
+                "count": count,
+                "bar_percent": round(count * 100 / max_count) if max_count else 0,
+                "is_open": assignment.is_open,
+            }
+        )
+    if remote_count:
+        rows.append(
+            {
+                "label": "À distance (proches)",
+                "count": remote_count,
+                "bar_percent": round(remote_count * 100 / max_count) if max_count else 0,
+                "is_open": None,
+            }
+        )
+    return rows
 
 
 @login_required

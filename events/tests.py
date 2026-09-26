@@ -856,6 +856,40 @@ class EventViewTests(TestCase):
         self.assertContains(response, 'data-active="1"')
         self.assertEqual(response.context["media_stats"]["total"], 1)
 
+    def test_live_stats_panel_shows_the_guestbook_count_and_breakdown_per_agent(self):
+        from accounts.models import AgentProfile
+        from guestbook.models import GuestBookAssignment, GuestBookMessage
+
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Livre Or",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        agent_a = get_user_model().objects.create_user(username="agent-a", password="secret", first_name="Agent A")
+        agent_b = get_user_model().objects.create_user(username="agent-b", password="secret")
+        AgentProfile.objects.create(user=agent_a)
+        AgentProfile.objects.create(user=agent_b)
+        GuestBookAssignment.objects.create(event=event, agent=agent_a, started_at=timezone.now())
+        GuestBookAssignment.objects.create(event=event, agent=agent_b)  # pas encore demarree, 0 message
+
+        for _ in range(2):
+            GuestBookMessage.objects.create(
+                event=event, media_file="x/a.mp4", original_filename="a.mp4", file_size=1, recorded_by=agent_a
+            )
+        GuestBookMessage.objects.create(event=event, media_file="x/r.mp4", original_filename="r.mp4", file_size=1)  # a distance
+
+        self.client.login(username="owner", password="secret")
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Livre d'or")
+        self.assertContains(response, "3</strong>")  # total (2 + 1)
+        breakdown = {row["label"]: row["count"] for row in response.context["guestbook_by_agent"]}
+        self.assertEqual(breakdown["Agent A"], 2)
+        self.assertEqual(breakdown["agent-b"], 0)
+        self.assertEqual(breakdown["À distance (proches)"], 1)
+
     def test_live_stats_panel_is_limited_to_owner(self):
         event = Event.objects.create(
             organizer=self.other_user,
