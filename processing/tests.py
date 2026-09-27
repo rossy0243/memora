@@ -667,7 +667,9 @@ class MovieGenerationServiceTests(TestCase):
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch("processing.services.render_movie_with_remotion")
-    def test_full_deliverable_is_skipped_by_default(self, render_remotion, run_ffmpeg, _which):
+    def test_all_three_deliverables_are_produced_by_default(self, render_remotion, run_ffmpeg, _which):
+        """L'integrale (« full ») a ete reactivee par defaut (30/09) : trop de souvenirs restaient
+        hors du heros, curated et court, pour un mariage avec beaucoup de participation."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
         def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
@@ -680,8 +682,8 @@ class MovieGenerationServiceTests(TestCase):
         movie = generate_event_movie(self.event)
 
         deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
-        self.assertEqual(deliverables, ["hero", "teaser"])
-        self.assertFalse(movie.full_file.name)
+        self.assertEqual(deliverables, ["hero", "full", "teaser"])
+        self.assertTrue(movie.full_file.name)
         self.assertTrue(movie.teaser_file.name)
 
     @override_settings(
@@ -1633,8 +1635,12 @@ class RemotionEdlTests(TestCase):
         # Sans autorisation : montage musique seule.
         muted = build_film_props(self._event(), uploads, self._soundtrack(), fps=30)
         self.assertFalse(any(c["keepAudio"] for c in muted["clips"]))
-        # Volumes musique presents pour le ducking cote Remotion.
-        self.assertGreater(allowed["musicVolume"], allowed["duckedMusicVolume"])
+        # Musique dominante (30/09) : le ducking est neutralise par defaut
+        # (duckedMusicVolume == musicVolume), la voix des invites reste en
+        # arriere-plan via voiceVolume plutot que par une baisse de la musique.
+        self.assertEqual(allowed["musicVolume"], allowed["duckedMusicVolume"])
+        self.assertIn("voiceVolume", allowed)
+        self.assertLess(allowed["voiceVolume"], 1.0)
 
     @override_settings(MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES={"hero", "full", "teaser"})
     @patch("processing.remotion.subprocess.Popen")

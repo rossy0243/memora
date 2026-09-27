@@ -58,8 +58,13 @@ export interface FilmProps {
   pace: "punchy" | "balanced" | "gentle";
   // Volume de la musique, et volume reduit (ducking) quand un plan garde la
   // voix des invites (keepAudio). Alignes sur les reglages du pipeline FFmpeg.
+  // Par defaut les deux sont egaux (pas de dip) : la musique domine du debut a
+  // la fin, cf. voiceVolume ci-dessous.
   musicVolume: number;
   duckedMusicVolume: number;
+  // Volume de la voix des invites dans les plans qui la gardent (keepAudio) :
+  // volontairement bas, la voix s'entend en arriere-plan plutot qu'en avant.
+  voiceVolume: number;
   // Bandeaux cinema (2.35:1) : reserves au heros, l'effet "salle de cinema".
   // Absent (undefined) = pas de bandeaux, comme avant.
   cinematicBars?: boolean;
@@ -120,7 +125,8 @@ export const defaultFilmProps: FilmProps = {
   grade: "romantic",
   pace: "balanced",
   musicVolume: 0.85,
-  duckedMusicVolume: 0.25,
+  duckedMusicVolume: 0.85,
+  voiceVolume: 0.18,
   cinematicBars: false,
   watermark: false,
   coldOpenClipIndex: 0,

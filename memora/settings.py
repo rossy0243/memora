@@ -460,7 +460,10 @@ MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)
 # Trois livrables : le film heros doit rester court et dense, c'est lui qui doit emouvoir.
 MEMORA_MOVIE_HERO_DURATION_SECONDS = env_int("MEMORA_MOVIE_HERO_DURATION_SECONDS", 210)
-MEMORA_MOVIE_FULL_DURATION_SECONDS = env_int("MEMORA_MOVIE_FULL_DURATION_SECONDS", 600)
+# 45 min : plafond genereux plutot qu'une vraie absence de limite - couvre la quasi-totalite
+# des mariages (voir MEMORA_MOVIE_MAX_PER_GUEST["full"] = 2, qui laisse de toute facon entrer
+# tous les souvenirs restants si la duree le permet) sans rendu demesurement long.
+MEMORA_MOVIE_FULL_DURATION_SECONDS = env_int("MEMORA_MOVIE_FULL_DURATION_SECONDS", 2700)
 MEMORA_MOVIE_TEASER_DURATION_SECONDS = env_int("MEMORA_MOVIE_TEASER_DURATION_SECONDS", 60)
 MEMORA_MOVIE_TEASER_WIDTH = env_int("MEMORA_MOVIE_TEASER_WIDTH", 1080)
 MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
@@ -468,13 +471,13 @@ MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
 # et l'integrale. Le film heros n'est pas plafonne.
 MEMORA_MOVIE_MAX_PER_GUEST = {"teaser": 1, "full": 2}
 MEMORA_MOVIE_VARIANTS_ENABLED = env_bool("MEMORA_MOVIE_VARIANTS_ENABLED", True)
-# Declinaisons produites en plus du film heros. L'integrale montee ("full") est
-# retiree par defaut : le ZIP des fichiers originaux joue ce role (meilleure
-# qualite, tout est dedans) et le montage du livre d'or couvre le "tout revoir".
-# Remettre "full" ici (et dans MEMORA_REMOTION_DELIVERABLES) pour la reactiver.
+# Declinaisons produites en plus du film heros. L'integrale ("full") est reactivee
+# (30/09) : le ZIP des fichiers originaux et le livre d'or ne remplacaient pas un
+# vrai montage complet, et beaucoup de souvenirs restaient hors du heros (curated,
+# quelques minutes) pour un mariage avec beaucoup de participation.
 MEMORA_MOVIE_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_MOVIE_DELIVERABLES", "hero,teaser").split(",")
+    for part in os.getenv("MEMORA_MOVIE_DELIVERABLES", "hero,teaser,full").split(",")
     if part.strip()
 }
 # Coupes calees sur le tempo : le levier principal du "monte comme un pro".
@@ -544,19 +547,23 @@ MEMORA_REMOTION_DIR = os.getenv("MEMORA_REMOTION_DIR", str(BASE_DIR / "remotion"
 MEMORA_NODE_BINARY = os.getenv("MEMORA_NODE_BINARY", "node")
 MEMORA_REMOTION_FPS = env_int("MEMORA_REMOTION_FPS", 30)
 MEMORA_REMOTION_TIMEOUT_SECONDS = env_int("MEMORA_REMOTION_TIMEOUT_SECONDS", 1800)
-# Volumes musique du rendu Remotion. Distincts des reglages FFmpeg : ici la
-# musique est le lit principal (fort), et elle est duckee uniquement pendant
-# les passages qui gardent la voix des invites (heros/integrale).
+# Volumes musique du rendu Remotion. La musique est desormais le lit dominant, du debut a
+# la fin (heros, integrale, teaser) : la voix des invites (MEMORA_REMOTION_VOICE_VOLUME,
+# cf. Clip.tsx) passe en arriere-plan plutot que d'etre mise en avant. Le "ducking" (musique
+# qui descendait pendant les passages avec voix) est donc neutralise par defaut : la meme
+# valeur des deux cotes annule l'effet, sans retirer le mecanisme (utile si un evenement
+# demande un jour l'ancien equilibre voix-en-avant).
 MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.85"))
-# Resserre a 0.10 (etait 0.18) pour une voix nette sous la musique, alignee sur
-# l'intensite deja utilisee cote FFmpeg (0.08) : cf. MEMORA_MOVIE_DUCKED_MUSIC_VOLUME.
-MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.10"))
+MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.85"))
+# Volume de la voix des invites dans les clips gardes (heros/integrale/teaser) : volontairement
+# bas, la musique doit dominer et la voix s'entendre "a peine", en toile de fond.
+MEMORA_REMOTION_VOICE_VOLUME = float(os.getenv("MEMORA_REMOTION_VOICE_VOLUME", "0.18"))
 # Livrables rendus par Remotion quand le provider est "remotion". Doit rester un
 # sous-ensemble de MEMORA_MOVIE_DELIVERABLES (produire un livrable hors de cette
 # liste n'a aucun effet). Defaut aligne : heros + teaser.
 MEMORA_REMOTION_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,teaser").split(",")
+    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,teaser,full").split(",")
     if part.strip()
 }
 # Livrables qui gardent le son des videos des invites (rires, voeux, musique de
@@ -564,7 +571,7 @@ MEMORA_REMOTION_DELIVERABLES = {
 # des invites EST l'emotion du souvenir. Mettre "" pour un montage muet.
 MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,teaser").split(",")
+    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,teaser,full").split(",")
     if part.strip()
 }
 # Montage du livre d'or : tous les messages en entier, chacun precede d'un carton
@@ -617,6 +624,7 @@ MEMORA_RUNWAY_PROMPT = os.getenv(
     ),
 )
 MEMORA_MOVIE_MUSIC_DIR = os.getenv("MEMORA_MOVIE_MUSIC_DIR", str(BASE_DIR / "assets" / "music"))
-MEMORA_MOVIE_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_MUSIC_VOLUME", "0.22"))
-MEMORA_MOVIE_VOICE_VOLUME = float(os.getenv("MEMORA_MOVIE_VOICE_VOLUME", "1.0"))
-MEMORA_MOVIE_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_DUCKED_MUSIC_VOLUME", "0.08"))
+# Meme philosophie que cote Remotion (voir plus haut) : musique dominante, voix en arriere-plan.
+MEMORA_MOVIE_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_MUSIC_VOLUME", "0.80"))
+MEMORA_MOVIE_VOICE_VOLUME = float(os.getenv("MEMORA_MOVIE_VOICE_VOLUME", "0.18"))
+MEMORA_MOVIE_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_DUCKED_MUSIC_VOLUME", "0.80"))

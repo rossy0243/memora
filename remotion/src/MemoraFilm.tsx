@@ -56,6 +56,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     pace,
     musicVolume,
     duckedMusicVolume,
+    voiceVolume,
     cinematicBars,
     watermark,
     coldOpenClipIndex,
@@ -156,6 +157,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
           pace={pace}
           chapterLabel={clipLabels[index]}
           transitionDurationInFrames={transitionDurationInFrames}
+          voiceVolume={voiceVolume}
         />
       ),
     });

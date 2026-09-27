@@ -110,7 +110,11 @@ export const Clip: React.FC<{
   // fondait en douceur pendant que le son sautait net d'un plan a l'autre
   // (calage sur un fixe ~0.2s independant du rythme choisi).
   transitionDurationInFrames?: number;
-}> = ({ clip, grade, pace, chapterLabel, transitionDurationInFrames }) => {
+  // Volume de la voix des invites (0-1) : la musique domine, la voix reste en
+  // arriere-plan. Absent (ouverture a froid, toujours muette) = plein volume,
+  // sans consequence puisque keepAudio y est force a false.
+  voiceVolume?: number;
+}> = ({ clip, grade, pace, chapterLabel, transitionDurationInFrames, voiceVolume = 1 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -146,11 +150,14 @@ export const Clip: React.FC<{
     if (!clip.keepAudio) {
       return 0;
     }
-    return interpolate(
-      localFrame,
-      [0, voiceFadeFrames, clip.durationInFrames - voiceFadeFrames, clip.durationInFrames],
-      [0, 1, 1, 0],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+    return (
+      voiceVolume *
+      interpolate(
+        localFrame,
+        [0, voiceFadeFrames, clip.durationInFrames - voiceFadeFrames, clip.durationInFrames],
+        [0, 1, 1, 0],
+        { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+      )
     );
   };
 

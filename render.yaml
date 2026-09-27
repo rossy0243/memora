@@ -236,13 +236,13 @@ services:
         value: /app/assets/music
       - &env_music_volume
         key: MEMORA_MOVIE_MUSIC_VOLUME
-        value: "0.22"
+        value: "0.80"
       - &env_voice_volume
         key: MEMORA_MOVIE_VOICE_VOLUME
-        value: "1.0"
+        value: "0.18"
       - &env_ducked_music_volume
         key: MEMORA_MOVIE_DUCKED_MUSIC_VOLUME
-        value: "0.08"
+        value: "0.80"
 
   - type: cron
     name: memora-schedule-movies
@@ -382,12 +382,13 @@ services:
       - key: REMOTION_CONCURRENCY
         value: "4"
       - key: MEMORA_REMOTION_DELIVERABLES
-        value: hero,teaser
-      # Integrale montee retiree du set standard : le ZIP (fichiers originaux) et
-      # le montage du livre d'or la remplacent. Ajouter "full" ici + a
-      # MEMORA_MOVIE_DELIVERABLES pour la reactiver.
+        value: hero,teaser,full
+      # Integrale reactivee (30/09) : trop de souvenirs restaient hors du heros
+      # (curated, quelques minutes) pour un gros mariage. Plafond genereux
+      # (MEMORA_MOVIE_FULL_DURATION_SECONDS, 45 min) plutot que retirer le
+      # livrable — voir aussi MEMORA_MOVIE_MAX_PER_GUEST["full"].
       - key: MEMORA_MOVIE_DELIVERABLES
-        value: hero,teaser
+        value: hero,teaser,full
       - key: MEMORA_REMOTION_TIMEOUT_SECONDS
         value: "14400"
 

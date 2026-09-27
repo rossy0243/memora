@@ -256,7 +256,8 @@ def build_film_props(
         "grade": _GRADE_BY_MOOD.get(getattr(soundtrack, "mood", ""), "romantic"),
         "pace": resolved_pace,
         "musicVolume": float(getattr(settings, "MEMORA_REMOTION_MUSIC_VOLUME", 0.85)),
-        "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.10)),
+        "duckedMusicVolume": float(getattr(settings, "MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", 0.85)),
+        "voiceVolume": float(getattr(settings, "MEMORA_REMOTION_VOICE_VOLUME", 0.18)),
         # Bandeaux cinema (2.35:1) : reserves au heros, l'effet "salle de cinema"
         # sur le livrable qu'on regarde ensemble, pas sur l'integrale (archive)
         # ni le teaser (deja vertical plein cadre).
