@@ -146,6 +146,57 @@ def choose_movie_soundtrack(event, uploads):
     )
 
 
+def choose_guestbook_soundtrack(event):
+    """Fond sonore du montage du livre d'or : une piste fixe (choisie une fois par l'equipe dans
+    l'admin), pas l'ambiance devinee par evenement comme pour le film. L'organisateur garde la
+    main s'il a fourni sa propre musique ou impose une piste — ce sont ses choix explicites."""
+    custom_music = getattr(event, "custom_music_file", None)
+    if custom_music:
+        return SoundtrackChoice(
+            mood=choose_music_mood(event, []),
+            track_path=None,
+            reason="Musique personnalisée fournie par l'organisateur",
+            bpm=getattr(event, "custom_music_bpm", None) or 0.0,
+            first_beat_offset=getattr(event, "custom_music_first_beat_offset", None) or 0.0,
+            custom_event_id=event.pk,
+            track_display_name=Path(custom_music.name).stem,
+            track_extension=Path(custom_music.name).suffix or ".mp3",
+        )
+
+    manual_track = getattr(event, "selected_music_track", None)
+    if manual_track is not None and manual_track.is_active:
+        return SoundtrackChoice(
+            mood=manual_track.mood,
+            track_path=None,
+            reason="Piste choisie manuellement pour cet événement",
+            bpm=manual_track.bpm or 0.0,
+            first_beat_offset=manual_track.first_beat_offset or 0.0,
+            track_id=manual_track.pk,
+            track_display_name=manual_track.title,
+            track_extension=Path(manual_track.audio_file.name).suffix or ".mp3" if manual_track.audio_file else "",
+        )
+
+    from .models import MusicTrack
+
+    default_track = (
+        MusicTrack.objects.filter(is_active=True, is_guestbook_default=True).order_by("pk").first()
+    )
+    if default_track is not None:
+        return SoundtrackChoice(
+            mood=default_track.mood,
+            track_path=None,
+            reason="Piste par défaut du livre d'or",
+            bpm=default_track.bpm or 0.0,
+            first_beat_offset=default_track.first_beat_offset or 0.0,
+            track_id=default_track.pk,
+            track_display_name=default_track.title,
+            track_extension=Path(default_track.audio_file.name).suffix or ".mp3" if default_track.audio_file else "",
+        )
+
+    # Filet de securite : aucune piste par defaut configuree, on retombe sur la selection du film.
+    return choose_movie_soundtrack(event, [])
+
+
 def materialize_soundtrack(soundtrack, directory):
     """Renvoie (chemin_local, a_supprimer) pour la piste, prete pour ffmpeg.
 

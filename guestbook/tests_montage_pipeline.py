@@ -4,6 +4,7 @@ Les tests d'encodage lancent le vrai FFmpeg (sur de tres petits clips) : ce qui
 compte ici, ce sont les commandes construites — filtres, fondus, concat sans
 reencodage, mixage —, qu'un mock ne validerait pas. Ignores si FFmpeg est absent.
 """
+import inspect
 import json
 import shutil
 import subprocess
@@ -172,6 +173,21 @@ class FfmpegSegmentTests(SimpleTestCase):
         info = _probe(segment)
         self.assertEqual((info["video"]["width"], info["video"]["height"]), (1920, 1080))
 
+    def test_message_audio_is_denoised_before_loudness_normalization(self):
+        """Un message enregistre en pleine soiree (brouhaha, souffle du micro) doit passer par une
+        reduction de bruit AVANT la normalisation de loudness — sinon egaliser le volume en premier
+        remonterait le bruit de fond en meme temps que la voix."""
+        source = inspect.getsource(gm._encode_message_segment)
+        denoise_pos = source.index("afftdn")
+        loudnorm_pos = source.index("loudnorm")
+        self.assertLess(denoise_pos, loudnorm_pos)
+
+        # Verifie aussi, avec un vrai fichier, que le filtre ne casse pas l'encodage.
+        clip = self.tmp / "noisy.mp4"
+        _make_clip(clip, seconds=2)
+        segment, _ = self._segment(clip)
+        self.assertTrue(_probe(segment)["has_audio"])
+
     def test_silent_message_gets_a_silent_track_so_the_concat_stays_uniform(self):
         clip = self.tmp / "silent.mp4"
         _make_clip(clip, seconds=2, audio=False)
@@ -321,7 +337,7 @@ class RenderGuestbookMontageTests(SimpleTestCase):
 
         sound = SimpleNamespace(has_track=False, mood="warm_lounge", first_beat_offset=0.0)
         with patch.object(gm, "_materialize_upload", materialize), patch.object(
-            gm, "choose_movie_soundtrack", return_value=sound
+            gm, "choose_guestbook_soundtrack", return_value=sound
         ), patch.object(gm, "_render_cards", self._fake_cards):
             return gm.render_guestbook_montage(
                 self.event, self.messages, self.tmp / "hd.mp4", self.tmp / "light.mp4", **kwargs

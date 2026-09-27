@@ -6,8 +6,8 @@ from .models import GeneratedMovie, MediaAnalysis, MusicTrack
 @admin.register(MusicTrack)
 class MusicTrackAdmin(admin.ModelAdmin):
     actions = ("measure_tempo",)
-    list_display = ("title", "mood", "bpm", "first_beat_offset", "is_active", "attribution")
-    list_filter = ("mood", "is_active")
+    list_display = ("title", "mood", "bpm", "first_beat_offset", "is_active", "is_guestbook_default", "attribution")
+    list_filter = ("mood", "is_active", "is_guestbook_default")
     list_editable = ("is_active",)
     search_fields = ("title", "attribution", "source")
     readonly_fields = ("bpm", "first_beat_offset", "created_at", "updated_at")
@@ -16,6 +16,7 @@ class MusicTrackAdmin(admin.ModelAdmin):
         "audio_file",
         "mood",
         "is_active",
+        "is_guestbook_default",
         "attribution",
         "source",
         "bpm",

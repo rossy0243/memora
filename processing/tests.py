@@ -2114,6 +2114,75 @@ class MusicLibraryTests(TestCase):
         self.assertEqual(choice.custom_event_id, event.pk)
         self.assertIsNone(choice.track_id)
 
+    def test_guestbook_uses_the_flagged_default_track_not_the_mood_guess(self):
+        """Contrairement au film, le livre d'or n'essaie pas de deviner une ambiance : une seule
+        piste fixe, choisie une fois par l'equipe (is_guestbook_default), sert a tous les evenements."""
+        from processing.soundtrack import choose_guestbook_soundtrack
+
+        self._track(MusicTrack.Mood.ROMANTIC, "romance-admin")  # serait choisie pour le FILM
+        default = self._track(MusicTrack.Mood.EMOTIONAL, "if-not-for-grace")
+        default.is_guestbook_default = True
+        default.save(update_fields=["is_guestbook_default"])
+        event = self._make_event()
+
+        choice = choose_guestbook_soundtrack(event)
+
+        self.assertEqual(choice.track_id, default.pk)
+        self.assertEqual(choice.track_name, "if-not-for-grace")
+        self.assertEqual(choice.reason, "Piste par défaut du livre d'or")
+
+    def test_guestbook_falls_back_to_mood_pick_without_a_default_track(self):
+        from processing.soundtrack import choose_guestbook_soundtrack
+
+        romance = self._track(MusicTrack.Mood.ROMANTIC, "romance-admin")
+        event = self._make_event()
+
+        choice = choose_guestbook_soundtrack(event)
+
+        self.assertEqual(choice.track_id, romance.pk)
+
+    def test_guestbook_still_honors_the_organizers_own_custom_music(self):
+        from processing.soundtrack import choose_guestbook_soundtrack
+
+        default = self._track(MusicTrack.Mood.EMOTIONAL, "if-not-for-grace")
+        default.is_guestbook_default = True
+        default.save(update_fields=["is_guestbook_default"])
+        event = self._make_event()
+        event.custom_music_file = SimpleUploadedFile("notre-chanson.wav", b"fake-wav-bytes")
+        event.save()
+
+        choice = choose_guestbook_soundtrack(event)
+
+        self.assertEqual(choice.custom_event_id, event.pk)
+        self.assertIsNone(choice.track_id)
+
+    def test_guestbook_still_honors_the_organizers_manual_pick(self):
+        from processing.soundtrack import choose_guestbook_soundtrack
+
+        default = self._track(MusicTrack.Mood.EMOTIONAL, "if-not-for-grace")
+        default.is_guestbook_default = True
+        default.save(update_fields=["is_guestbook_default"])
+        event = self._make_event()
+        event.selected_music_track = self._track(MusicTrack.Mood.ROMANTIC, "pick-equipe")
+        event.save()
+
+        choice = choose_guestbook_soundtrack(event)
+
+        self.assertEqual(choice.track_name, "pick-equipe")
+
+    def test_inactive_default_track_is_ignored(self):
+        from processing.soundtrack import choose_guestbook_soundtrack
+
+        default = self._track(MusicTrack.Mood.EMOTIONAL, "if-not-for-grace", active=False)
+        default.is_guestbook_default = True
+        default.save(update_fields=["is_guestbook_default"])
+        romance = self._track(MusicTrack.Mood.ROMANTIC, "romance-admin")
+        event = self._make_event()
+
+        choice = choose_guestbook_soundtrack(event)
+
+        self.assertEqual(choice.track_id, romance.pk)
+
     def test_materialize_copies_custom_event_music(self):
         from processing.soundtrack import choose_movie_soundtrack, materialize_soundtrack
 

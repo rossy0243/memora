@@ -170,7 +170,10 @@ class EventAdmin(admin.ModelAdmin):
                     "Facultatif : impose une piste precise pour le film de cet evenement. "
                     "Sans choix ici, Memora retombe sur une ambiance par defaut liee au type "
                     "d'evenement — l'invite ne choisissant plus de moment, ce choix automatique "
-                    "ne peut plus vraiment varier d'un evenement a l'autre."
+                    "ne peut plus vraiment varier d'un evenement a l'autre. Cette liste ne propose "
+                    "que les pistes deja presentes dans la bibliotheque musicale ; pour en ajouter "
+                    "une nouvelle (televerser un fichier audio), utilisez « Traitement > Bibliotheque "
+                    "musicale > Ajouter » depuis l'accueil de l'admin, pas cette page."
                 ),
             },
         ),

@@ -44,6 +44,15 @@ class MusicTrack(models.Model):
         default=True,
         help_text="Seules les pistes actives sont utilisees dans les films.",
     )
+    is_guestbook_default = models.BooleanField(
+        "piste par defaut du livre d'or",
+        default=False,
+        help_text=(
+            "Fond sonore utilise pour TOUS les montages du livre d'or (sauf si l'organisateur a "
+            "fourni sa propre musique ou choisi une piste precise pour son evenement). Une seule "
+            "piste active devrait porter cette case ; en cas de plusieurs, la plus ancienne gagne."
+        ),
+    )
     attribution = models.CharField(
         max_length=255,
         blank=True,

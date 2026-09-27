@@ -33,7 +33,7 @@ from django.core.files import File
 from django.utils import timezone
 
 from .remotion import _materialize_upload, run_remotion_subprocess
-from .soundtrack import choose_movie_soundtrack, materialize_soundtrack
+from .soundtrack import choose_guestbook_soundtrack, materialize_soundtrack
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +262,13 @@ def _encode_message_segment(source, destination, *, fallback_seconds, grade, enc
     inputs = ["-i", str(source)]
     if has_audio:
         audio_graph = (
-            "[0:a]loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,"
+            # Reduction de bruit avant la normalisation de loudness : sur un enregistrement de
+            # soiree (brouhaha, ventilation, souffle du micro du telephone), egaliser le volume
+            # en premier remonterait le bruit de fond en meme temps que la voix. afftdn s'adapte
+            # au signal sans profil de bruit fourni a l'avance : reste doux, pas un vrai isolement
+            # de voix (une musique forte derriere le message restera audible, ce n'est pas ce que
+            # ce filtre sait faire).
+            "[0:a]afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000,"
             "aformat=sample_fmts=fltp:channel_layouts=stereo,"
             f"afade=t=in:st=0:d={VOICE_FADE_SECONDS},afade=t=out:st={voice_out_at:.3f}:d={VOICE_FADE_SECONDS},"
             f"apad,atrim=0:{duration:.3f}[a]"
@@ -513,7 +519,7 @@ def render_guestbook_montage(event, messages, output_path, light_output_path=Non
     encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
     workers = _worker_count()
     threads_per_encode = max(1, _available_cpus() // workers)
-    soundtrack = choose_movie_soundtrack(event, [])
+    soundtrack = choose_guestbook_soundtrack(event)
     grade = _grade_filter(soundtrack)
 
     logger.info(
