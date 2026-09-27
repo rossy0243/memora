@@ -1680,6 +1680,78 @@ class RemotionEdlTests(TestCase):
 
         self.assertTrue(captured["props"]["clips"][0]["keepAudio"])
 
+    def test_probe_audio_duration_seconds_reads_a_real_file(self):
+        """Sonde reelle (ffprobe), sans mock : base de la boucle audio (voir
+        MemoraFilm.tsx) qui a besoin de connaitre la vraie duree de la piste."""
+        from processing.remotion import _probe_audio_duration_seconds
+
+        with tempfile.TemporaryDirectory() as tmp:
+            track_path = Path(tmp) / "short_track.wav"
+            subprocess.run(
+                [
+                    settings.MEMORA_FFMPEG_BINARY, "-y", "-v", "error",
+                    "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono",
+                    "-t", "2", str(track_path),
+                ],
+                check=True,
+            )
+            duration = _probe_audio_duration_seconds(track_path, settings.MEMORA_FFPROBE_BINARY)
+
+        self.assertIsNotNone(duration)
+        self.assertAlmostEqual(duration, 2.0, delta=0.2)
+
+    @patch("processing.remotion._probe_audio_duration_seconds", return_value=4.0)
+    @patch("processing.remotion.subprocess.Popen")
+    @patch("processing.remotion._normalize_clip_audio")
+    @patch("processing.remotion._materialize_upload")
+    @patch("processing.remotion.shutil.which", return_value="/usr/bin/node")
+    def test_short_track_gets_a_measurable_duration_for_looping(
+        self, _which, _materialize, _normalize, popen, _probe
+    ):
+        """Une chanson normale (quelques minutes) est bien plus courte que
+        l'integrale (jusqu'a 45 min) : la duree sondee doit se retrouver dans
+        les props pour que Remotion puisse boucler la piste (MemoraFilm.tsx)."""
+        from processing.remotion import render_movie_with_remotion
+
+        captured = {}
+
+        def fake_popen(command, **kwargs):
+            props_arg = next(arg for arg in command if arg.startswith("--props="))
+            captured["props"] = json.loads(
+                Path(props_arg.split("=", 1)[1]).read_text(encoding="utf-8")
+            )
+            return SimpleNamespace(
+                returncode=0,
+                communicate=lambda timeout=None: ("OK", ""),
+                kill=lambda: None,
+            )
+
+        popen.side_effect = fake_popen
+
+        with tempfile.TemporaryDirectory() as tmp:
+            track_path = Path(tmp) / "fake_track.mp3"
+            track_path.write_bytes(b"not-real-audio-but-ffprobe-is-mocked-here")
+
+            soundtrack = SimpleNamespace(
+                mood="romantic_cinematic",
+                bpm=120.0,
+                first_beat_offset=0.0,
+                has_track=True,
+                track_path=str(track_path),
+                track_id=None,
+                custom_event_id=None,
+                track_extension="",
+                beat_interval=0.5,
+            )
+            uploads = [self._upload(GuestUpload.MediaType.IMAGE, "p.jpg")]
+
+            render_movie_with_remotion(
+                self._event(), uploads, soundtrack, Path(tmp) / "out.mp4", deliverable="full",
+            )
+
+        expected_frames = round(4.0 * settings.MEMORA_REMOTION_FPS)
+        self.assertEqual(captured["props"]["musicDurationInFrames"], expected_frames)
+
     @patch(
         "processing.remotion.subprocess.Popen",
         return_value=SimpleNamespace(

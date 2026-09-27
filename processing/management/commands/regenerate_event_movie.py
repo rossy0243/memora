@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.mail import send_mail
 from django.core.management.base import BaseCommand, CommandError
 
 from events.models import Event
@@ -12,11 +14,18 @@ class Command(BaseCommand):
         "reglages de production actuels. Equivalent programmatique de "
         "l'action admin « Regenerer le film souvenir » : ne cree pas de "
         "nouveau film, ne renvoie pas l'e-mail « film pret » (organizer_"
-        "notified_at est conserve)."
+        "notified_at est conserve). --notify-email envoie, en plus, un court "
+        "e-mail de confirmation a l'adresse donnee si (et seulement si) la "
+        "regeneration reussit — pour l'operateur Memora, pas l'organisateur."
     )
 
     def add_arguments(self, parser):
         parser.add_argument("event_id", type=int)
+        parser.add_argument(
+            "--notify-email",
+            default="",
+            help="E-mail de confirmation envoye a cette adresse si la regeneration reussit.",
+        )
 
     def handle(self, *args, **options):
         event_id = options["event_id"]
@@ -50,3 +59,19 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Film #{processed.pk} - {event.title}: {processed.get_status_display().lower()}{detail}"
         )
+
+        notify_email = options.get("notify_email")
+        if notify_email and processed.status == GeneratedMovie.Status.COMPLETED:
+            send_mail(
+                subject=f"Film regenere avec succes - {event.title}",
+                message=(
+                    f"Le film souvenir de \"{event.title}\" a ete regenere avec succes.\n\n"
+                    f"Heros : {'ok' if processed.final_file else 'absent'}\n"
+                    f"Integrale : {'ok' if processed.full_file else 'absent'}\n"
+                    f"Teaser : {'ok' if processed.teaser_file else 'absent'}\n"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[notify_email],
+                fail_silently=False,
+            )
+            self.stdout.write(f"E-mail de confirmation envoye a {notify_email}.")

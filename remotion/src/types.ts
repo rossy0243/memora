@@ -43,6 +43,11 @@ export interface FilmProps {
   audioSrc: string | null;
   // Decalage du premier temps fort de la musique, en secondes.
   audioFirstBeatOffset: number;
+  // Duree de la piste (frames), sondee cote Python une fois le fichier
+  // materialise. Plus courte que le film (une chanson normale face a une
+  // integrale de 45 min) -> la piste est bouclee (voir MemoraFilm.tsx).
+  // null/absent = duree inconnue, une seule lecture (comportement d'avant).
+  musicDurationInFrames?: number | null;
   title: string;
   subtitle: string;
   outroTitle: string;
@@ -116,6 +121,7 @@ export const defaultFilmProps: FilmProps = {
   clips: [],
   audioSrc: null,
   audioFirstBeatOffset: 0,
+  musicDurationInFrames: null,
   title: "Camille & Noé",
   subtitle: "12/07/2026",
   outroTitle: "Merci",

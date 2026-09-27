@@ -2,6 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  Loop,
   interpolate,
   staticFile,
   useVideoConfig,
@@ -46,6 +47,7 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
     clips,
     audioSrc,
     audioFirstBeatOffset,
+    musicDurationInFrames,
     title,
     subtitle,
     outroTitle,
@@ -219,6 +221,10 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
 
   // Ducking : la musique descend a duckedMusicVolume pendant les passages avec
   // voix, avec une rampe douce d'un tiers de seconde de part et d'autre.
+  // Attention si ce ducking est un jour reactive (duckedMusicVolume < musicVolume) :
+  // `frame` recu ici est le frame ABSOLU de la composition, mais quand la piste est
+  // bouclee (<Loop>, voir plus bas) elle redemarre a 0 a chaque cycle — le calage
+  // avec voiceSegments (lui aussi absolu) ne resterait juste qu'au premier cycle.
   const ramp = Math.max(Math.round(fps / 3), 1);
   const musicVolumeAt = (frame: number): number => {
     let volume = musicVolume;
@@ -247,7 +253,17 @@ export const MemoraFilm: React.FC<FilmProps> = (props) => {
           .filter((node): node is React.ReactElement => node !== null)}
       </TransitionSeries>
 
-      {audioSrc ? (
+      {/* Une chanson (quelques minutes) est bien plus courte qu'une integrale
+          (jusqu'a 45 min) : sans boucle, la musique s'arrete en cours de film
+          et laisse le reste en silence. <Loop> la reprend depuis son debut
+          autant de fois qu'il faut pour couvrir toute la composition — le
+          calage sur le premier temps fort (startFrom) n'a de sens que pour
+          une lecture unique, on le laisse donc de cote ici. */}
+      {audioSrc && musicDurationInFrames ? (
+        <Loop durationInFrames={musicDurationInFrames}>
+          <Audio src={resolveSrc(audioSrc)} volume={musicVolumeAt} />
+        </Loop>
+      ) : audioSrc ? (
         <Audio
           src={resolveSrc(audioSrc)}
           startFrom={Math.round(audioFirstBeatOffset * fps)}

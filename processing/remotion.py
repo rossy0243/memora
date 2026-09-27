@@ -245,6 +245,11 @@ def build_film_props(
         "clips": clips,
         "audioSrc": audio_src,
         "audioFirstBeatOffset": audio_offset,
+        # Duree de la piste en frames : renseignee plus tard par
+        # render_movie_with_remotion (une fois le fichier materialise et
+        # sondable), pour que Remotion la boucle si elle est plus courte
+        # que le film. None -> pas de boucle (une seule lecture).
+        "musicDurationInFrames": None,
         "title": title or event.title,
         "subtitle": subtitle,
         "outroTitle": settings.MEMORA_MOVIE_OUTRO_TITLE or "Merci",
@@ -349,6 +354,22 @@ def _normalize_clip_audio(path, ffmpeg_binary):
         normalized_path.unlink(missing_ok=True)
 
 
+def _probe_audio_duration_seconds(path, binary):
+    """Duree (secondes) d'un fichier audio local, ou None si indisponible."""
+    if shutil.which(binary) is None and not Path(binary).exists():
+        return None
+    try:
+        result = subprocess.run(
+            [binary, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return float(result.stdout.strip())
+    except (subprocess.TimeoutExpired, ValueError, OSError):
+        return None
+
+
 def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progress_callback=None, failure_label="Rendu Remotion"):
     """Lance `node render.mjs` et attend la fin, en sondant la progression.
 
@@ -445,6 +466,16 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
                 shutil.copy(track_path, assets_dir / props["audioSrc"])
                 if cleanup:
                     Path(track_path).unlink(missing_ok=True)
+                # Une chanson (quelques minutes) est bien plus courte que
+                # l'integrale (jusqu'a 45 min) : sans sa duree, Remotion ne
+                # pourrait pas la boucler et le film finirait en silence.
+                music_seconds = _probe_audio_duration_seconds(
+                    assets_dir / props["audioSrc"], settings.MEMORA_FFPROBE_BINARY
+                )
+                if music_seconds:
+                    props["musicDurationInFrames"] = _seconds_to_frames(
+                        music_seconds, settings.MEMORA_REMOTION_FPS
+                    )
             else:
                 props["audioSrc"] = None  # piste indisponible : on garde le silence
 
