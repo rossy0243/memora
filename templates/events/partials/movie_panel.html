@@ -56,6 +56,18 @@
       <li class="{% if latest_movie.progress_percent >= 78 %}is-done{% endif %}">Musique</li>
       <li class="{% if latest_movie.progress_percent >= 94 %}is-done{% endif %}">Finalisation</li>
     </ol>
+    {% if latest_movie.status == "processing" %}
+      {% if latest_movie.final_file or latest_movie.full_file or latest_movie.teaser_file %}
+        <p class="muted-copy movie-versions__hint">
+          Déjà disponible pendant que le reste se termine :
+          {% if latest_movie.final_file %}<a href="{{ latest_movie.final_file.url }}" download>film</a>{% endif %}
+          {% if latest_movie.final_file and latest_movie.full_file %} · {% endif %}
+          {% if latest_movie.full_file %}<a href="{{ latest_movie.full_file.url }}" download>intégrale</a>{% endif %}
+          {% if latest_movie.teaser_file and latest_movie.final_file or latest_movie.teaser_file and latest_movie.full_file %} · {% endif %}
+          {% if latest_movie.teaser_file %}<a href="{{ latest_movie.teaser_file.url }}" download>teaser</a>{% endif %}
+        </p>
+      {% endif %}
+    {% endif %}
     {% if latest_movie.status == "failed" %}
       <p class="muted-copy">Memora n'a pas pu finaliser ce film. Vous pouvez le relancer, les détails techniques restent gérés en interne.</p>
     {% endif %}

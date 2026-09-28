@@ -1428,6 +1428,150 @@ class EventViewTests(TestCase):
         upload.refresh_from_db()
         self.assertFalse(upload.is_selected_for_teaser)
 
+    def test_media_list_shows_teaser_selection_duration_total(self):
+        """L'organisateur doit pouvoir voir, en secondes, s'il a choisi assez de
+        souvenirs pour le teaser avant de lancer une regeneration manuelle."""
+        from datetime import timedelta
+
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Duree Teaser",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-duree-teaser/uploads/ceremony/clip.mp4",
+            media_type=GuestUpload.MediaType.VIDEO,
+            original_filename="clip.mp4",
+            file_size=123,
+            duration=timedelta(seconds=8),
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            is_selected_for_teaser=True,
+        )
+        GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-duree-teaser/uploads/ceremony/other.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="other.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.context["teaser_selected_seconds"], 8)
+        self.assertEqual(
+            response.context["teaser_target_seconds"], settings.MEMORA_MOVIE_TEASER_DURATION_SECONDS
+        )
+        self.assertContains(response, "8s sur")
+
+    def test_ajax_toggle_returns_updated_card_when_still_in_filter(self):
+        """Le clic « Garder pour le film » doit mettre a jour la carte sur place
+        (pas de rechargement complet) quand le media reste visible dans le filtre actif."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Ajax Remplace",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-ajax-remplace/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:toggle_movie_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"next": reverse("events:media_list", kwargs={"pk": event.pk})},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["action"], "replace")
+        self.assertEqual(data["upload_id"], upload.pk)
+        self.assertIn("Retirer du film", data["html"])
+        self.assertIn("1 media", data["movie_summary_html"])
+
+    def test_ajax_reject_removes_card_from_accepted_only_filter(self):
+        """Rejeter un media pendant qu'on affiche « Acceptes » (filtre par defaut) doit
+        le faire disparaitre de la grille au lieu d'y laisser une carte perimee."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Ajax Retire",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-ajax-retire/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {
+                "status": GuestUpload.ModerationStatus.REJECTED,
+                "next": reverse("events:media_list", kwargs={"pk": event.pk}),
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["action"], "remove")
+        self.assertEqual(data["upload_id"], upload.pk)
+
+    def test_ajax_unselect_removes_card_from_selected_movie_filter(self):
+        """Retirer un media du film pendant qu'on affiche le filtre « Selectionnes »
+        doit aussi le faire disparaitre de la grille."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Ajax Retire Film",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-ajax-retire-film/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            is_selected_for_movie=True,
+        )
+        self.client.login(username="owner", password="secret")
+
+        next_url = reverse("events:media_list", kwargs={"pk": event.pk}) + "?movie=selected"
+        response = self.client.post(
+            reverse("events:toggle_movie_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"next": next_url},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["action"], "remove")
+
     def test_owner_can_moderate_event_media(self):
         event = Event.objects.create(
             organizer=self.user,

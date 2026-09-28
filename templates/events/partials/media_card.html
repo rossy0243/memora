@@ -1,0 +1,54 @@
+<article class="media-library-card" data-upload-id="{{ upload.pk }}">
+  {% if upload.media_type == "image" %}
+    <a class="media-library-card__preview" href="{{ upload.media_file.url }}">
+      <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
+    </a>
+  {% else %}
+    <div class="media-library-card__preview">
+      <video src="{{ upload.media_file.url }}" controls muted preload="metadata" playsinline></video>
+    </div>
+  {% endif %}
+  <div class="media-library-card__body">
+    <span>{{ upload.category.label }}{% if upload.is_selected_for_movie %} - Pour le film{% endif %}</span>
+    <span class="moderation-pill moderation-pill--{{ upload.moderation_status }}">{{ upload.get_moderation_status_display }}</span>
+    <strong>{{ upload.original_filename }}</strong>
+    <small>{{ upload.get_media_type_display }} - {{ upload.file_size|filesizeformat }}</small>
+    <div class="media-library-card__actions">
+      <div class="moderation-actions">
+        {% if upload.moderation_status == moderation_statuses.REJECTED %}
+          <form method="post" action="{% url 'events:set_media_moderation' event.pk upload.pk %}" data-media-action>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="hidden" name="status" value="{{ moderation_statuses.APPROVED }}">
+            <button class="button button--primary button--compact" type="submit">Restaurer</button>
+          </form>
+        {% endif %}
+        {% if upload.moderation_status != moderation_statuses.REJECTED %}
+          <form method="post" action="{% url 'events:set_media_moderation' event.pk upload.pk %}" data-media-action>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input type="hidden" name="status" value="{{ moderation_statuses.REJECTED }}">
+            <button class="button button--secondary button--compact" type="submit">Rejeter</button>
+          </form>
+        {% endif %}
+      </div>
+      {% if upload.moderation_status == moderation_statuses.APPROVED %}
+        <form method="post" action="{% url 'events:toggle_movie_selection' event.pk upload.pk %}" data-media-action>
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="button {% if upload.is_selected_for_movie %}button--secondary{% else %}button--primary{% endif %} button--compact" type="submit">
+            {% if upload.is_selected_for_movie %}Retirer du film{% else %}Garder pour le film{% endif %}
+          </button>
+        </form>
+        <form method="post" action="{% url 'events:toggle_teaser_selection' event.pk upload.pk %}" data-media-action>
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="button {% if upload.is_selected_for_teaser %}button--secondary{% else %}button--primary{% endif %} button--compact" type="submit">
+            {% if upload.is_selected_for_teaser %}Retirer du teaser{% else %}Garder pour le teaser{% endif %}
+          </button>
+        </form>
+      {% endif %}
+      <a href="{{ upload.media_file.url }}" download>Telecharger l'original</a>
+    </div>
+  </div>
+</article>

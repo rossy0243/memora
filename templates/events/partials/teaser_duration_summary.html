@@ -1,0 +1,12 @@
+{% if teaser_selected_seconds %}
+  Teaser (selection manuelle) : {{ teaser_selected_seconds }}s sur {{ teaser_target_seconds }}s visees
+  {% if teaser_selected_seconds < teaser_target_seconds|add:"-15" %}
+    — encore un peu court, ajoutez quelques souvenirs.
+  {% elif teaser_selected_seconds > teaser_target_seconds|add:"15" %}
+    — au-dela de la cible, les derniers seront coupes automatiquement.
+  {% else %}
+    — bon calibrage.
+  {% endif %}
+{% else %}
+  Teaser : selection automatique (aucun souvenir marque manuellement pour l'instant).
+{% endif %}

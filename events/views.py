@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
-from django.http import Http404, HttpResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -16,6 +16,7 @@ from core.downloads import download_response
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from processing.models import GeneratedMovie
 from processing.services import (
+    _estimated_movie_clip_duration,
     create_event_movie_job,
     get_event_movie_schedule_at,
     get_event_zip_filename,
@@ -134,6 +135,95 @@ class EventDetailView(OrganizerEventMixin, DetailView):
         return context
 
 
+def _media_list_filters_from_next_url(next_url):
+    """Reconstruit les filtres actifs de la page medias a partir de l'URL « next »
+    postee par un formulaire de la grille (voir templates/events/partials/media_card.html).
+    Sert uniquement a l'update AJAX : sans ca, un media qui vient de sortir du filtre actif
+    (ex. rejete pendant qu'on affiche « Acceptes ») resterait visible jusqu'au prochain
+    rechargement complet de la page."""
+    from urllib.parse import urlparse, parse_qs
+
+    query = parse_qs(urlparse(next_url or "").query)
+    return {
+        "category": query.get("category", [""])[0],
+        "media_type": query.get("type", [""])[0],
+        "movie_filter": query.get("movie", [""])[0],
+        "moderation_status": query.get("status", [""])[0],
+    }
+
+
+def _upload_matches_media_filters(upload, filters):
+    """Meme logique que EventMediaListView.get_queryset, appliquee a un seul objet deja
+    en memoire (mise a jour AJAX) plutot qu'a un queryset."""
+    if filters["category"] and upload.category.code != filters["category"]:
+        return False
+    if filters["media_type"] in {GuestUpload.MediaType.IMAGE, GuestUpload.MediaType.VIDEO}:
+        if upload.media_type != filters["media_type"]:
+            return False
+    if filters["movie_filter"] == "selected":
+        if not (upload.is_selected_for_movie and upload.moderation_status == GuestUpload.ModerationStatus.APPROVED):
+            return False
+    if filters["moderation_status"] in GuestUpload.ModerationStatus.values:
+        if upload.moderation_status != filters["moderation_status"]:
+            return False
+    elif filters["moderation_status"] != GuestUpload.ModerationStatus.REJECTED:
+        if upload.moderation_status == GuestUpload.ModerationStatus.REJECTED:
+            return False
+    return True
+
+
+def _media_selection_summary(event):
+    return {
+        "selected_for_movie_count": event.guest_uploads.filter(
+            is_deleted=False,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+            is_selected_for_movie=True,
+        ).count(),
+        "teaser_selected_seconds": sum(
+            _estimated_movie_clip_duration(upload)
+            for upload in event.guest_uploads.filter(
+                is_deleted=False,
+                moderation_status=GuestUpload.ModerationStatus.APPROVED,
+                is_selected_for_teaser=True,
+            )
+        ),
+        "teaser_target_seconds": settings.MEMORA_MOVIE_TEASER_DURATION_SECONDS,
+    }
+
+
+def _is_ajax(request):
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
+def _media_card_ajax_response(request, event, upload, next_url):
+    """Reponse JSON pour une action AJAX sur la grille medias : soit le HTML de la
+    carte mise a jour (elle reste dans le filtre actif), soit un ordre de suppression
+    (elle n'y correspond plus), plus les compteurs de synthese a jour."""
+    from django.template.loader import render_to_string
+
+    filters = _media_list_filters_from_next_url(next_url)
+    summary = _media_selection_summary(event)
+    payload = {
+        "upload_id": upload.pk,
+        "movie_summary_html": render_to_string("events/partials/movie_selection_summary.html", summary),
+        "teaser_summary_html": render_to_string("events/partials/teaser_duration_summary.html", summary),
+    }
+    if _upload_matches_media_filters(upload, filters):
+        payload["action"] = "replace"
+        payload["html"] = render_to_string(
+            "events/partials/media_card.html",
+            {
+                "upload": upload,
+                "event": event,
+                "moderation_statuses": GuestUpload.ModerationStatus,
+            },
+            request=request,
+        )
+    else:
+        payload["action"] = "remove"
+    return JsonResponse(payload)
+
+
 class EventMediaListView(OrganizerEventMixin, ListView):
     template_name = "events/event_media_list.html"
     context_object_name = "uploads"
@@ -183,11 +273,7 @@ class EventMediaListView(OrganizerEventMixin, ListView):
                 "selected_media_type": self.selected_media_type,
                 "selected_movie_filter": self.selected_movie_filter,
                 "selected_moderation_status": self.selected_moderation_status,
-                "selected_for_movie_count": self.event.guest_uploads.filter(
-                    is_deleted=False,
-                    moderation_status=GuestUpload.ModerationStatus.APPROVED,
-                    is_selected_for_movie=True,
-                ).count(),
+                **_media_selection_summary(self.event),
             }
         )
         return context
@@ -370,6 +456,9 @@ def toggle_movie_selection(request, pk, upload_pk):
     upload.is_selected_for_movie = not upload.is_selected_for_movie
     upload.save(update_fields=["is_selected_for_movie"])
 
+    next_url = request.POST.get("next", "")
+    if _is_ajax(request):
+        return _media_card_ajax_response(request, event, upload, next_url)
     return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 
 
@@ -387,6 +476,9 @@ def toggle_teaser_selection(request, pk, upload_pk):
     upload.is_selected_for_teaser = not upload.is_selected_for_teaser
     upload.save(update_fields=["is_selected_for_teaser"])
 
+    next_url = request.POST.get("next", "")
+    if _is_ajax(request):
+        return _media_card_ajax_response(request, event, upload, next_url)
     return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 
 
@@ -408,6 +500,9 @@ def set_media_moderation_status(request, pk, upload_pk):
             upload.is_selected_for_teaser = False
         upload.save(update_fields=["moderation_status", "is_selected_for_movie", "is_selected_for_teaser"])
 
+    next_url = request.POST.get("next", "")
+    if _is_ajax(request):
+        return _media_card_ajax_response(request, event, upload, next_url)
     return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 
 
