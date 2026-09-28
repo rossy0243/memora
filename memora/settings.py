@@ -519,7 +519,16 @@ MEMORA_MOVIE_MAX_CONSECUTIVE_VIDEOS_BEFORE_PHOTO = env_int(
 )
 MEMORA_MOVIE_BADGE_ENABLED = env_bool("MEMORA_MOVIE_BADGE_ENABLED", True)
 MEMORA_MOVIE_BADGE_DURATION_SECONDS = env_int("MEMORA_MOVIE_BADGE_DURATION_SECONDS", 5)
-MEMORA_MOVIE_PROCESSING_STALE_MINUTES = env_int("MEMORA_MOVIE_PROCESSING_STALE_MINUTES", 5)
+# 5 min etait beaucoup trop court (28/09) : le cron planifie (*/15 * * * *) a
+# considere un film reellement en cours de rendu (aucune mise a jour pendant le
+# rendu de l'integrale/teaser, qui n'avait alors pas de callback continu) comme
+# abandonne, et l'a relance en parallele du process original — deux rendus
+# Remotion/Chrome concurrents sur la meme machine, la vraie cause probable des
+# "plantages OOM" precedents plutot que la duree ou la concurrence. 60 min
+# laisse largement le temps a une phase silencieuse legitime (materialisation
+# de dizaines de clips depuis R2, par exemple) sans pour autant laisser un job
+# vraiment mort bloque indefiniment.
+MEMORA_MOVIE_PROCESSING_STALE_MINUTES = env_int("MEMORA_MOVIE_PROCESSING_STALE_MINUTES", 60)
 # Normalisation de la nettete : un media net doit approcher 80/100 sur l'echelle d'analyse.
 MEMORA_ANALYSIS_SHARPNESS_DIVISOR = env_float("MEMORA_ANALYSIS_SHARPNESS_DIVISOR", 6.5)
 # Rejet des medias inexploitables (trop flous, trop sombres, crames).
