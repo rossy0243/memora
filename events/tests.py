@@ -1489,6 +1489,60 @@ class EventViewTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
 
+    def test_regenerate_teaser_carries_only_deliverable_intent(self):
+        """Le cron (process_pending_movies) appelle process_generated_movie(movie)
+        generiquement : l'intention "juste le teaser" doit donc survivre dans le
+        film lui-meme (edit_decision_data), pas seulement dans le formulaire web."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Teaser Intention",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/hero.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        self.client.post(reverse("events:regenerate_teaser", kwargs={"pk": event.pk}))
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "teaser")
+
+    def test_owner_can_cancel_an_active_render(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Annulation",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:cancel_movie_generation", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertTrue(movie.cancel_requested)
+
+    def test_cancel_is_a_noop_without_an_active_render(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Annulation Inutile",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.COMPLETED)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:cancel_movie_generation", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertFalse(movie.cancel_requested)
+
     def test_media_list_shows_teaser_selection_duration_total(self):
         """L'organisateur doit pouvoir voir, en secondes, s'il a choisi assez de
         souvenirs pour le teaser avant de lancer une regeneration manuelle."""

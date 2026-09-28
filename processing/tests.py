@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from types import SimpleNamespace
 import tempfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -742,6 +742,70 @@ class MovieGenerationServiceTests(TestCase):
         self.assertEqual(deliverables, ["full", "teaser"])
         self.assertEqual(processed.final_file.name, "events/x/movies/deja_rendu.mp4")
         self.assertEqual(processed.status, GeneratedMovie.Status.COMPLETED)
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_only_deliverable_skips_others_even_if_their_file_is_empty(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        """only_deliverable="teaser" (voir regenerate_event_movie --only et la page
+        medias) ne doit JAMAIS declencher un rendu de l'integrale, meme si son
+        fichier est vide pour une tout autre raison (ex. reste d'un plantage
+        precedent) — sinon une simple demande de teaser pouvait quand meme
+        relancer un rendu de plusieurs heures sur l'integrale."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"movie-bytes")
+
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            final_file="events/x/movies/deja_rendu.mp4",
+            # full_file volontairement vide (comme apres un plantage) : sans le
+            # garde-fou only_deliverable, le pipeline le tenterait quand meme.
+        )
+
+        processed = process_generated_movie(movie, only_deliverable="teaser")
+
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["teaser"])
+        self.assertFalse(processed.full_file)
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_only_deliverable_carried_via_edit_decision_data(self, render_remotion, run_ffmpeg, _which):
+        """La page medias (regenerate_teaser) ne peut pas passer only_deliverable en
+        argument a process_generated_movie(movie) — le cron l'appelle
+        generiquement. L'intention transite donc par edit_decision_data."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"movie-bytes")
+
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            final_file="events/x/movies/deja_rendu.mp4",
+            edit_decision_data={"only_deliverable": "teaser"},
+        )
+
+        process_generated_movie(movie)
+
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["teaser"])
 
     @override_settings(
         MEMORA_MOVIE_RENDER_PROVIDER="remotion",
@@ -1579,6 +1643,51 @@ class RemotionClipAudioNormalizationTests(TestCase):
                 _normalize_clip_audio(path, "ffmpeg")
 
             self.assertEqual(path.read_bytes(), b"original")
+
+
+class RemotionCancellationTests(TestCase):
+    """Un rendu Chrome headless peut durer plusieurs heures (voir les plantages du
+    28/09) : l'organisateur doit pouvoir l'arreter sans attendre le timeout global."""
+
+    def test_cancel_check_kills_process_and_raises(self):
+        from processing.remotion import MovieGenerationCancelled, run_remotion_subprocess
+
+        process = SimpleNamespace(
+            communicate=Mock(side_effect=[subprocess.TimeoutExpired(cmd="x", timeout=2), ("", "")]),
+            kill=Mock(),
+        )
+        cancel_calls = []
+
+        def cancel_check():
+            cancel_calls.append(True)
+            return len(cancel_calls) >= 1
+
+        with patch("processing.remotion.subprocess.Popen", return_value=process):
+            with self.assertRaises(MovieGenerationCancelled):
+                run_remotion_subprocess(
+                    ["node", "render.mjs"],
+                    cwd=".",
+                    timeout=999,
+                    cancel_check=cancel_check,
+                )
+
+        process.kill.assert_called_once()
+
+    def test_no_cancel_check_runs_to_completion(self):
+        """cancel_check absent (comportement historique) : aucun impact."""
+        from processing.remotion import run_remotion_subprocess
+
+        process = SimpleNamespace(
+            communicate=Mock(return_value=("ok", "")),
+            returncode=0,
+            kill=Mock(),
+        )
+
+        with patch("processing.remotion.subprocess.Popen", return_value=process):
+            stdout = run_remotion_subprocess(["node", "render.mjs"], cwd=".", timeout=999)
+
+        self.assertEqual(stdout, "ok")
+        process.kill.assert_not_called()
 
 
 class RemotionEdlTests(TestCase):
@@ -2649,7 +2758,7 @@ class RegenerateEventMovieCommandTests(TestCase):
             final_file="events/x/movies/old_hero.mp4",
             full_file="events/x/movies/old_full.mp4",
         )
-        process_generated_movie.side_effect = lambda m: m
+        process_generated_movie.side_effect = lambda m, only_deliverable=None: m
 
         call_command("regenerate_event_movie", self.event.pk)
 
@@ -2667,7 +2776,7 @@ class RegenerateEventMovieCommandTests(TestCase):
             status=GeneratedMovie.Status.PROCESSING,
             final_file="events/x/movies/old_hero.mp4",
         )
-        process_generated_movie.side_effect = lambda m: m
+        process_generated_movie.side_effect = lambda m, only_deliverable=None: m
 
         call_command("regenerate_event_movie", self.event.pk, "--include-processing")
 
@@ -2687,7 +2796,7 @@ class RegenerateEventMovieCommandTests(TestCase):
             full_file="events/x/movies/old_full.mp4",
             teaser_file="events/x/movies/old_teaser.mp4",
         )
-        process_generated_movie.side_effect = lambda m: m
+        process_generated_movie.side_effect = lambda m, only_deliverable=None: m
 
         call_command("regenerate_event_movie", self.event.pk, "--only", "teaser")
 
@@ -2695,6 +2804,7 @@ class RegenerateEventMovieCommandTests(TestCase):
         self.assertEqual(movie.final_file.name, "events/x/movies/old_hero.mp4")
         self.assertEqual(movie.full_file.name, "events/x/movies/old_full.mp4")
         self.assertFalse(movie.teaser_file)
+        process_generated_movie.assert_called_once_with(movie, only_deliverable="teaser")
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
 
     @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")

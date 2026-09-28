@@ -562,6 +562,11 @@ def regenerate_teaser(request, pk):
     movie.progress_message = ""
     movie.teaser_file = None
     movie.teaser_duration = None
+    # Le cron (process_pending_movies) traite ce film generiquement, sans savoir
+    # que cette demande ne concerne QUE le teaser — transporte l'intention via le
+    # film lui-meme (voir process_generated_movie) pour que le heros/l'integrale
+    # ne soient jamais retouches, meme s'ils sont vides pour une autre raison.
+    movie.edit_decision_data["only_deliverable"] = "teaser"
     movie.save(
         update_fields=[
             "status",
@@ -570,6 +575,7 @@ def regenerate_teaser(request, pk):
             "progress_message",
             "teaser_file",
             "teaser_duration",
+            "edit_decision_data",
             "updated_at",
         ]
     )
@@ -579,6 +585,28 @@ def regenerate_teaser(request, pk):
         "(le heros et l'integrale ne sont pas touches).",
     )
     return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+
+@login_required
+@require_POST
+def cancel_movie_generation(request, pk):
+    """Demande l'arret d'un rendu en cours (voir GeneratedMovie.cancel_requested,
+    verifie periodiquement par processing.remotion.run_remotion_subprocess). Un
+    rendu Chrome headless peut durer plusieurs heures — sans ca, rien ne
+    permettait a l'organisateur de reprendre la main une fois lance."""
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    movie = event.generated_movies.order_by("-created_at").first()
+    if not movie or movie.status != GeneratedMovie.Status.PROCESSING:
+        messages.error(request, "Aucun rendu en cours a arreter pour ce film.")
+        return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
+
+    movie.cancel_requested = True
+    movie.save(update_fields=["cancel_requested", "updated_at"])
+    messages.success(
+        request,
+        "Arret demande : la generation s'interrompra dans les prochaines secondes.",
+    )
+    return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
 
 
 @login_required

@@ -172,6 +172,11 @@ class GeneratedMovie(models.Model):
         ),
     )
     progress_message = models.CharField(max_length=160, blank=True)
+    # Demande d'arret par l'organisateur (bouton « Arreter la generation »). Verifie
+    # periodiquement par processing.remotion.run_remotion_subprocess pendant un
+    # rendu Chrome headless en cours, qui peut durer plusieurs heures — sans ca,
+    # rien ne permettait d'interrompre un rendu deja lance.
+    cancel_requested = models.BooleanField(default=False)
     generated_at = models.DateTimeField(blank=True, null=True)
     organizer_notified_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)

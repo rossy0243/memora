@@ -103,7 +103,7 @@ class Command(BaseCommand):
 
         movie.save(update_fields=update_fields)
 
-        processed = process_generated_movie(movie)
+        processed = process_generated_movie(movie, only_deliverable=only or None)
         detail = (
             f" — {processed.error_logs}"
             if processed.status == GeneratedMovie.Status.FAILED

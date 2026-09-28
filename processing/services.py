@@ -25,7 +25,7 @@ from .runway import (
     runway_final_is_ready,
     runway_is_ready,
 )
-from .remotion import render_movie_with_remotion
+from .remotion import MovieGenerationCancelled, render_movie_with_remotion
 from .soundtrack import build_edit_decision_data, choose_movie_soundtrack, materialize_soundtrack
 from .title_cards import build_title_card, event_intro_texts, event_outro_texts
 
@@ -576,11 +576,29 @@ def generate_event_movie(event):
     return process_generated_movie(movie)
 
 
-def process_generated_movie(movie):
+def process_generated_movie(movie, only_deliverable=None):
     movie.refresh_from_db()
     if movie.status not in {GeneratedMovie.Status.PENDING, GeneratedMovie.Status.PROCESSING}:
         logger.info("Movie skipped movie=%s event=%s status=%s", movie.pk, movie.event_id, movie.status)
         return movie
+
+    if movie.cancel_requested:
+        # Reste d'une precedente demande d'arret : sans ce nettoyage, une toute
+        # nouvelle tentative se retrouverait annulee des le premier sondage.
+        movie.cancel_requested = False
+        movie.save(update_fields=["cancel_requested", "updated_at"])
+
+    if only_deliverable is None and movie.edit_decision_data.get("only_deliverable"):
+        # Demande venue de la page medias (regenerate_teaser) : le cron generique
+        # (process_pending_movies) appelle process_generated_movie(movie) sans
+        # connaitre cette intention, elle est donc transportee via le film lui-meme
+        # (edit_decision_data est de toute facon reconstruit a neuf plus bas, des
+        # que le film entre reellement en traitement).
+        only_deliverable = movie.edit_decision_data.get("only_deliverable")
+
+    def cancel_check():
+        movie.refresh_from_db(fields=["cancel_requested"])
+        return movie.cancel_requested
 
     event = movie.event
     logger.info("Movie processing started movie=%s event=%s", movie.pk, event.pk)
@@ -659,7 +677,14 @@ def process_generated_movie(movie):
                 and "hero" in settings.MEMORA_REMOTION_DELIVERABLES
             ):
                 remotion_rendered = _render_movie_with_remotion_pipeline(
-                    movie, event, uploads, soundtrack, temp_path, ffmpeg_binary
+                    movie,
+                    event,
+                    uploads,
+                    soundtrack,
+                    temp_path,
+                    ffmpeg_binary,
+                    cancel_check=cancel_check,
+                    only_deliverable=only_deliverable,
                 )
 
             if not remotion_rendered and runway_final_is_ready():
@@ -758,6 +783,15 @@ def process_generated_movie(movie):
             logger.info("Guest collection closed after movie completion event=%s movie=%s", event.pk, movie.pk)
         logger.info("Movie processing completed movie=%s event=%s", movie.pk, event.pk)
         notify_generated_movie_ready(movie)
+    except MovieGenerationCancelled as exc:
+        movie.status = GeneratedMovie.Status.FAILED
+        movie.cancel_requested = False
+        movie.error_logs = str(exc)
+        movie.progress_message = "Génération annulée par l'organisateur."
+        movie.save(
+            update_fields=["status", "cancel_requested", "error_logs", "progress_message", "updated_at"]
+        )
+        logger.info("Movie processing cancelled movie=%s event=%s", movie.pk, event.pk)
     except Exception as exc:
         movie.status = GeneratedMovie.Status.FAILED
         movie.error_logs = str(exc)
@@ -1434,7 +1468,9 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
         input_path.unlink(missing_ok=True)
 
 
-def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp_path, ffmpeg_binary):
+def _render_movie_with_remotion_pipeline(
+    movie, event, uploads, soundtrack, temp_path, ffmpeg_binary, cancel_check=None, only_deliverable=None
+):
     """Rend les trois livrables (heros, integrale, teaser) via Remotion.
 
     Retourne True si le film heros est rendu — le flux Runway/ffmpeg est alors
@@ -1478,8 +1514,16 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
 
         try:
             render_movie_with_remotion(
-                event, uploads, soundtrack, hero_path, deliverable="hero", progress_callback=_report_hero_progress
+                event,
+                uploads,
+                soundtrack,
+                hero_path,
+                deliverable="hero",
+                progress_callback=_report_hero_progress,
+                cancel_check=cancel_check,
             )
+        except MovieGenerationCancelled:
+            raise
         except Exception as exc:
             remotion_data["deliverables"]["hero"] = {"ok": False, "error": str(exc)}
             remotion_data["fallback"] = "ffmpeg"
@@ -1526,6 +1570,15 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
         try:
             if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
                 continue
+            if only_deliverable and deliverable != only_deliverable:
+                # --only <X> (voir regenerate_event_movie) : ne touche a rien
+                # d'autre, meme si ce livrable est vide pour une toute autre
+                # raison (ex. reste d'une precedente tentative interrompue). Sans
+                # ce garde-fou, un simple --only teaser pouvait quand meme
+                # relancer un rendu de plusieurs heures sur l'integrale.
+                continue
+            if cancel_check and cancel_check():
+                raise MovieGenerationCancelled("Rendu Remotion : annule par l'organisateur.")
             # Meme filet que le heros ci-dessus : un livrable deja rendu lors
             # d'une tentative precedente de ce cycle n'est pas refait.
             if getattr(movie, file_field):
@@ -1568,8 +1621,11 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
                     variant_path,
                     deliverable=deliverable,
                     progress_callback=_report_variant_progress,
+                    cancel_check=cancel_check,
                 )
                 remotion_data["deliverables"][deliverable] = {"ok": True, "clips": len(variant_uploads)}
+            except MovieGenerationCancelled:
+                raise
             except Exception as exc:
                 remotion_data["deliverables"][deliverable] = {
                     "ok": False,
@@ -1601,6 +1657,8 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
             # Commit immediat : si le process meurt pendant le livrable suivant,
             # celui-ci reste acquis plutot que d'etre refait pour rien.
             movie.save(update_fields=[file_field, duration_field, "edit_decision_data", "updated_at"])
+        except MovieGenerationCancelled:
+            raise
         except Exception as exc:
             logger.warning(
                 "Movie variant failed movie=%s event=%s label=%s error=%s",

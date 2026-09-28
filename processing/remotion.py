@@ -370,7 +370,15 @@ def _probe_audio_duration_seconds(path, binary):
         return None
 
 
-def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progress_callback=None, failure_label="Rendu Remotion"):
+class MovieGenerationCancelled(Exception):
+    """Levee quand l'organisateur a demande l'arret pendant un rendu en cours
+    (voir GeneratedMovie.cancel_requested) — distincte de RuntimeError pour que
+    l'appelant puisse afficher « Annule » plutot que « Echec »."""
+
+
+def run_remotion_subprocess(
+    command, *, cwd, timeout, progress_path=None, progress_callback=None, cancel_check=None, failure_label="Rendu Remotion"
+):
     """Lance `node render.mjs` et attend la fin, en sondant la progression.
 
     Boucle de sondage plutot qu'un simple `run(..., timeout=...)` : c'est ce
@@ -378,6 +386,11 @@ def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progre
     et appeler `progress_callback`, tout en gardant le meme comportement de
     timeout global (le process est tue si `timeout` est depasse). Partage par
     tous les rendus Remotion (film souvenir et montage du livre d'or).
+
+    `cancel_check`, si fourni, est appele a chaque tour (toutes les ~2s) ; s'il
+    renvoie True, le process est tue et MovieGenerationCancelled est levee — un
+    rendu Chrome headless peut durer plusieurs heures, l'organisateur doit
+    pouvoir l'arreter sans attendre le timeout global.
     """
     started_at = time.monotonic()
     last_reported = None
@@ -401,6 +414,10 @@ def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progre
                 if fraction is not None and fraction != last_reported:
                     last_reported = fraction
                     progress_callback(fraction)
+            if cancel_check and cancel_check():
+                process.kill()
+                process.communicate()
+                raise MovieGenerationCancelled(f"{failure_label} : annule par l'organisateur.")
             if time.monotonic() - started_at > timeout:
                 process.kill()
                 process.communicate()
@@ -414,7 +431,7 @@ def run_remotion_subprocess(command, *, cwd, timeout, progress_path=None, progre
     return stdout
 
 
-def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
     """Rend un livrable (hero / full / teaser) via Remotion. Renvoie le chemin du MP4.
 
     Leve une exception si Node/Remotion echoue : l'appelant decide du fallback.
@@ -424,6 +441,10 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
     de remonter une progression qui bouge vraiment cote organisateur, plutot qu'un
     pourcentage fige pendant toute la duree (potentiellement plusieurs minutes) du
     rendu Chrome headless.
+
+    `cancel_check()`, si fourni, est appele au meme rythme ; s'il renvoie True le
+    process Chrome est tue et MovieGenerationCancelled est levee (voir
+    run_remotion_subprocess).
     """
     composition = COMPOSITIONS.get(deliverable)
     if not composition:
@@ -505,6 +526,7 @@ def render_movie_with_remotion(event, uploads, soundtrack, output_path, *, deliv
             timeout=settings.MEMORA_REMOTION_TIMEOUT_SECONDS,
             progress_path=progress_path,
             progress_callback=progress_callback,
+            cancel_check=cancel_check,
             failure_label="Rendu Remotion",
         )
 
