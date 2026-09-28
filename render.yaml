@@ -376,11 +376,16 @@ services:
       - *env_music_volume
       - *env_voice_volume
       - *env_ducked_music_volume
-      # Tout-Remotion : plus de coeurs pour le rendu Chrome headless. Ajuster
-      # REMOTION_CONCURRENCY au vCPU reel du plan Pro Plus une fois confirme
-      # (suppose ~4 ci-dessous, a verifier).
+      # Tout-Remotion : plusieurs rendus Chrome headless en parallele. A 4, le
+      # rendu de l'integrale (jusqu'a 45 min, ex. 71 clips) a plante le
+      # 27/09 sans exception Python (processus tue net, tres probablement
+      # OOM) alors que le heros (quelques minutes) passait sans souci — le
+      # cout memoire d'un rendu depend surtout de la duree de la composition,
+      # pas seulement du nombre de coeurs. Redescendu a 2 ; voir aussi le
+      # commentaire dans remotion/render.mjs (1 etait la valeur prudente
+      # d'origine avant ce test a 4).
       - key: REMOTION_CONCURRENCY
-        value: "4"
+        value: "2"
       - key: MEMORA_REMOTION_DELIVERABLES
         value: hero,teaser,full
       # Integrale reactivee (30/09) : trop de souvenirs restaient hors du heros
