@@ -65,7 +65,7 @@
             </a>
           {% else %}
             <div class="media-library-card__preview">
-              <video src="{{ upload.media_file.url }}" controls preload="metadata" playsinline></video>
+              <video src="{{ upload.media_file.url }}" controls muted preload="metadata" playsinline></video>
             </div>
           {% endif %}
           <div class="media-library-card__body">
