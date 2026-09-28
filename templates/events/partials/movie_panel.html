@@ -16,7 +16,7 @@
     {% endif %}
   </div>
 
-  {% if latest_movie and latest_movie.final_file %}
+  {% if latest_movie and latest_movie.final_file and latest_movie.status != "processing" %}
     <div class="movie-progress movie-progress--complete">
       <div class="movie-progress__meta">
         <span>{{ latest_movie.progress_message|default:"Votre film souvenir est prêt." }}</span>
