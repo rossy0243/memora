@@ -285,10 +285,13 @@ def _limit_per_guest(uploads, max_per_guest, needed_seconds):
     return kept
 
 
-def get_movie_candidate_uploads(event, max_duration=None, max_per_guest=None):
+def get_movie_candidate_uploads(event, max_duration=None, max_per_guest=None, deliverable=None):
     """Selection des medias. Par defaut la duree du film heros (court = dense = emouvant).
 
-    `max_per_guest` : plafond de souvenirs par invite (teaser : 1, integrale : 2) ; None = sans plafond."""
+    `max_per_guest` : plafond de souvenirs par invite (teaser : 1, integrale : 2) ; None = sans plafond.
+    `deliverable="teaser"` : si l'organisateur a marque des souvenirs « pour le teaser »
+    (GuestUpload.is_selected_for_teaser, page medias), ceux-ci remplacent entierement la
+    selection automatique — un choix manuel explicite ne doit jamais etre court-circuite."""
     max_duration = max_duration or settings.MEMORA_MOVIE_HERO_DURATION_SECONDS
 
     uploads = list(
@@ -299,6 +302,11 @@ def get_movie_candidate_uploads(event, max_duration=None, max_per_guest=None):
         .select_related("category")
         .order_by("uploaded_at", "pk")
     )
+
+    if deliverable == "teaser":
+        manual_uploads = [upload for upload in uploads if upload.is_selected_for_teaser]
+        if manual_uploads:
+            return _order_by_narrative_arc(_select_until_duration_limit(manual_uploads, max_duration))
 
     uploads, _rejected = _reject_unusable_uploads(uploads)
     if max_per_guest:
@@ -1531,7 +1539,10 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
                 continue
             variant_uploads = list(
                 get_movie_candidate_uploads(
-                    event, max_duration=max_duration, max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable)
+                    event,
+                    max_duration=max_duration,
+                    max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable),
+                    deliverable=deliverable,
                 )
             )
             if not variant_uploads:
@@ -1640,7 +1651,10 @@ def _render_movie_variants(movie, event, temp_path, ffmpeg_binary):
                 continue
             uploads = list(
                 get_movie_candidate_uploads(
-                    event, max_duration=max_duration, max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable)
+                    event,
+                    max_duration=max_duration,
+                    max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable),
+                    deliverable=deliverable,
                 )
             )
             if not uploads:

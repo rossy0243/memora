@@ -332,6 +332,32 @@ class MovieGenerationServiceTests(TestCase):
         self.assertCountEqual(selected, [first, other])
         self.assertNotIn(second, selected)
 
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    def test_manual_teaser_selection_replaces_the_automatic_pick(self):
+        """L'organisateur peut choisir lui-meme les souvenirs du teaser (page medias) :
+        un choix manuel explicite ne doit jamais etre court-circuite par l'automatique."""
+        chosen = self._guest_video("chosen.mp4", "guest-a", 5_000_000)
+        GuestUpload.objects.filter(pk=chosen.pk).update(is_selected_for_teaser=True)
+        for s in "bcd":
+            self._guest_video(f"{s}.mp4", f"guest-{s}", 30_000_000)  # candidats "meilleurs" pour l'auto
+
+        selected = list(
+            get_movie_candidate_uploads(self.event, max_duration=60, max_per_guest=1, deliverable="teaser")
+        )
+
+        self.assertEqual(selected, [chosen])
+
+    @override_settings(MEMORA_MOVIE_VIDEO_MAX_SECONDS=10, MEMORA_MOVIE_MIN_CLIPS_AFTER_REJECT=0)
+    def test_teaser_falls_back_to_automatic_pick_without_a_manual_selection(self):
+        self._guest_video("a.mp4", "guest-a", 30_000_000)
+        self._guest_video("b.mp4", "guest-b", 5_000_000)
+
+        selected = list(
+            get_movie_candidate_uploads(self.event, max_duration=60, max_per_guest=1, deliverable="teaser")
+        )
+
+        self.assertEqual(len(selected), 2)
+
     @override_settings(
         MEMORA_MOVIE_MAX_DURATION_SECONDS=20,
         MEMORA_MOVIE_HERO_DURATION_SECONDS=20,

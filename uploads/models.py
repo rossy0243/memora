@@ -139,6 +139,11 @@ class GuestUpload(models.Model):
         default=ModerationStatus.APPROVED,
     )
     is_selected_for_movie = models.BooleanField(default=False)
+    # Selection manuelle dediee au teaser (independante de is_selected_for_movie) :
+    # si au moins un souvenir de l'evenement porte cette marque, le teaser n'utilise
+    # que ceux-la au lieu de la selection automatique (voir
+    # processing.services.get_movie_candidate_uploads).
+    is_selected_for_teaser = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     # Quand le media a ete masque (retention expiree). Le fichier sur R2 n'est
     # purge qu'apres un delai de grace supplementaire — cf. cleanup_expired_media.

@@ -100,6 +100,13 @@
                     {% if upload.is_selected_for_movie %}Retirer du film{% else %}Garder pour le film{% endif %}
                   </button>
                 </form>
+                <form method="post" action="{% url 'events:toggle_teaser_selection' event.pk upload.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button class="button {% if upload.is_selected_for_teaser %}button--secondary{% else %}button--primary{% endif %} button--compact" type="submit">
+                    {% if upload.is_selected_for_teaser %}Retirer du teaser{% else %}Garder pour le teaser{% endif %}
+                  </button>
+                </form>
               {% endif %}
               <a href="{{ upload.media_file.url }}" download>Telecharger l'original</a>
             </div>

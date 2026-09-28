@@ -81,7 +81,10 @@ class Command(BaseCommand):
         max_duration = getattr(settings, _DELIVERABLE_DURATION[deliverable])
         uploads = list(
             get_movie_candidate_uploads(
-                event, max_duration=max_duration, max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable)
+                event,
+                max_duration=max_duration,
+                max_per_guest=settings.MEMORA_MOVIE_MAX_PER_GUEST.get(deliverable),
+                deliverable=deliverable,
             )
         )
         if not uploads:

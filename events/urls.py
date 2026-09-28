@@ -25,6 +25,7 @@ urlpatterns = [
     path("<int:pk>/livre-dor/proches/desactiver/", views.disable_remote_guestbook, name="disable_remote_guestbook"),
     path("<int:pk>/livre-dor/telecharger/", views.download_guestbook_movie, name="download_guestbook_movie"),
     path("<int:pk>/medias/<int:upload_pk>/selection-film/", views.toggle_movie_selection, name="toggle_movie_selection"),
+    path("<int:pk>/medias/<int:upload_pk>/selection-teaser/", views.toggle_teaser_selection, name="toggle_teaser_selection"),
     path("<int:pk>/medias/<int:upload_pk>/moderation/", views.set_media_moderation_status, name="set_media_moderation"),
     path("<int:pk>/modifier/", views.EventUpdateView.as_view(), name="update"),
     path("<int:pk>/qr-code/", views.event_qr_code, name="qr_code"),

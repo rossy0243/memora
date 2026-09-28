@@ -375,6 +375,23 @@ def toggle_movie_selection(request, pk, upload_pk):
 
 @login_required
 @require_POST
+def toggle_teaser_selection(request, pk, upload_pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    upload = get_object_or_404(
+        GuestUpload,
+        pk=upload_pk,
+        event=event,
+        is_deleted=False,
+        moderation_status=GuestUpload.ModerationStatus.APPROVED,
+    )
+    upload.is_selected_for_teaser = not upload.is_selected_for_teaser
+    upload.save(update_fields=["is_selected_for_teaser"])
+
+    return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
+
+
+@login_required
+@require_POST
 def set_media_moderation_status(request, pk, upload_pk):
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     upload = get_object_or_404(
@@ -388,7 +405,8 @@ def set_media_moderation_status(request, pk, upload_pk):
         upload.moderation_status = status
         if status != GuestUpload.ModerationStatus.APPROVED:
             upload.is_selected_for_movie = False
-        upload.save(update_fields=["moderation_status", "is_selected_for_movie"])
+            upload.is_selected_for_teaser = False
+        upload.save(update_fields=["moderation_status", "is_selected_for_movie", "is_selected_for_teaser"])
 
     return redirect(_safe_next_url(request, reverse("events:media_list", kwargs={"pk": event.pk})))
 

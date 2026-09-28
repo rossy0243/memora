@@ -1396,6 +1396,38 @@ class EventViewTests(TestCase):
         upload.refresh_from_db()
         self.assertFalse(upload.is_selected_for_movie)
 
+    def test_owner_can_toggle_media_teaser_selection(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Selection Teaser",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        ceremony = event.upload_categories.get(code="ceremony")
+        upload = GuestUpload.objects.create(
+            event=event,
+            category=ceremony,
+            media_file="events/reception-selection-teaser/uploads/ceremony/photo.jpg",
+            media_type=GuestUpload.MediaType.IMAGE,
+            original_filename="photo.jpg",
+            file_size=123,
+            moderation_status=GuestUpload.ModerationStatus.APPROVED,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:toggle_teaser_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
+            {"next": reverse("events:media_list", kwargs={"pk": event.pk})},
+        )
+        upload.refresh_from_db()
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        self.assertTrue(upload.is_selected_for_teaser)
+
+        self.client.post(reverse("events:toggle_teaser_selection", kwargs={"pk": event.pk, "upload_pk": upload.pk}))
+        upload.refresh_from_db()
+        self.assertFalse(upload.is_selected_for_teaser)
+
     def test_owner_can_moderate_event_media(self):
         event = Event.objects.create(
             organizer=self.user,
@@ -1415,7 +1447,8 @@ class EventViewTests(TestCase):
         self.client.login(username="owner", password="secret")
 
         upload.is_selected_for_movie = True
-        upload.save(update_fields=["is_selected_for_movie"])
+        upload.is_selected_for_teaser = True
+        upload.save(update_fields=["is_selected_for_movie", "is_selected_for_teaser"])
         reject_response = self.client.post(
             reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
             {
@@ -1428,6 +1461,7 @@ class EventViewTests(TestCase):
         self.assertRedirects(reject_response, reverse("events:media_list", kwargs={"pk": event.pk}))
         self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.REJECTED)
         self.assertFalse(upload.is_selected_for_movie)
+        self.assertFalse(upload.is_selected_for_teaser)
 
         restore_response = self.client.post(
             reverse("events:set_media_moderation", kwargs={"pk": event.pk, "upload_pk": upload.pk}),
