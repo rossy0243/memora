@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -263,6 +265,7 @@ class EventMediaListView(OrganizerEventMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        latest_movie = self.event.generated_movies.order_by("-created_at").first()
         context.update(
             {
                 "event": self.event,
@@ -273,6 +276,7 @@ class EventMediaListView(OrganizerEventMixin, ListView):
                 "selected_media_type": self.selected_media_type,
                 "selected_movie_filter": self.selected_movie_filter,
                 "selected_moderation_status": self.selected_moderation_status,
+                "teaser_regeneration_available": bool(latest_movie) and not _movie_is_busy(latest_movie),
                 **_media_selection_summary(self.event),
             }
         )
@@ -514,6 +518,67 @@ def generate_movie(request, pk):
         return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
     create_event_movie_job(event, allow_retry=True)
     return redirect(reverse("events:detail", kwargs={"pk": event.pk}))
+
+
+def _movie_is_busy(movie):
+    """Vrai si un rendu est reellement en cours (ou en attente) sur ce film — sert
+    a bloquer une regeneration ciblee lancee depuis la page medias (voir
+    regenerate_teaser) tant qu'un autre traitement travaille dessus. Meme seuil
+    que le rattrapage automatique du cron (voir processing.services.
+    get_pending_movie_jobs) : un statut « en cours » trop vieux est considere
+    abandonne plutot que reellement actif."""
+    if movie.status == GeneratedMovie.Status.PENDING:
+        return True
+    if movie.status == GeneratedMovie.Status.PROCESSING:
+        stale_before = timezone.now() - timedelta(minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES)
+        return movie.updated_at > stale_before
+    return False
+
+
+@login_required
+@require_POST
+def regenerate_teaser(request, pk):
+    """Relance uniquement le teaser (voir GeneratedMovie.teaser_file), avec la
+    selection manuelle courante (GuestUpload.is_selected_for_teaser). Ne touche
+    ni au heros ni a l'integrale : reste en attente pour le prochain passage du
+    cron plutot que de traiter la demande dans la requete web (le rendu prend
+    plusieurs dizaines de minutes)."""
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    movie = event.generated_movies.order_by("-created_at").first()
+    if not movie:
+        messages.error(request, "Aucun film souvenir n'a encore ete genere pour cet evenement.")
+        return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+    if _movie_is_busy(movie):
+        messages.error(
+            request,
+            "Un rendu est deja en cours ou en attente pour ce film — reessayez une fois termine.",
+        )
+        return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+    movie.status = GeneratedMovie.Status.PENDING
+    movie.error_logs = ""
+    movie.progress_percent = 0
+    movie.progress_message = ""
+    movie.teaser_file = None
+    movie.teaser_duration = None
+    movie.save(
+        update_fields=[
+            "status",
+            "error_logs",
+            "progress_percent",
+            "progress_message",
+            "teaser_file",
+            "teaser_duration",
+            "updated_at",
+        ]
+    )
+    messages.success(
+        request,
+        "Le teaser va etre regenere avec la selection actuelle, d'ici quelques minutes "
+        "(le heros et l'integrale ne sont pas touches).",
+    )
+    return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
 
 
 @login_required

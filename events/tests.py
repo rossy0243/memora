@@ -1428,6 +1428,67 @@ class EventViewTests(TestCase):
         upload.refresh_from_db()
         self.assertFalse(upload.is_selected_for_teaser)
 
+    def test_owner_can_regenerate_teaser_when_movie_is_idle(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Regenere Teaser",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/hero.mp4",
+            teaser_file="events/x/movies/old_teaser.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:regenerate_teaser", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertFalse(movie.teaser_file)
+        self.assertTrue(movie.final_file)  # heros non touche
+
+    def test_owner_cannot_regenerate_teaser_while_a_fresh_render_is_active(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Teaser Bloque",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
+        # updated_at=auto_now : on force une valeur recente en base directement.
+        GeneratedMovie.objects.filter(pk=movie.pk).update(updated_at=timezone.now())
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:regenerate_teaser", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PROCESSING)
+
+    def test_owner_can_regenerate_teaser_when_processing_status_is_stale(self):
+        """Un statut « en cours » trop vieux est considere abandonne — meme seuil
+        que le rattrapage automatique du cron (MEMORA_MOVIE_PROCESSING_STALE_MINUTES)."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Teaser Abandonne",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
+        stale = timezone.now() - timedelta(minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES + 5)
+        GeneratedMovie.objects.filter(pk=movie.pk).update(updated_at=stale)
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:regenerate_teaser", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+
     def test_media_list_shows_teaser_selection_duration_total(self):
         """L'organisateur doit pouvoir voir, en secondes, s'il a choisi assez de
         souvenirs pour le teaser avant de lancer une regeneration manuelle."""

@@ -34,6 +34,7 @@ urlpatterns = [
     path("<int:pk>/film/", views.movie_ready_detail, name="movie_ready"),
     path("<int:pk>/film/telecharger/", views.download_event_movie, name="download_movie"),
     path("<int:pk>/generer-film/", views.generate_movie, name="generate_movie"),
+    path("<int:pk>/medias/regenerer-teaser/", views.regenerate_teaser, name="regenerate_teaser"),
     path("<int:pk>/film-statut/", views.movie_status_panel, name="movie_status"),
     path("<int:pk>/telecharger-zip/", views.download_event_zip, name="download_zip"),
     path("public/<slug:slug>/<slug:access_key>/", views.public_event_preview, name="public-preview"),
