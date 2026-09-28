@@ -1440,43 +1440,59 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
     remotion_data = {"deliverables": {}}
     movie.edit_decision_data["remotion"] = remotion_data
 
-    _update_movie_progress(movie, 30, "Montage cinématique premium en cours.")
-    hero_path = temp_path / f"memora_{_clean_name(event.title)}_remotion.mp4"
-    # Le rendu Chrome headless peut prendre plusieurs minutes ; sans ce callback,
-    # la barre de progression organisateur restait figee a 30% tout ce temps,
-    # illisible (bloque ? tres lent ?). Fenetre 30-70% reservee a ce seul rendu.
-    hero_progress_window = (30, 70)
-
-    def _report_hero_progress(fraction):
-        span = hero_progress_window[1] - hero_progress_window[0]
-        _update_movie_progress(
-            movie,
-            hero_progress_window[0] + fraction * span,
-            "Montage cinématique premium en cours.",
+    # Reprise apres crash (--include-processing) : si le heros est deja present,
+    # inutile de le refaire — sa presence ne peut venir que d'une tentative
+    # precedente de CE MEME cycle (regenerate_event_movie vide les fichiers au
+    # depart d'une regeneration volontaire, voir la commande). Sans ce filet, un
+    # plantage pendant l'integrale (de loin le plus long) obligeait a tout
+    # refaire depuis zero, heros compris, a chaque nouvelle tentative.
+    if movie.final_file:
+        logger.info(
+            "Remotion hero skipped (already rendered) movie=%s event=%s", movie.pk, event.pk
         )
+        remotion_data["deliverables"]["hero"] = {"ok": True, "clips": len(uploads), "skipped": True}
+        movie.render_provider = "remotion"
+    else:
+        _update_movie_progress(movie, 30, "Montage cinématique premium en cours.")
+        hero_path = temp_path / f"memora_{_clean_name(event.title)}_remotion.mp4"
+        # Le rendu Chrome headless peut prendre plusieurs minutes ; sans ce callback,
+        # la barre de progression organisateur restait figee a 30% tout ce temps,
+        # illisible (bloque ? tres lent ?). Fenetre 30-70% reservee a ce seul rendu.
+        hero_progress_window = (30, 70)
 
-    try:
-        render_movie_with_remotion(
-            event, uploads, soundtrack, hero_path, deliverable="hero", progress_callback=_report_hero_progress
-        )
-    except Exception as exc:
-        remotion_data["deliverables"]["hero"] = {"ok": False, "error": str(exc)}
-        remotion_data["fallback"] = "ffmpeg"
-        logger.warning(
-            "Remotion hero render failed movie=%s event=%s error=%s", movie.pk, event.pk, exc
-        )
-        return False
-    remotion_data["deliverables"]["hero"] = {"ok": True, "clips": len(uploads)}
-    movie.render_provider = "remotion"
+        def _report_hero_progress(fraction):
+            span = hero_progress_window[1] - hero_progress_window[0]
+            _update_movie_progress(
+                movie,
+                hero_progress_window[0] + fraction * span,
+                "Montage cinématique premium en cours.",
+            )
 
-    # Le logo « Memora » est desormais incruste par Remotion sur tous les livrables (haut a droite) :
-    # l'ancien bandeau du bas (ffmpeg) fait double emploi et passait inapercu sur telephone.
-    final_output_path = hero_path
-    movie.edit_decision_data["badge"] = {**_build_badge_data(event), "applied": False, "replaced_by": "remotion-watermark"}
+        try:
+            render_movie_with_remotion(
+                event, uploads, soundtrack, hero_path, deliverable="hero", progress_callback=_report_hero_progress
+            )
+        except Exception as exc:
+            remotion_data["deliverables"]["hero"] = {"ok": False, "error": str(exc)}
+            remotion_data["fallback"] = "ffmpeg"
+            logger.warning(
+                "Remotion hero render failed movie=%s event=%s error=%s", movie.pk, event.pk, exc
+            )
+            return False
+        remotion_data["deliverables"]["hero"] = {"ok": True, "clips": len(uploads)}
+        movie.render_provider = "remotion"
 
-    _update_movie_progress(movie, 80, "Enregistrement de la vidéo finale.")
-    with final_output_path.open("rb") as output_file:
-        movie.final_file.save(final_output_path.name, File(output_file), save=False)
+        # Le logo « Memora » est desormais incruste par Remotion sur tous les livrables (haut a droite) :
+        # l'ancien bandeau du bas (ffmpeg) fait double emploi et passait inapercu sur telephone.
+        movie.edit_decision_data["badge"] = {**_build_badge_data(event), "applied": False, "replaced_by": "remotion-watermark"}
+
+        _update_movie_progress(movie, 80, "Enregistrement de la vidéo finale.")
+        with hero_path.open("rb") as output_file:
+            movie.final_file.save(hero_path.name, File(output_file), save=False)
+        # Commit immediat (pas seulement le gros save() final du pipeline) : si le
+        # process meurt pendant l'integrale juste apres, le heros deja rendu reste
+        # acquis pour la prochaine tentative au lieu d'etre refait pour rien.
+        movie.save(update_fields=["final_file", "render_provider", "edit_decision_data", "updated_at"])
 
     if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
         return True
@@ -1501,6 +1517,17 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
     for deliverable, label, max_duration, width, height, file_field, duration_field, progress_window in variants:
         try:
             if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
+                continue
+            # Meme filet que le heros ci-dessus : un livrable deja rendu lors
+            # d'une tentative precedente de ce cycle n'est pas refait.
+            if getattr(movie, file_field):
+                logger.info(
+                    "Remotion variant skipped (already rendered) movie=%s event=%s label=%s",
+                    movie.pk,
+                    event.pk,
+                    deliverable,
+                )
+                remotion_data["deliverables"][deliverable] = {"ok": True, "skipped": True}
                 continue
             variant_uploads = list(
                 get_movie_candidate_uploads(
@@ -1560,6 +1587,9 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
                 getattr(movie, file_field).save(Path(variant_path).name, File(variant_file), save=False)
             seconds = sum(_estimated_movie_clip_duration(upload) for upload in variant_uploads)
             setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
+            # Commit immediat : si le process meurt pendant le livrable suivant,
+            # celui-ci reste acquis plutot que d'etre refait pour rien.
+            movie.save(update_fields=[file_field, duration_field, "edit_decision_data", "updated_at"])
         except Exception as exc:
             logger.warning(
                 "Movie variant failed movie=%s event=%s label=%s error=%s",

@@ -54,13 +54,27 @@ class Command(BaseCommand):
         if not movie:
             raise CommandError(f"Aucun film a regenerer pour l'evenement #{event_id}.")
 
+        update_fields = ["status", "error_logs", "progress_percent", "progress_message", "updated_at"]
         movie.status = GeneratedMovie.Status.PENDING
         movie.error_logs = ""
         movie.progress_percent = 0
         movie.progress_message = ""
-        movie.save(
-            update_fields=["status", "error_logs", "progress_percent", "progress_message", "updated_at"]
-        )
+
+        if not options["include_processing"]:
+            # Regeneration volontaire (pas une reprise apres crash) : on repart
+            # de zero sur les trois livrables. Sans ca, le pipeline (voir
+            # _render_movie_with_remotion_pipeline) sauterait un livrable deja
+            # present en le prenant pour un reste d'une tentative interrompue,
+            # alors que l'organisateur veut justement du contenu neuf (nouvelle
+            # musique, souvenirs rejetes...).
+            movie.final_file = None
+            movie.full_file = None
+            movie.teaser_file = None
+            movie.full_duration = None
+            movie.teaser_duration = None
+            update_fields += ["final_file", "full_file", "teaser_file", "full_duration", "teaser_duration"]
+
+        movie.save(update_fields=update_fields)
 
         processed = process_generated_movie(movie)
         detail = (

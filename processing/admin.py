@@ -77,7 +77,29 @@ class GeneratedMovieAdmin(admin.ModelAdmin):
             movie.error_logs = ""
             movie.progress_percent = 0
             movie.progress_message = ""
-            movie.save(update_fields=["status", "error_logs", "progress_percent", "progress_message", "updated_at"])
+            # Regeneration volontaire : repart de zero sur les trois livrables,
+            # sinon le pipeline sauterait un livrable deja present en le
+            # prenant pour un reste d'une tentative interrompue (voir
+            # processing.management.commands.regenerate_event_movie).
+            movie.final_file = None
+            movie.full_file = None
+            movie.teaser_file = None
+            movie.full_duration = None
+            movie.teaser_duration = None
+            movie.save(
+                update_fields=[
+                    "status",
+                    "error_logs",
+                    "progress_percent",
+                    "progress_message",
+                    "final_file",
+                    "full_file",
+                    "teaser_file",
+                    "full_duration",
+                    "teaser_duration",
+                    "updated_at",
+                ]
+            )
             regenerated += 1
 
         if regenerated:

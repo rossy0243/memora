@@ -686,6 +686,37 @@ class MovieGenerationServiceTests(TestCase):
         self.assertTrue(movie.full_file.name)
         self.assertTrue(movie.teaser_file.name)
 
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_already_rendered_deliverable_is_not_redone_on_resume(self, render_remotion, run_ffmpeg, _which):
+        """Reprise apres crash (--include-processing) : un livrable deja rendu lors
+        d'une tentative precedente du meme cycle ne doit pas etre refait — sinon un
+        plantage pendant l'integrale (le plus long) obligeait a tout refaire, heros
+        compris, a chaque nouvelle tentative."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"movie-bytes")
+
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            final_file="events/x/movies/deja_rendu.mp4",
+        )
+
+        processed = process_generated_movie(movie)
+
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["full", "teaser"])
+        self.assertEqual(processed.final_file.name, "events/x/movies/deja_rendu.mp4")
+        self.assertEqual(processed.status, GeneratedMovie.Status.COMPLETED)
+
     @override_settings(
         MEMORA_MOVIE_RENDER_PROVIDER="remotion",
         MEMORA_MOVIE_DELIVERABLES={"hero", "full", "teaser"},
@@ -2340,6 +2371,11 @@ class GeneratedMovieAdminActionTests(TestCase):
         self.assertEqual(movie.error_logs, "")
         self.assertEqual(movie.progress_percent, 0)
         self.assertEqual(movie.progress_message, "")
+        # Une regeneration volontaire (pas une reprise apres crash) repart de
+        # zero : sinon le pipeline sauterait le heros en le prenant pour un
+        # reste d'une tentative interrompue, alors que l'organisateur veut du
+        # contenu neuf (nouvelle musique, souvenirs rejetes...).
+        self.assertFalse(movie.final_file)
 
     def test_regenerate_action_skips_processing_movie(self):
         movie = GeneratedMovie.objects.create(
@@ -2561,6 +2597,85 @@ class ProcessEventMovieCommandTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.FAILED)
         self.assertIn("ffmpeg boom", movie.error_logs)
+
+
+class RegenerateEventMovieCommandTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(
+            username="organizer-regenerate-movie",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Film Regenere",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
+    def test_voluntary_regeneration_clears_existing_deliverables(self, process_generated_movie):
+        """Sans --include-processing : un livrable deja present ne doit pas etre pris
+        pour un reste d'une tentative interrompue — l'organisateur veut du contenu neuf."""
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/old_hero.mp4",
+            full_file="events/x/movies/old_full.mp4",
+        )
+        process_generated_movie.side_effect = lambda m: m
+
+        call_command("regenerate_event_movie", self.event.pk)
+
+        movie.refresh_from_db()
+        self.assertFalse(movie.final_file)
+        self.assertFalse(movie.full_file)
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+
+    @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
+    def test_crash_resume_keeps_existing_deliverables(self, process_generated_movie):
+        """Avec --include-processing : les livrables deja rendus lors de la tentative
+        interrompue doivent rester acquis pour que process_generated_movie les saute."""
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            final_file="events/x/movies/old_hero.mp4",
+        )
+        process_generated_movie.side_effect = lambda m: m
+
+        call_command("regenerate_event_movie", self.event.pk, "--include-processing")
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.final_file.name, "events/x/movies/old_hero.mp4")
+
+    @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
+    def test_notify_email_sent_only_on_success(self, process_generated_movie):
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
+
+        def fail(m):
+            m.status = GeneratedMovie.Status.FAILED
+            m.error_logs = "boom"
+            return m
+
+        process_generated_movie.side_effect = fail
+
+        call_command("regenerate_event_movie", self.event.pk, "--notify-email", "ops@example.com")
+
+        self.assertEqual(len(mail.outbox), 0)
+
+        movie.status = GeneratedMovie.Status.PENDING
+        movie.save(update_fields=["status"])
+
+        def succeed(m):
+            m.status = GeneratedMovie.Status.COMPLETED
+            return m
+
+        process_generated_movie.side_effect = succeed
+
+        call_command("regenerate_event_movie", self.event.pk, "--notify-email", "ops@example.com")
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["ops@example.com"])
 
 
 class NotifyReadyMoviesCommandTests(TestCase):
