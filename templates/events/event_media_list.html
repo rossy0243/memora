@@ -59,15 +59,15 @@
     <div class="media-library-grid">
       {% for upload in uploads %}
         <article class="media-library-card">
-          <a class="media-library-card__preview" href="{{ upload.media_file.url }}">
-            {% if upload.media_type == "image" %}
+          {% if upload.media_type == "image" %}
+            <a class="media-library-card__preview" href="{{ upload.media_file.url }}">
               <img src="{{ upload.media_file.url }}" alt="{{ upload.original_filename }}">
-            {% else %}
-              <div class="media-library-card__video">
-                <span>Video</span>
-              </div>
-            {% endif %}
-          </a>
+            </a>
+          {% else %}
+            <div class="media-library-card__preview">
+              <video src="{{ upload.media_file.url }}" controls preload="metadata" playsinline></video>
+            </div>
+          {% endif %}
           <div class="media-library-card__body">
             <span>{{ upload.category.label }}{% if upload.is_selected_for_movie %} - Pour le film{% endif %}</span>
             <span class="moderation-pill moderation-pill--{{ upload.moderation_status }}">{{ upload.get_moderation_status_display }}</span>
