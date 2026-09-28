@@ -2675,6 +2675,29 @@ class RegenerateEventMovieCommandTests(TestCase):
         self.assertEqual(movie.final_file.name, "events/x/movies/old_hero.mp4")
 
     @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
+    def test_only_flag_regenerates_a_single_deliverable(self, process_generated_movie):
+        """--only teaser : livrer une correction ciblee (ex. nouvelle selection
+        manuelle) sans retoucher a un heros/integrale deja bons — voir
+        _render_movie_with_remotion_pipeline, qui saute un livrable dont le fichier
+        est deja present."""
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/old_hero.mp4",
+            full_file="events/x/movies/old_full.mp4",
+            teaser_file="events/x/movies/old_teaser.mp4",
+        )
+        process_generated_movie.side_effect = lambda m: m
+
+        call_command("regenerate_event_movie", self.event.pk, "--only", "teaser")
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.final_file.name, "events/x/movies/old_hero.mp4")
+        self.assertEqual(movie.full_file.name, "events/x/movies/old_full.mp4")
+        self.assertFalse(movie.teaser_file)
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+
+    @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
     def test_notify_email_sent_only_on_success(self, process_generated_movie):
         movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
 

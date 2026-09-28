@@ -35,6 +35,18 @@ class Command(BaseCommand):
                 "A n'utiliser que si on est sur qu'aucun job n'est reellement encore actif."
             ),
         )
+        parser.add_argument(
+            "--only",
+            choices=["hero", "full", "teaser"],
+            default="",
+            help=(
+                "Ne regenere que ce livrable : les deux autres, s'ils existent deja, "
+                "restent inchanges (le pipeline les saute, voir "
+                "_render_movie_with_remotion_pipeline). Utile pour livrer une "
+                "correction ciblee (ex. nouvelle selection manuelle du teaser) sans "
+                "retoucher a un heros/integrale deja bons."
+            ),
+        )
 
     def handle(self, *args, **options):
         event_id = options["event_id"]
@@ -60,7 +72,22 @@ class Command(BaseCommand):
         movie.progress_percent = 0
         movie.progress_message = ""
 
-        if not options["include_processing"]:
+        only = options["only"]
+        if only:
+            # Cible un seul livrable : on ne vide que son fichier (et sa duree s'il
+            # en a une), les deux autres restent tels quels pour que le pipeline les
+            # saute (voir _render_movie_with_remotion_pipeline).
+            file_field, duration_field = {
+                "hero": ("final_file", None),
+                "full": ("full_file", "full_duration"),
+                "teaser": ("teaser_file", "teaser_duration"),
+            }[only]
+            setattr(movie, file_field, None)
+            update_fields.append(file_field)
+            if duration_field:
+                setattr(movie, duration_field, None)
+                update_fields.append(duration_field)
+        elif not options["include_processing"]:
             # Regeneration volontaire (pas une reprise apres crash) : on repart
             # de zero sur les trois livrables. Sans ca, le pipeline (voir
             # _render_movie_with_remotion_pipeline) sauterait un livrable deja
