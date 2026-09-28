@@ -26,6 +26,15 @@ class Command(BaseCommand):
             default="",
             help="E-mail de confirmation envoye a cette adresse si la regeneration reussit.",
         )
+        parser.add_argument(
+            "--include-processing",
+            action="store_true",
+            help=(
+                "Reprend aussi un film reste bloque en statut « en cours » (ex. processus "
+                "tue net par un OOM, sans exception Python pour le repasser en echec). "
+                "A n'utiliser que si on est sur qu'aucun job n'est reellement encore actif."
+            ),
+        )
 
     def handle(self, *args, **options):
         event_id = options["event_id"]
@@ -34,8 +43,11 @@ class Command(BaseCommand):
         except Event.DoesNotExist as exc:
             raise CommandError(f"Evenement #{event_id} introuvable.") from exc
 
+        statuses_to_exclude = (
+            [] if options["include_processing"] else [GeneratedMovie.Status.PROCESSING]
+        )
         movie = (
-            event.generated_movies.exclude(status=GeneratedMovie.Status.PROCESSING)
+            event.generated_movies.exclude(status__in=statuses_to_exclude)
             .order_by("-created_at")
             .first()
         )
