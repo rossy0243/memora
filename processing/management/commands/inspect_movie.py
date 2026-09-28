@@ -26,6 +26,9 @@ class Command(BaseCommand):
                 f"  film #{movie.pk} status={movie.status} provider={movie.render_provider} "
                 f"created={movie.created_at:%H:%M:%S} updated={movie.updated_at:%H:%M:%S}"
             )
+            self.stdout.write(
+                f"    progression: {movie.progress_percent:.1f}% — {movie.progress_message or '(pas de message)'}"
+            )
             self.stdout.write(f"    hero:   {movie.final_file.name if movie.final_file else '(vide)'}")
             self.stdout.write(f"    full:   {movie.full_file.name if movie.full_file else '(vide)'}")
             self.stdout.write(f"    teaser: {movie.teaser_file.name if movie.teaser_file else '(vide)'}")

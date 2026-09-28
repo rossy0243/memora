@@ -460,10 +460,12 @@ MEMORA_MOVIE_VIDEO_MAX_SECONDS = env_int("MEMORA_MOVIE_VIDEO_MAX_SECONDS", 10)
 MEMORA_MOVIE_MAX_DURATION_SECONDS = env_int("MEMORA_MOVIE_MAX_DURATION_SECONDS", 600)
 # Trois livrables : le film heros doit rester court et dense, c'est lui qui doit emouvoir.
 MEMORA_MOVIE_HERO_DURATION_SECONDS = env_int("MEMORA_MOVIE_HERO_DURATION_SECONDS", 210)
-# 45 min : plafond genereux plutot qu'une vraie absence de limite - couvre la quasi-totalite
-# des mariages (voir MEMORA_MOVIE_MAX_PER_GUEST["full"] = 2, qui laisse de toute facon entrer
-# tous les souvenirs restants si la duree le permet) sans rendu demesurement long.
-MEMORA_MOVIE_FULL_DURATION_SECONDS = env_int("MEMORA_MOVIE_FULL_DURATION_SECONDS", 2700)
+# Redescendu de 45 a 20 min le 28/09 : un rendu Remotion sur 71 clips / 45 min a
+# fait planter le worker deux fois de suite (processus tue net, tres probablement
+# OOM sur le plan actuel 8 vCPU/16 Go), quelle que soit la concurrence (4 puis 2).
+# 20 min reste genereux pour la quasi-totalite des mariages (voir aussi
+# MEMORA_MOVIE_MAX_PER_GUEST["full"] = 2) sans reproduire le meme plantage.
+MEMORA_MOVIE_FULL_DURATION_SECONDS = env_int("MEMORA_MOVIE_FULL_DURATION_SECONDS", 1200)
 MEMORA_MOVIE_TEASER_DURATION_SECONDS = env_int("MEMORA_MOVIE_TEASER_DURATION_SECONDS", 60)
 MEMORA_MOVIE_TEASER_WIDTH = env_int("MEMORA_MOVIE_TEASER_WIDTH", 1080)
 MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
