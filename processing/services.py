@@ -1481,8 +1481,12 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
     if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
         return True
 
+    # Fenetres larges (surtout l'integrale, de loin le rendu le plus long) : sans
+    # callback continu ici, la barre restait figee sur un seul palier (86%) tout
+    # le temps du rendu de l'integrale, illisible pour suivre une progression
+    # reelle — meme raison que hero_progress_window ci-dessus.
     variants = (
-        ("full", "integrale", settings.MEMORA_MOVIE_FULL_DURATION_SECONDS, None, None, "full_file", "full_duration", 86),
+        ("full", "integrale", settings.MEMORA_MOVIE_FULL_DURATION_SECONDS, None, None, "full_file", "full_duration", (80, 95)),
         (
             "teaser",
             "teaser",
@@ -1491,10 +1495,10 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
             settings.MEMORA_MOVIE_TEASER_HEIGHT,
             "teaser_file",
             "teaser_duration",
-            92,
+            (95, 99),
         ),
     )
-    for deliverable, label, max_duration, width, height, file_field, duration_field, progress in variants:
+    for deliverable, label, max_duration, width, height, file_field, duration_field, progress_window in variants:
         try:
             if deliverable not in settings.MEMORA_MOVIE_DELIVERABLES:
                 continue
@@ -1505,13 +1509,27 @@ def _render_movie_with_remotion_pipeline(movie, event, uploads, soundtrack, temp
             )
             if not variant_uploads:
                 continue
-            _update_movie_progress(movie, progress, "Déclinaisons premium (intégrale et teaser).")
+            _update_movie_progress(movie, progress_window[0], "Déclinaisons premium (intégrale et teaser).")
             variant_path = temp_path / f"memora_{_clean_name(event.title)}_{deliverable}_remotion.mp4"
+
+            def _report_variant_progress(fraction, _window=progress_window):
+                span = _window[1] - _window[0]
+                _update_movie_progress(
+                    movie,
+                    _window[0] + fraction * span,
+                    "Déclinaisons premium (intégrale et teaser).",
+                )
+
             try:
                 if deliverable not in settings.MEMORA_REMOTION_DELIVERABLES:
                     raise RuntimeError("livrable hors perimetre Remotion (config)")
                 render_movie_with_remotion(
-                    event, variant_uploads, soundtrack, variant_path, deliverable=deliverable
+                    event,
+                    variant_uploads,
+                    soundtrack,
+                    variant_path,
+                    deliverable=deliverable,
+                    progress_callback=_report_variant_progress,
                 )
                 remotion_data["deliverables"][deliverable] = {"ok": True, "clips": len(variant_uploads)}
             except Exception as exc:
