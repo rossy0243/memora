@@ -3891,6 +3891,29 @@ body.capture-review-open {
   font-variant-numeric: tabular-nums;
 }
 
+.guestbook-upload-queue {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.guestbook-upload-errors {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(214, 90, 90, 0.18);
+  border: 1px solid rgba(214, 90, 90, 0.4);
+}
+
+.guestbook-upload-errors p {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .guestbook-montage {
   display: grid;
   gap: 12px;

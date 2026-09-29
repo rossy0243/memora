@@ -10,7 +10,13 @@
   const previewVideo = document.getElementById("capture-preview-video");
   const previewDetails = document.getElementById("capture-preview-details");
   const retakeCameraButton = document.getElementById("retake-camera-button");
-  const captureErrors = document.querySelector(".capture-preview__errors");
+  const guestNameInput = document.getElementById("id_guest_name");
+  const tallyEl = document.getElementById("guestbook-tally");
+  const recentWrapEl = document.getElementById("guestbook-recent-wrap");
+  const uploadQueueEl = document.getElementById("guestbook-upload-queue");
+  const uploadErrorsEl = document.getElementById("guestbook-upload-errors");
+  const uploadErrorsText = uploadErrorsEl ? uploadErrorsEl.querySelector("p") : null;
+  const uploadRetryButton = document.getElementById("guestbook-upload-retry");
   const cameraStudio = document.getElementById("camera-studio");
   const startCameraButton = document.getElementById("start-camera-button");
   const cameraPanel = document.getElementById("camera-panel");
@@ -24,11 +30,6 @@
   const flashToggleButton = document.getElementById("flash-toggle-button");
   const cameraActionButton = document.getElementById("camera-action-button");
   const closeCameraButton = document.getElementById("close-camera-button");
-  const progress = form.querySelector(".upload-progress");
-  const progressBar = form.querySelector(".upload-progress__bar span");
-  const progressText = form.querySelector(".upload-progress p");
-  const submitButton = form.querySelector("button[type='submit']");
-  const initialSubmitLabel = submitButton ? submitButton.textContent : "";
   const maxRecordingSeconds = (cameraStudio && parseInt(cameraStudio.dataset.maxDuration, 10)) || 20;
 
   let previewUrl = "";
@@ -45,8 +46,13 @@
   let recordingInterval = null;
   let isSwitchingCamera = false;
   let isStoppingRecording = false;
-  let slowUploadTimer = null;
-  let verySlowUploadTimer = null;
+  // Envoi en arriere-plan (point 11) : l'agent enchaine les messages sans
+  // attendre la fin de chaque envoi. pendingUploads suit les envois en cours
+  // (indicateur discret), failedUploads garde les FormData qui ont echoue apres
+  // reessai automatique, pour un nouvel essai manuel sans perdre le message.
+  let pendingUploads = 0;
+  let failedUploads = [];
+  let slowQueueTimer = null;
 
   function resetPreviewUrl() {
     if (previewUrl) {
@@ -610,26 +616,140 @@
     }
   }
 
-  function showCaptureErrors(errorMessages) {
-    if (!captureErrors) {
-      return;
+  function queueStatusLabel() {
+    if (pendingUploads <= 0) {
+      return "";
     }
-    captureErrors.innerHTML = "";
-    const list = errorMessages && errorMessages.length ? errorMessages : ["L'envoi a échoué. Réessayez."];
-    list.forEach(function (message) {
-      const item = document.createElement("li");
-      item.textContent = message;
-      captureErrors.appendChild(item);
-    });
-    captureErrors.hidden = false;
+    return pendingUploads === 1
+      ? "1 message en cours d'envoi..."
+      : pendingUploads + " messages en cours d'envoi...";
   }
 
-  function clearCaptureErrors() {
-    if (!captureErrors) {
+  function updateQueueUi() {
+    if (!uploadQueueEl) {
       return;
     }
-    captureErrors.hidden = true;
-    captureErrors.innerHTML = "";
+    if (pendingUploads > 0) {
+      uploadQueueEl.hidden = false;
+      uploadQueueEl.textContent = queueStatusLabel();
+    } else {
+      uploadQueueEl.hidden = true;
+    }
+    if (pendingUploads <= 0 && slowQueueTimer) {
+      clearTimeout(slowQueueTimer);
+      slowQueueTimer = null;
+    }
+  }
+
+  function updateUploadErrorsUi() {
+    if (!uploadErrorsEl) {
+      return;
+    }
+    if (failedUploads.length > 0) {
+      uploadErrorsEl.hidden = false;
+      if (uploadErrorsText) {
+        uploadErrorsText.textContent =
+          failedUploads.length === 1
+            ? "1 message n'a pas pu être envoyé. Gardez cette page ouverte."
+            : failedUploads.length + " messages n'ont pas pu être envoyés. Gardez cette page ouverte.";
+      }
+    } else {
+      uploadErrorsEl.hidden = true;
+    }
+  }
+
+  // Le tableau (nombre de messages, derniers envois) vient de la page fraiche
+  // que le serveur renvoie apres un envoi reussi (redirection suivie par le XHR) :
+  // pas besoin de deviner cote client, la source de verite reste le serveur.
+  let lastKnownSentCount = -1;
+  function applyServerSnapshot(responseText) {
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(responseText || "", "text/html");
+    } catch (error) {
+      return;
+    }
+    const freshTally = doc.getElementById("guestbook-tally");
+    if (freshTally && tallyEl) {
+      const countText = freshTally.querySelector("strong");
+      const count = countText ? parseInt(countText.textContent, 10) : NaN;
+      if (!Number.isFinite(count) || count >= lastKnownSentCount) {
+        tallyEl.innerHTML = freshTally.innerHTML;
+        if (Number.isFinite(count)) {
+          lastKnownSentCount = count;
+        }
+      }
+    }
+    const freshRecentWrap = doc.getElementById("guestbook-recent-wrap");
+    if (freshRecentWrap && recentWrapEl) {
+      recentWrapEl.innerHTML = freshRecentWrap.innerHTML;
+    }
+  }
+
+  function sendInBackground(formData, attempt) {
+    const currentAttempt = attempt || 1;
+    const request = new XMLHttpRequest();
+    request.open(form.method || "POST", form.action);
+    request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+
+    function retryOrFail() {
+      if (currentAttempt < 2) {
+        window.setTimeout(function () {
+          sendInBackground(formData, currentAttempt + 1);
+        }, 3000);
+        return;
+      }
+      pendingUploads = Math.max(0, pendingUploads - 1);
+      updateQueueUi();
+      failedUploads.push(formData);
+      updateUploadErrorsUi();
+    }
+
+    request.addEventListener("load", function () {
+      // L'envoi reussi redirige vers la MEME page (ecran pret pour l'invite
+      // suivant) : contrairement au parcours invite, l'URL ne suffit pas a
+      // distinguer un succes d'un formulaire invalide. On se fie plutot a la
+      // presence (ou non) d'erreurs dans la reponse.
+      const errorMessages = extractServerErrorMessages(request.responseText);
+      if (request.status >= 200 && request.status < 300 && errorMessages.length === 0) {
+        pendingUploads = Math.max(0, pendingUploads - 1);
+        updateQueueUi();
+        applyServerSnapshot(request.responseText);
+        return;
+      }
+      retryOrFail();
+    });
+
+    request.addEventListener("error", retryOrFail);
+    request.addEventListener("abort", retryOrFail);
+
+    request.send(formData);
+  }
+
+  function queueUpload(formData) {
+    pendingUploads += 1;
+    updateQueueUi();
+    if (!slowQueueTimer) {
+      slowQueueTimer = window.setTimeout(function () {
+        if (uploadQueueEl && pendingUploads > 0) {
+          uploadQueueEl.textContent = "Connexion lente : " + queueStatusLabel();
+        }
+      }, 15000);
+    }
+    sendInBackground(formData, 1);
+  }
+
+  if (uploadRetryButton) {
+    uploadRetryButton.addEventListener("click", function () {
+      const toRetry = failedUploads;
+      failedUploads = [];
+      updateUploadErrorsUi();
+      toRetry.forEach(function (formData) {
+        pendingUploads += 1;
+        updateQueueUi();
+        sendInBackground(formData, 1);
+      });
+    });
   }
 
   form.addEventListener("submit", function (event) {
@@ -642,92 +762,16 @@
 
     event.preventDefault();
 
-    clearCaptureErrors();
-    if (retakeCameraButton) {
-      retakeCameraButton.disabled = true;
+    // L'agent n'attend pas la fin de l'envoi : le message part en arriere-plan
+    // pendant que la camera est deja prete pour le suivant (point 11 de la mise
+    // a niveau post-mariage — le telechargement apres chaque message faisait
+    // perdre du temps).
+    const formData = new FormData(form);
+    closeCaptureReview();
+    if (guestNameInput) {
+      guestNameInput.value = "";
     }
-    if (progress) {
-      progress.hidden = false;
-    }
-    if (progressBar) {
-      progressBar.style.width = "0%";
-    }
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = "Envoi...";
-    }
-    if (progressText) {
-      progressText.textContent = "Préparation de l'envoi...";
-    }
-    slowUploadTimer = window.setTimeout(function () {
-      if (progressText) {
-        progressText.textContent = "Connexion lente... gardez cette page ouverte.";
-      }
-    }, 8000);
-    verySlowUploadTimer = window.setTimeout(function () {
-      if (progressText) {
-        progressText.textContent = "Envoi toujours en cours.";
-      }
-    }, 20000);
-
-    const request = new XMLHttpRequest();
-    request.open(form.method || "POST", form.action);
-    request.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-
-    request.upload.addEventListener("progress", function (progressEvent) {
-      if (!progressEvent.lengthComputable || !progressBar) {
-        return;
-      }
-      const percent = Math.max(8, Math.min(96, Math.round((progressEvent.loaded / progressEvent.total) * 100)));
-      progressBar.style.width = percent + "%";
-      if (progressText) {
-        progressText.textContent = "Envoi en cours... " + percent + "%";
-      }
-    });
-
-    function finishFailedSend(errorMessages) {
-      clearTimeout(slowUploadTimer);
-      clearTimeout(verySlowUploadTimer);
-      if (progress) {
-        progress.hidden = true;
-      }
-      showCaptureErrors(errorMessages);
-      if (retakeCameraButton) {
-        retakeCameraButton.disabled = false;
-      }
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = initialSubmitLabel;
-      }
-    }
-
-    request.addEventListener("load", function () {
-      // L'envoi reussi redirige vers la MEME page (ecran pret pour l'invite
-      // suivant) : contrairement au parcours invite, l'URL ne suffit pas a
-      // distinguer un succes d'un formulaire invalide. On se fie plutot a la
-      // presence (ou non) d'erreurs dans la reponse.
-      const errorMessages = extractServerErrorMessages(request.responseText);
-      if (request.status >= 200 && request.status < 300 && errorMessages.length === 0) {
-        clearTimeout(slowUploadTimer);
-        clearTimeout(verySlowUploadTimer);
-        if (progressBar) {
-          progressBar.style.width = "100%";
-        }
-        window.location.assign(form.action);
-        return;
-      }
-
-      finishFailedSend(errorMessages);
-    });
-
-    request.addEventListener("error", function () {
-      finishFailedSend(["L'envoi a échoué. Vérifiez la connexion puis réessayez."]);
-    });
-
-    request.addEventListener("abort", function () {
-      finishFailedSend(["L'envoi a été interrompu."]);
-    });
-
-    request.send(new FormData(form));
+    startCamera();
+    queueUpload(formData);
   });
 })();

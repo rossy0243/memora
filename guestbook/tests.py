@@ -305,6 +305,13 @@ class GuestbookViewTests(TestCase):
 
         self.assertContains(response, "message enregistré")
         self.assertContains(response, "Les voisins")
+        # Ancrages utilises par guestbook-capture.js pour l'envoi en arriere-plan
+        # (point 11) : mis a jour depuis la reponse fraiche apres chaque envoi
+        # reussi, sans recharger la page.
+        self.assertContains(response, 'id="guestbook-tally"')
+        self.assertContains(response, 'id="guestbook-recent-wrap"')
+        self.assertContains(response, 'id="guestbook-upload-queue"')
+        self.assertContains(response, 'id="guestbook-upload-errors"')
 
     def test_agent_home_shows_message_count_per_mission(self):
         GuestBookMessage.objects.create(

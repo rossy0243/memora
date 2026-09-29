@@ -14,24 +14,31 @@
       <h1>{{ event.title }}</h1>
       <p class="guest-upload-heading__hint">Enregistrez le message d'un invité &mdash; {{ max_duration_seconds }} secondes max.</p>
 
-      <div class="guestbook-tally" aria-live="polite">
+      <div class="guestbook-tally" id="guestbook-tally" aria-live="polite">
         <strong>{{ sent_count }}</strong>
         <span>message{{ sent_count|pluralize }} enregistré{{ sent_count|pluralize }} pour cet événement</span>
       </div>
-      {% if recent_messages %}
-        <ul class="guestbook-recent">
-          {% for message in recent_messages %}
-            <li>
-              <span class="guestbook-recent__check" aria-hidden="true">&#10003;</span>
-              <span class="guestbook-recent__who">{{ message.guest_name|default:"Sans nom" }}</span>
-              {% if message.recorded_by %}
-                <span class="guestbook-recent__by">par {{ message.recorded_by.get_short_name|default:message.recorded_by.username }}</span>
-              {% endif %}
-              <time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"H:i" }}</time>
-            </li>
-          {% endfor %}
-        </ul>
-      {% endif %}
+      <p class="guestbook-upload-queue" id="guestbook-upload-queue" aria-live="polite" hidden></p>
+      <div class="guestbook-upload-errors" id="guestbook-upload-errors" aria-live="assertive" hidden>
+        <p></p>
+        <button class="button button--secondary button--compact" type="button" id="guestbook-upload-retry">Réessayer l'envoi</button>
+      </div>
+      <div id="guestbook-recent-wrap">
+        {% if recent_messages %}
+          <ul class="guestbook-recent">
+            {% for message in recent_messages %}
+              <li>
+                <span class="guestbook-recent__check" aria-hidden="true">&#10003;</span>
+                <span class="guestbook-recent__who">{{ message.guest_name|default:"Sans nom" }}</span>
+                {% if message.recorded_by %}
+                  <span class="guestbook-recent__by">par {{ message.recorded_by.get_short_name|default:message.recorded_by.username }}</span>
+                {% endif %}
+                <time datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"H:i" }}</time>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
 
       <form method="post" action="{% url 'guestbook:end_shift' event.pk %}" class="guestbook-end-form">
         {% csrf_token %}
@@ -104,16 +111,9 @@
           <label for="{{ form.guest_name.id_for_label }}">De la part de <span>Facultatif</span></label>
           {{ form.guest_name }}
         </div>
-        <ul class="capture-preview__errors" hidden aria-live="assertive"></ul>
         <div class="capture-preview__actions">
           <button class="button button--secondary button--compact" type="button" id="retake-camera-button">Reprendre</button>
           <button class="button button--primary button--compact capture-preview__confirm" type="submit" id="use-capture-button">Envoyer le message</button>
-        </div>
-        <div class="upload-progress" hidden aria-live="polite">
-          <div class="upload-progress__bar">
-            <span></span>
-          </div>
-          <p>Envoi en cours...</p>
         </div>
       </div>
     </div>
