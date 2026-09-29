@@ -11,6 +11,11 @@ from core.security import get_client_ip
 from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryTemplate
 
 
+# Plafond « effectivement illimite » pour le mode immersion (voir get_upload_quota) :
+# une soiree entiere de captures ne l'atteint jamais, mais un nombre fini reste plus
+# sur pour l'affichage et le JS cote camera qu'un veritable None.
+IMMERSION_UPLOAD_LIMIT = 10_000
+
 FALLBACK_UPLOAD_CATEGORIES = [
     ("ceremony", "Cérémonie", 1),
     ("arrival", "Arrivée", 2),
@@ -295,8 +300,13 @@ def _guest_uploads(event, session_key, identity):
     return uploads.filter(match)
 
 
-def get_upload_quota(event, session_key, identity=None):
-    limit = settings.MEMORA_SESSION_UPLOAD_LIMIT
+def get_upload_quota(event, session_key, identity=None, exempt_session_limit=False):
+    # Mode immersion (agent Memora affecte au livre d'or, voir
+    # guestbook.services.is_assigned_agent) : il capture toute la soiree, sans la
+    # limite de souvenirs par session d'un invite ordinaire. Un grand nombre
+    # plutot que None : le JS cote camera (upload-progress.js) attend un compteur
+    # numerique fiable pour rester en mode capture entre deux envois.
+    limit = IMMERSION_UPLOAD_LIMIT if exempt_session_limit else settings.MEMORA_SESSION_UPLOAD_LIMIT
     used = _guest_uploads(event, session_key, identity).count()
     remaining = max(limit - used, 0)
     return {
@@ -307,12 +317,14 @@ def get_upload_quota(event, session_key, identity=None):
     }
 
 
-def get_upload_limit_error(event, session_key, ip_address, identity=None):
+def get_upload_limit_error(event, session_key, ip_address, identity=None, exempt_session_limit=False):
     event_uploads = GuestUpload.objects.filter(event=event, is_deleted=False)
 
     # Quota de la formule, avec marge de tolerance : on ne bloque jamais un invite
     # « en trop » — la limite porte sur le nombre de souvenirs, pas sur les
-    # personnes — et le depassement leger passe quand meme.
+    # personnes — et le depassement leger passe quand meme. S'applique aussi en
+    # immersion : seule la limite par session (les 5 souvenirs) est levee pour
+    # l'agent, pas le quota global de la formule.
     if event_uploads.count() >= event.upload_hard_limit:
         return (
             "Cet événement a atteint le nombre de souvenirs inclus dans sa formule. "
@@ -320,7 +332,7 @@ def get_upload_limit_error(event, session_key, ip_address, identity=None):
         )
 
     guest_uploads = _guest_uploads(event, session_key, identity)
-    if guest_uploads.count() >= settings.MEMORA_SESSION_UPLOAD_LIMIT:
+    if not exempt_session_limit and guest_uploads.count() >= settings.MEMORA_SESSION_UPLOAD_LIMIT:
         label = "souvenir" if settings.MEMORA_SESSION_UPLOAD_LIMIT == 1 else "souvenirs"
         return f"Vous avez atteint la limite de {settings.MEMORA_SESSION_UPLOAD_LIMIT} {label} pour cet événement."
 

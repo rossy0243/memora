@@ -14,8 +14,10 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
+from accounts.models import AgentProfile
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE
 from events.models import Event, EventType
+from guestbook.models import GuestBookAssignment
 
 from .models import GuestUpload, MomentTemplate, UploadCategory, UploadCategoryTemplate
 from .services import normalize_moment_label, sync_event_upload_categories
@@ -313,6 +315,52 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(upload.original_filename, "photo.jpg")
         self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
         self.assertTrue(upload.session_key)
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
+    def test_assigned_agent_is_exempt_from_the_session_upload_limit(self):
+        """Mode immersion (point 10 de la mise a niveau post-mariage) : l'agent
+        Memora affecte au livre d'or capture aussi des souvenirs comme un invite,
+        sans la limite de session (ici abaissee a 1 pour le test)."""
+        agent = get_user_model().objects.create_user(username="agent-immersion", password="secret")
+        AgentProfile.objects.create(user=agent)
+        GuestBookAssignment.objects.create(event=self.event, agent=agent)
+        self.client.login(username="agent-immersion", password="secret")
+
+        first = self.client.post(self.upload_url(), {"media_file": make_test_image_file("un.jpg")})
+        second = self.client.post(self.upload_url(), {"media_file": make_test_image_file("deux.jpg")})
+
+        self.assertRedirects(first, self.thanks_url())
+        self.assertRedirects(second, self.thanks_url())
+        self.assertEqual(GuestUpload.objects.filter(event=self.event).count(), 2)
+
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
+    def test_ordinary_guest_still_hits_the_session_upload_limit(self):
+        """Regression : seul un agent affecte est exempte, pas n'importe quel invite connecte."""
+        self.client.post(self.upload_url(), {"media_file": make_test_image_file("un.jpg")})
+
+        response = self.client.post(self.upload_url(), {"media_file": make_test_image_file("deux.jpg")})
+
+        self.assertEqual(GuestUpload.objects.filter(event=self.event).count(), 1)
+        self.assertContains(response, "limite de 1 souvenir")
+
+    def test_agent_not_assigned_to_this_event_is_not_exempt(self):
+        agent = get_user_model().objects.create_user(username="agent-autre-event", password="secret")
+        AgentProfile.objects.create(user=agent)
+        other_event = Event.objects.create(
+            organizer=self.event.organizer,
+            title="Autre Mariage",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GuestBookAssignment.objects.create(event=other_event, agent=agent)
+        self.client.login(username="agent-autre-event", password="secret")
+
+        with override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1):
+            self.client.post(self.upload_url(), {"media_file": make_test_image_file("un.jpg")})
+            response = self.client.post(self.upload_url(), {"media_file": make_test_image_file("deux.jpg")})
+
+        self.assertEqual(GuestUpload.objects.filter(event=self.event).count(), 1)
+        self.assertContains(response, "limite de 1 souvenir")
 
     def _post_photo(self, client, device_id="", name="p.jpg"):
         return client.post(self.upload_url(), {"media_file": make_test_image_file(name), "device_id": device_id, "device_sig": "abcdef0123456789"})
@@ -709,6 +757,21 @@ class GuestUploadViewTests(TestCase):
 
         self.assertRedirects(unlocked_response, self.thanks_url())
         self.assertEqual(GuestUpload.objects.count(), 1)
+
+    def test_assigned_agent_bypasses_the_guest_access_code(self):
+        """Mode immersion : l'agent n'a pas a ressaisir un code d'acces separe,
+        il est deja identifie par sa propre mission (GuestBookAssignment)."""
+        self.event.guest_access_code = "AMOUR2026"
+        self.event.save()
+        agent = get_user_model().objects.create_user(username="agent-code", password="secret")
+        AgentProfile.objects.create(user=agent)
+        GuestBookAssignment.objects.create(event=self.event, agent=agent)
+        self.client.login(username="agent-code", password="secret")
+
+        response = self.client.post(self.upload_url(), {"media_file": make_test_image_file("photo.jpg")})
+
+        self.assertRedirects(response, self.thanks_url())
+        self.assertEqual(GuestUpload.objects.filter(event=self.event).count(), 1)
 
     def test_rejects_invalid_file_extension(self):
         media = SimpleUploadedFile("notes.pdf", b"pdf", content_type="application/pdf")

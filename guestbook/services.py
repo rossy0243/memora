@@ -18,6 +18,18 @@ from .models import GuestBookAssignment, GuestBookMovie
 logger = logging.getLogger(__name__)
 
 
+def is_assigned_agent(user, event):
+    """Vrai si `user` est un agent Memora affecte au livre d'or de cet evenement.
+
+    Sert au « mode immersion » (point 10 de la mise a niveau post-mariage) :
+    l'agent peut aussi capturer des souvenirs comme un invite, via le meme
+    parcours public, mais sans la limite de 5 souvenirs par session ni le code
+    d'acces invite — voir uploads.views.guest_upload_create."""
+    if not user.is_authenticated or not hasattr(user, "agent_profile"):
+        return False
+    return GuestBookAssignment.objects.filter(event=event, agent=user).exists()
+
+
 def has_open_shifts(event):
     """Vrai si au moins un agent a demarre son service sur cet evenement sans l'avoir termine.
 
@@ -55,37 +67,42 @@ def queue_guestbook_movie(event, *, trigger):
     return movie
 
 
-def queue_abandoned_guestbook_movies():
-    """File les livres d'or dont au moins un agent n'a jamais termine son service.
+def close_assignment_if_past_closing_time(assignment):
+    """Cloture ce service si l'heure de fermeture du livre d'or est passee
+    (Event.guestbook_closes_at, fixe a 23h59 le jour de l'evenement).
 
-    Un service ouvert depuis plus de MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS est
-    cloture d'office et pris en charge par Memora — plusieurs agents pouvant
-    travailler sur le meme evenement, la cloture de l'un n'attend pas les
-    autres. Renvoie le nombre de montages nouvellement files.
-    """
-    cutoff = timezone.now() - timedelta(
-        hours=settings.MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS
-    )
-    stale_assignments = (
-        GuestBookAssignment.objects.select_related("event")
-        .filter(ended_at__isnull=True, started_at__lt=cutoff)
-    )
+    Partage par le cron (rattrapage periodique) et par la vue de capture
+    (fermeture immediate, sans attendre le prochain passage du cron). L'agent
+    n'est plus jamais bloque par une inactivite prolongee — il peut enregistrer
+    toute la soiree — seule cette heure fixe ferme le stand.
+
+    Retourne (closed, queued) : closed est vrai si le service vient d'etre
+    cloture ici ; queued est vrai si cette cloture a aussi mis le montage en
+    file (dernier agent a terminer, voir has_open_shifts)."""
+    if assignment.ended_at or timezone.now() < assignment.event.guestbook_closes_at:
+        return False, False
+    assignment.ended_at = timezone.now()
+    assignment.save(update_fields=["ended_at", "updated_at"])
+    if has_open_shifts(assignment.event):
+        return True, False
+    queued = bool(queue_guestbook_movie(assignment.event, trigger="auto_abandon"))
+    return True, queued
+
+
+def queue_abandoned_guestbook_movies():
+    """Ferme d'office (et prend en charge le montage de) tout stand livre d'or
+    dont l'heure de fermeture est passee mais qu'aucun agent n'a pense a
+    terminer. Renvoie le nombre de montages nouvellement files."""
+    open_assignments = GuestBookAssignment.objects.select_related("event").filter(ended_at__isnull=True)
 
     queued_events = set()
-    now = timezone.now()
-    for assignment in stale_assignments:
-        assignment.ended_at = now
-        assignment.save(update_fields=["ended_at", "updated_at"])
-        if assignment.event_id in queued_events:
-            continue
-        # Meme regle que la fin de service : tant qu'un autre agent enregistre encore, on attend.
-        if has_open_shifts(assignment.event):
-            continue
-        if queue_guestbook_movie(assignment.event, trigger="auto_abandon"):
+    for assignment in open_assignments:
+        _closed, queued = close_assignment_if_past_closing_time(assignment)
+        if queued:
             queued_events.add(assignment.event_id)
 
     if queued_events:
-        logger.info("Guestbook montage auto-queued for %s abandoned shift(s)", len(queued_events))
+        logger.info("Guestbook montage auto-queued for %s closed-shift event(s)", len(queued_events))
     return len(queued_events)
 
 

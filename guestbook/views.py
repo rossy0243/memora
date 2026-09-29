@@ -14,7 +14,7 @@ from events.models import Event
 
 from .forms import GuestBookMessageForm
 from .models import GuestBookAssignment, RemoteGuestbookCode
-from .services import has_open_shifts, queue_guestbook_movie
+from .services import close_assignment_if_past_closing_time, has_open_shifts, queue_guestbook_movie
 
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,16 @@ def guestbook_capture(request, pk):
     if event.is_upcoming_for_agent:
         return render(request, "guestbook/mission_not_started.html", {"event": event})
 
+    # Fermeture fixe a 23h59 le jour de l'evenement (voir Event.guestbook_closes_at) :
+    # verifiee ici en temps reel plutot que d'attendre le prochain passage du cron
+    # (jusqu'a 15 minutes de decalage sinon).
+    close_assignment_if_past_closing_time(assignment)
     if assignment.ended_at:
-        return render(request, "guestbook/shift_closed.html", {"event": event})
+        return render(
+            request,
+            "guestbook/shift_closed.html",
+            {"event": event, "immersion_url": event.get_public_url()},
+        )
 
     if not assignment.started_at:
         assignment.started_at = timezone.now()

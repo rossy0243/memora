@@ -613,11 +613,6 @@ MEMORA_GUESTBOOK_MONTAGE_OUTRO_CARD_SECONDS = env_int(
 MEMORA_GUESTBOOK_MONTAGE_OUTRO_TITLE = os.getenv(
     "MEMORA_GUESTBOOK_MONTAGE_OUTRO_TITLE", "Merci à tous"
 )
-# Delai apres l'evenement au-dela duquel Memora genere le montage meme si l'agent
-# a oublie de terminer son service.
-MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS = env_int(
-    "MEMORA_GUESTBOOK_MONTAGE_ABANDON_HOURS", 12
-)
 
 MEMORA_RUNWAY_ENABLED = env_bool("MEMORA_RUNWAY_ENABLED", False)
 MEMORA_RUNWAY_API_SECRET = os.getenv("RUNWAYML_API_SECRET", os.getenv("MEMORA_RUNWAY_API_SECRET", ""))

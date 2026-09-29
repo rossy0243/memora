@@ -44,9 +44,14 @@
               </dd>
             </div>
           </dl>
-          <a class="button button--primary" href="{% url 'guestbook:capture' assignment.event.pk %}">
-            {% if assignment.ended_at %}Revoir{% elif assignment.started_at %}Continuer{% else %}Démarrer le livre d'or{% endif %}
-          </a>
+          <div class="quick-actions">
+            <a class="button button--primary" href="{% url 'guestbook:capture' assignment.event.pk %}">
+              {% if assignment.ended_at %}Revoir{% elif assignment.started_at %}Continuer{% else %}Démarrer le livre d'or{% endif %}
+            </a>
+            {% if not assignment.event.is_upcoming_for_agent %}
+              <a class="button button--secondary button--compact" href="{{ assignment.event.get_public_url }}">Immersion (comme un invité)</a>
+            {% endif %}
+          </div>
         </article>
       {% endfor %}
     </div>

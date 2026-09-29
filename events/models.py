@@ -417,6 +417,15 @@ class Event(models.Model):
         return timezone.make_aware(datetime.combine(self.event_date, time(22, 0)))
 
     @property
+    def guestbook_closes_at(self):
+        """Fermeture du stand livre d'or sur place, fixe a 23h59 le jour de
+        l'evenement (29/09 : l'agent n'est plus jamais bloque par une inactivite
+        prolongee — il peut enregistrer toute la soiree — seule cette heure fixe
+        cloture d'office les services encore ouverts, voir
+        guestbook.services.queue_abandoned_guestbook_movies)."""
+        return timezone.make_aware(datetime.combine(self.event_date, time(23, 59)))
+
+    @property
     def is_upcoming_for_agent(self):
         """Le stand de l'agent du livre d'or s'ouvre le jour J des minuit, quelle que soit
         l'heure d'ouverture choisie pour les invites (l'agent arrive avant eux)."""

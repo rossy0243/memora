@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from core.storage_errors import STORAGE_UNAVAILABLE_MESSAGE, is_storage_error, recover_from_storage_error
 from events.access import has_guest_access, upcoming_event_response
 from events.models import Event
+from guestbook.services import is_assigned_agent
 
 from .forms import GuestUploadForm
 from .services import (
@@ -32,18 +33,24 @@ def guest_upload_create(request, slug, access_key):
     upcoming = upcoming_event_response(request, event)
     if upcoming:
         return upcoming
-    if not has_guest_access(request, event):
+    # Mode immersion (point 10) : l'agent affecte au livre d'or de cet evenement
+    # capture aussi des souvenirs comme un invite, sans code d'acces separe ni
+    # limite de session — voir guestbook.services.is_assigned_agent.
+    is_immersion = is_assigned_agent(request.user, event)
+    if not is_immersion and not has_guest_access(request, event):
         return redirect(event.get_public_url())
 
     session_key = ensure_session_key(request)
     identity = get_device_identity(request)
-    upload_quota = get_upload_quota(event, session_key, identity)
+    upload_quota = get_upload_quota(event, session_key, identity, exempt_session_limit=is_immersion)
 
     if request.method == "POST":
         form = GuestUploadForm(request.POST, request.FILES, event=event)
         if form.is_valid():
             ip_address = get_client_ip(request)
-            limit_error = get_upload_limit_error(event, session_key, ip_address, identity)
+            limit_error = get_upload_limit_error(
+                event, session_key, ip_address, identity, exempt_session_limit=is_immersion
+            )
 
             if limit_error:
                 logger.warning("Guest upload blocked for event=%s reason=%s", event.pk, limit_error)
@@ -96,8 +103,9 @@ def guest_upload_create(request, slug, access_key):
                 "event": event,
                 "form": form,
                 "upload_quota": upload_quota,
-                # Un point par souvenir permis ; au-dela de 8, le texte suffit.
-                "quota_slots": range(upload_quota["limit"]) if upload_quota["limit"] <= 8 else [],
+                # Un point par souvenir permis ; au-dela de 8 (ou en immersion,
+                # sans limite : voir get_upload_quota), le texte suffit.
+                "quota_slots": range(upload_quota["limit"]) if upload_quota["limit"] and upload_quota["limit"] <= 8 else [],
             },
         ),
         identity,

@@ -45,7 +45,11 @@ class GuestbookViewTests(TestCase):
             organizer=self.organizer,
             title="Mariage Livre d'Or",
             event_type=self.event_type,
-            event_date=date(2026, 7, 8),
+            # Aujourd'hui, pas une date fixe : le stand ferme desormais a 23h59 le
+            # jour de l'evenement (Event.guestbook_closes_at), donc une date passee
+            # fermerait le stand des la premiere visite dans tous les tests ici qui
+            # ne testent pas explicitement cette fermeture.
+            event_date=timezone.localdate(),
         )
         self.assignment = GuestBookAssignment.objects.create(event=self.event, agent=self.agent)
 
@@ -241,6 +245,21 @@ class GuestbookViewTests(TestCase):
         closed_response = self.client.get(self.capture_url())
         self.assertContains(closed_response, "Service terminé")
 
+    def test_capture_screen_closes_the_shift_in_real_time_past_the_closing_hour(self):
+        """L'heure de fermeture (23h59 le jour de l'evenement) ferme le stand des
+        la visite suivante, sans attendre le prochain passage du cron (jusqu'a 15
+        minutes de decalage sinon) — voir close_assignment_if_past_closing_time."""
+        self.event.event_date = timezone.localdate() - timedelta(days=1)
+        self.event.save(update_fields=["event_date"])
+        self.client.login(username="agent1", password="secret")
+
+        response = self.client.get(self.capture_url())
+
+        self.assertContains(response, "Service terminé")
+        self.assertContains(response, "Continuer en immersion")
+        self.assignment.refresh_from_db()
+        self.assertIsNotNone(self.assignment.ended_at)
+
     def test_two_agents_can_work_the_same_event_independently(self):
         second_assignment = GuestBookAssignment.objects.create(
             event=self.event, agent=self.other_agent
@@ -361,7 +380,9 @@ class GuestBookMontageTests(TestCase):
             organizer=self.organizer,
             title="Mariage Montage",
             event_type=EventType.objects.get(code="wedding"),
-            event_date=date(2026, 7, 8),
+            # Aujourd'hui, pas une date fixe : voir le commentaire equivalent dans
+            # GuestbookViewTests.setUp (Event.guestbook_closes_at).
+            event_date=timezone.localdate(),
         )
         self.assignment = GuestBookAssignment.objects.create(event=self.event, agent=self.agent)
 
@@ -423,9 +444,13 @@ class GuestBookMontageTests(TestCase):
 
         self.assertTrue(GuestBookMovie.objects.filter(event=self.event).exists())
 
-    def test_abandoned_shift_waits_while_another_agent_is_still_recording(self):
+    def test_shift_stays_open_before_the_closing_time(self):
+        """L'agent n'est plus jamais bloque par une inactivite prolongee (point 10) :
+        tant que l'heure de fermeture (23h59 le jour de l'evenement) n'est pas
+        passee, un service ouvert depuis longtemps reste ouvert."""
         self._add_message()
-        self._second_agent()  # demarre maintenant, encore ouvert
+        self.event.event_date = timezone.localdate() + timedelta(days=1)
+        self.event.save(update_fields=["event_date"])
         GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
             started_at=timezone.now() - timedelta(hours=48), ended_at=None
         )
@@ -435,7 +460,28 @@ class GuestBookMontageTests(TestCase):
         self.assertEqual(queued, 0)
         self.assertFalse(GuestBookMovie.objects.filter(event=self.event).exists())
         self.assignment.refresh_from_db()
-        self.assertIsNotNone(self.assignment.ended_at)  # clos quand meme
+        self.assertIsNone(self.assignment.ended_at)
+
+    def test_all_open_shifts_close_together_once_the_closing_time_passes(self):
+        """Plusieurs agents sur le meme evenement : une fois l'heure de fermeture
+        passee, tous les services encore ouverts sont clotures dans le meme
+        passage, et le montage n'est file qu'une fois."""
+        self._add_message()
+        self._second_agent()  # encore ouvert, actif recemment
+        self.event.event_date = timezone.localdate() - timedelta(days=1)
+        self.event.save(update_fields=["event_date"])
+        GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
+            started_at=timezone.now() - timedelta(hours=1), ended_at=None
+        )
+
+        queued = queue_abandoned_guestbook_movies()
+
+        self.assertEqual(queued, 1)
+        self.assertEqual(
+            GuestBookMovie.objects.get(event=self.event).trigger, "auto_abandon"
+        )
+        for assignment in GuestBookAssignment.objects.filter(event=self.event):
+            self.assertIsNotNone(assignment.ended_at)
 
     def test_messages_recorded_during_the_render_trigger_a_catch_up(self):
         self._add_message("Les voisins")
@@ -516,9 +562,10 @@ class GuestBookMontageTests(TestCase):
 
     def test_abandoned_shift_is_picked_up(self):
         self._add_message()
-        old = timezone.now() - timedelta(hours=48)
+        self.event.event_date = timezone.localdate() - timedelta(days=1)
+        self.event.save(update_fields=["event_date"])
         GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
-            started_at=old, ended_at=None
+            started_at=timezone.now() - timedelta(hours=48), ended_at=None
         )
 
         queued = queue_abandoned_guestbook_movies()
@@ -534,9 +581,10 @@ class GuestBookMontageTests(TestCase):
 
     def test_abandoned_shift_of_one_agent_does_not_reflag_forever(self):
         self._add_message()
-        old = timezone.now() - timedelta(hours=48)
+        self.event.event_date = timezone.localdate() - timedelta(days=1)
+        self.event.save(update_fields=["event_date"])
         GuestBookAssignment.objects.filter(pk=self.assignment.pk).update(
-            started_at=old, ended_at=None
+            started_at=timezone.now() - timedelta(hours=48), ended_at=None
         )
 
         first_pass = queue_abandoned_guestbook_movies()

@@ -10,7 +10,11 @@
   <div class="empty-state">
     <h2>Service terminé pour {{ event.title }}.</h2>
     <p>Le livre d'or de cet événement est clôturé. Contactez Memora si vous devez le rouvrir.</p>
-    <a class="button button--secondary" href="{% url 'guestbook:agent_home' %}">Retour à mes missions</a>
+    <p>Vous pouvez continuer à capturer la soirée en immersion, comme un invité (sans limite de souvenirs).</p>
+    <div class="quick-actions">
+      <a class="button button--primary" href="{{ immersion_url }}">Continuer en immersion</a>
+      <a class="button button--secondary" href="{% url 'guestbook:agent_home' %}">Retour à mes missions</a>
+    </div>
   </div>
 </section>
 {% endblock %}
