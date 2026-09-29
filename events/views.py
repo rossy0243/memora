@@ -91,6 +91,25 @@ class EventUpdateView(OrganizerEventMixin, UpdateView):
     form_class = EventForm
     template_name = "events/event_form.html"
 
+    def get(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.is_finalized:
+            return self._finalized_redirect()
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if self.object.is_finalized:
+            return self._finalized_redirect()
+        return super().post(request, *args, **kwargs)
+
+    def _finalized_redirect(self):
+        messages.error(
+            self.request,
+            "Cet evenement est termine : ses informations ne sont plus modifiables.",
+        )
+        return redirect(reverse("events:detail", kwargs={"pk": self.object.pk}))
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["user"] = self.request.user

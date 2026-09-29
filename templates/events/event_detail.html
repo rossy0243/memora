@@ -16,9 +16,18 @@
     </div>
     <div class="dashboard-command-actions">
       <a class="button button--secondary" href="{{ event.get_public_url }}">Page invité</a>
-      <a class="button button--primary" href="{% url 'events:update' event.pk %}">Modifier</a>
+      {% if not event.is_finalized %}
+        <a class="button button--primary" href="{% url 'events:update' event.pk %}">Modifier</a>
+      {% endif %}
     </div>
   </div>
+
+  {% if event.is_finalized %}
+    <article class="detail-panel reveal">
+      <span class="status-pill">Événement terminé</span>
+      <p class="muted-copy">Cet événement est clos : ses informations ne sont plus modifiables.</p>
+    </article>
+  {% endif %}
 
   {% if not event.is_paid %}
     <article class="payment-required-panel reveal">

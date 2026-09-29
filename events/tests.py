@@ -2040,6 +2040,85 @@ class EventViewTests(TestCase):
         self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
         self.assertEqual(event.event_type, custom_type)
 
+    def test_finalized_event_cannot_be_edited(self):
+        """Point 5 de la mise a niveau post-mariage : un evenement termine (marque
+        manuellement par l'equipe Memora) ne peut plus etre modifie par
+        l'organisateur, meme en forcant un POST direct sur le formulaire."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Terminee",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            location="Paris",
+            finalized_at=timezone.now(),
+        )
+        self.client.login(username="owner", password="secret")
+        update_url = reverse("events:update", kwargs={"pk": event.pk})
+
+        get_response = self.client.get(update_url)
+        post_response = self.client.post(
+            update_url,
+            {
+                "title": "Titre Modifie",
+                "couple_name": "",
+                "event_type": self.event_type.pk,
+                "event_date": "2026-07-08",
+                "location": "Paris",
+                "welcome_message": "",
+                "is_active": "on",
+                "media_retention_days": "7",
+            },
+        )
+
+        detail_url = reverse("events:detail", kwargs={"pk": event.pk})
+        self.assertRedirects(get_response, detail_url)
+        self.assertRedirects(post_response, detail_url)
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Reception Terminee")
+
+    def test_event_detail_hides_edit_link_when_finalized(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Terminee Affichage",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            finalized_at=timezone.now(),
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Événement terminé")
+        self.assertNotContains(response, reverse("events:update", kwargs={"pk": event.pk}))
+
+    def test_non_finalized_event_can_still_be_edited(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Modifiable",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            location="Paris",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(
+            reverse("events:update", kwargs={"pk": event.pk}),
+            {
+                "title": "Reception Renommee",
+                "couple_name": "",
+                "event_type": self.event_type.pk,
+                "event_date": "2026-07-08",
+                "location": "Paris",
+                "welcome_message": "",
+                "is_active": "on",
+                "media_retention_days": "7",
+            },
+        )
+
+        self.assertRedirects(response, reverse("events:detail", kwargs={"pk": event.pk}))
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Reception Renommee")
+
 
 class UpcomingEventTests(TestCase):
     """Evenement paye mais dont le jour n'est pas arrive : page d'attente, puis le
@@ -2598,6 +2677,18 @@ class GuestTestAdminTests(TestCase):
         self.client.post(changelist, {"action": "close_guest_test", "_selected_action": [self.event.pk]})
         self.event.refresh_from_db()
         self.assertFalse(self.event.guest_preview_enabled)
+
+    def test_finalize_and_reopen_actions(self):
+        self.client.login(username="admin-t", password="secret")
+        changelist = reverse("admin:events_event_changelist")
+
+        self.client.post(changelist, {"action": "finalize_events", "_selected_action": [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.is_finalized)
+
+        self.client.post(changelist, {"action": "reopen_events", "_selected_action": [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.is_finalized)
 
     def test_the_test_flag_only_matters_before_the_day(self):
         self.event.guest_preview_enabled = True

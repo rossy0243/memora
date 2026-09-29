@@ -320,6 +320,15 @@ class Event(models.Model):
         help_text="Rappel envoye a l'organisateur avant la suppression definitive de son film. Vide = pas encore envoye.",
     )
     is_active = models.BooleanField(default=True)
+    finalized_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text=(
+            "Marque manuellement par l'equipe Memora une fois l'evenement clos : "
+            "l'organisateur ne peut alors plus modifier les informations de l'evenement "
+            "(voir EventUpdateView). Vide = toujours modifiable."
+        ),
+    )
     guest_preview_enabled = models.BooleanField(
         "ouvert aux invités avant la date (test)",
         default=False,
@@ -386,6 +395,13 @@ class Event(models.Model):
     @property
     def can_accept_guest_uploads(self):
         return self.is_active and self.is_paid
+
+    @property
+    def is_finalized(self):
+        """Vrai une fois l'evenement marque termine par l'equipe Memora : les
+        informations de l'evenement ne sont alors plus modifiables par
+        l'organisateur (voir EventUpdateView)."""
+        return self.finalized_at is not None
 
     @property
     def guest_opens_at(self):

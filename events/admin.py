@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import path, reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from uploads.models import UploadCategory
@@ -95,7 +96,14 @@ class GuestBookAssignmentInline(admin.TabularInline):
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     inlines = [UploadCategoryInline, GuestBookAssignmentInline]
-    actions = ("mark_events_paid", "open_for_guest_test", "close_guest_test", "purge_r2_files")
+    actions = (
+        "mark_events_paid",
+        "open_for_guest_test",
+        "close_guest_test",
+        "purge_r2_files",
+        "finalize_events",
+        "reopen_events",
+    )
     change_form_template = "admin/events/event/change_form.html"
     list_display = (
         "title",
@@ -107,16 +115,17 @@ class EventAdmin(admin.ModelAdmin):
         "formatted_price",
         "paid_at",
         "is_active",
+        "finalized_at",
         "guestbook_agent_count",
         "guest_access_code",
         "media_retention_days",
         "created_at",
     )
     list_select_related = ("organizer", "event_type")
-    list_filter = ("payment_status", "event_type", "is_active", "event_date", "created_at")
+    list_filter = ("payment_status", "event_type", "is_active", "finalized_at", "event_date", "created_at")
     search_fields = ("title", "couple_name", "location", "organizer__username", "payment_reference")
     prepopulated_fields = {"slug": ("title",)}
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at", "finalized_at")
     autocomplete_fields = ("selected_music_track",)
     fieldsets = (
         (
@@ -159,6 +168,7 @@ class EventAdmin(admin.ModelAdmin):
                     "guest_opening_time",
                     "guest_preview_enabled",
                     "remote_guestbook_enabled",
+                    "finalized_at",
                 )
             },
         ),
@@ -248,6 +258,19 @@ class EventAdmin(admin.ModelAdmin):
     def close_guest_test(self, request, queryset):
         count = self._set_guest_preview(request, queryset, False)
         self.message_user(request, f"{count} evenement(s) : le lien attend a nouveau la date de l'evenement.")
+
+    @admin.action(description="Marquer comme termine (organisateur ne peut plus modifier)")
+    def finalize_events(self, request, queryset):
+        count = queryset.filter(finalized_at__isnull=True).update(finalized_at=timezone.now())
+        self.message_user(
+            request,
+            f"{count} evenement(s) marque(s) comme termine(s) : l'organisateur ne peut plus les modifier.",
+        )
+
+    @admin.action(description="Rouvrir (l'organisateur peut de nouveau modifier)")
+    def reopen_events(self, request, queryset):
+        count = queryset.exclude(finalized_at__isnull=True).update(finalized_at=None)
+        self.message_user(request, f"{count} evenement(s) rouvert(s) a la modification.")
 
     def get_urls(self):
         custom = [
