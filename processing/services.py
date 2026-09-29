@@ -724,17 +724,14 @@ def process_generated_movie(movie, only_deliverable=None):
             runway_final_rendered = False
             total_duration = sum(_estimated_movie_clip_duration(upload) for upload in uploads)
 
-            # Rendu premium Remotion derriere le feature flag. En cas d'echec du
-            # heros, on retombe integralement sur le pipeline Runway/ffmpeg.
-            # Le pipeline complet ne s'active que si le heros fait partie des
-            # livrables Remotion configures ; sinon (mode hybride, ex. teaser
-            # seul), le flux ffmpeg garde la main et les declinaisons tentent
-            # Remotion individuellement dans _render_movie_variants.
+            # Rendu premium Remotion derriere le feature flag. Le heros ayant ete
+            # retire du produit (29/09), le pipeline complet s'active des qu'au
+            # moins un livrable Remotion est configure (integrale et/ou teaser) —
+            # plus besoin du heros specifiquement pour beneficier de la reprise
+            # apres crash, du bouton d'arret et de la progression continue,
+            # toutes cablees dans _render_movie_with_remotion_pipeline.
             remotion_rendered = False
-            if (
-                settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion"
-                and "hero" in settings.MEMORA_REMOTION_DELIVERABLES
-            ):
+            if settings.MEMORA_MOVIE_RENDER_PROVIDER == "remotion" and settings.MEMORA_REMOTION_DELIVERABLES:
                 remotion_rendered = _render_movie_with_remotion_pipeline(
                     movie,
                     event,
@@ -1530,15 +1527,16 @@ def _build_movie_clip(upload, output_path, ffmpeg_binary, width=None, height=Non
 def _render_movie_with_remotion_pipeline(
     movie, event, uploads, soundtrack, temp_path, ffmpeg_binary, cancel_check=None, only_deliverable=None
 ):
-    """Rend les trois livrables (heros, integrale, teaser) via Remotion.
+    """Rend les livrables Remotion (integrale, teaser — heros retire du produit
+    le 29/09, voir MEMORA_MOVIE_DELIVERABLES).
 
-    Retourne True si le film heros est rendu — le flux Runway/ffmpeg est alors
-    court-circuite. Si le heros echoue (Node absent, rendu KO...), retourne False
-    et laisse le pipeline historique reprendre entierement la main : le flag
-    « remotion » ne doit jamais empecher un film de sortir.
+    Retourne True si le pipeline premium a tourne (heros non tente ou reussi) —
+    le flux Runway/ffmpeg (herite, prevu pour un heros) est alors court-circuite.
+    Si le heros est encore configure et echoue (Node absent, rendu KO...),
+    retourne False et laisse le pipeline historique reprendre la main.
 
-    Les declinaisons restent un bonus : chacune retombe individuellement sur le
-    moteur ffmpeg en cas d'echec, sans compromettre le film principal.
+    Chaque declinaison (integrale, teaser) retombe individuellement sur le
+    moteur ffmpeg en cas d'echec, sans compromettre les autres.
     """
     remotion_data = {"deliverables": {}}
     movie.edit_decision_data["remotion"] = remotion_data
@@ -1549,7 +1547,12 @@ def _render_movie_with_remotion_pipeline(
     # depart d'une regeneration volontaire, voir la commande). Sans ce filet, un
     # plantage pendant l'integrale (de loin le plus long) obligeait a tout
     # refaire depuis zero, heros compris, a chaque nouvelle tentative.
-    if movie.final_file:
+    if "hero" not in settings.MEMORA_MOVIE_DELIVERABLES:
+        # Heros retire du produit (29/09) : on ne le tente jamais, meme si
+        # settings.MEMORA_REMOTION_DELIVERABLES le contenait encore par erreur.
+        remotion_data["deliverables"]["hero"] = {"ok": True, "skipped": True, "reason": "not_configured"}
+        movie.render_provider = "remotion"
+    elif movie.final_file:
         logger.info(
             "Remotion hero skipped (already rendered) movie=%s event=%s", movie.pk, event.pk
         )

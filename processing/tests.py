@@ -663,16 +663,24 @@ class MovieGenerationServiceTests(TestCase):
             props = build_film_props(self.event, [upload], None, deliverable=deliverable)
             self.assertTrue(props["watermark"], deliverable)
 
-    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @override_settings(
+        MEMORA_MOVIE_RENDER_PROVIDER="remotion",
+        MEMORA_MOVIE_DELIVERABLES={"hero", "full", "teaser"},
+        MEMORA_REMOTION_DELIVERABLES={"hero", "full", "teaser"},
+    )
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch(
         "processing.services.render_movie_with_remotion",
         side_effect=RuntimeError("Node introuvable : rendu Remotion impossible."),
     )
-    def test_generate_event_movie_falls_back_to_ffmpeg_when_remotion_fails(
+    def test_generate_event_movie_falls_back_to_ffmpeg_when_hero_render_fails(
         self, render_remotion, run_ffmpeg, _which
     ):
+        """Le heros reste un choix valide (voir MEMORA_MOVIE_DELIVERABLES) : s'il est
+        reactive et que son rendu Remotion echoue, tout le pipeline retombe sur
+        Runway/ffmpeg — comportement herite, non exerce par defaut depuis son
+        retrait du produit (29/09)."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
         def create_output(command):
@@ -691,11 +699,44 @@ class MovieGenerationServiceTests(TestCase):
 
     @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
     @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services.build_movie_variant")
+    @patch("processing.services._run_ffmpeg")
+    @patch(
+        "processing.services.render_movie_with_remotion",
+        side_effect=RuntimeError("Node introuvable : rendu Remotion impossible."),
+    )
+    def test_generate_event_movie_falls_back_per_deliverable_by_default(
+        self, render_remotion, run_ffmpeg, build_variant, _which
+    ):
+        """Par defaut (heros retire, 29/09), un echec Remotion sur l'integrale ou le
+        teaser retombe individuellement sur ffmpeg pour CE livrable — il n'y a plus
+        de film heros a produire en repli, donc plus de bascule pipeline entier."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_variant_output(event, uploads, temp_path, ffmpeg_binary, *, label, width=None, height=None):
+            output_path = temp_path / f"{label}.mp4"
+            output_path.write_bytes(b"movie-bytes")
+            return output_path
+
+        build_variant.side_effect = create_variant_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertFalse(movie.final_file.name)
+        self.assertTrue(movie.full_file.name.endswith(".mp4"))
+        self.assertTrue(movie.teaser_file.name.endswith(".mp4"))
+        self.assertTrue(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["skipped"])
+        self.assertEqual(movie.edit_decision_data["remotion"]["deliverables"]["full"]["fallback"], "ffmpeg")
+        self.assertEqual(movie.edit_decision_data["remotion"]["deliverables"]["teaser"]["fallback"], "ffmpeg")
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch("processing.services.render_movie_with_remotion")
-    def test_all_three_deliverables_are_produced_by_default(self, render_remotion, run_ffmpeg, _which):
-        """L'integrale (« full ») a ete reactivee par defaut (30/09) : trop de souvenirs restaient
-        hors du heros, curated et court, pour un mariage avec beaucoup de participation."""
+    def test_both_deliverables_are_produced_by_default(self, render_remotion, run_ffmpeg, _which):
+        """Le heros a ete retire du produit (29/09) : par defaut, seuls l'integrale
+        et le teaser sont rendus."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
         def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
@@ -708,9 +749,40 @@ class MovieGenerationServiceTests(TestCase):
         movie = generate_event_movie(self.event)
 
         deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
-        self.assertEqual(deliverables, ["hero", "full", "teaser"])
+        self.assertEqual(deliverables, ["full", "teaser"])
         self.assertTrue(movie.full_file.name)
         self.assertTrue(movie.teaser_file.name)
+        self.assertFalse(movie.final_file.name)
+
+    @override_settings(
+        MEMORA_MOVIE_RENDER_PROVIDER="remotion",
+        MEMORA_MOVIE_DELIVERABLES={"full", "teaser"},
+        MEMORA_REMOTION_DELIVERABLES={"hero", "full", "teaser"},
+    )
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_hero_is_never_attempted_even_if_still_listed_in_remotion_deliverables(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        """Le heros ne doit plus jamais etre rendu, meme si MEMORA_REMOTION_DELIVERABLES
+        le contient encore par erreur — seul MEMORA_MOVIE_DELIVERABLES fait foi."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(b"remotion-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"movie-bytes")
+
+        movie = generate_event_movie(self.event)
+
+        deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
+        self.assertEqual(deliverables, ["full", "teaser"])
+        self.assertFalse(movie.final_file.name)
+        self.assertTrue(movie.edit_decision_data["remotion"]["deliverables"]["hero"]["skipped"])
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
 
     @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
     @patch("processing.services.shutil.which", return_value="ffmpeg")

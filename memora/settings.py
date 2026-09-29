@@ -473,13 +473,13 @@ MEMORA_MOVIE_TEASER_HEIGHT = env_int("MEMORA_MOVIE_TEASER_HEIGHT", 1920)
 # et l'integrale. Le film heros n'est pas plafonne.
 MEMORA_MOVIE_MAX_PER_GUEST = {"teaser": 1, "full": 2}
 MEMORA_MOVIE_VARIANTS_ENABLED = env_bool("MEMORA_MOVIE_VARIANTS_ENABLED", True)
-# Declinaisons produites en plus du film heros. L'integrale ("full") est reactivee
-# (30/09) : le ZIP des fichiers originaux et le livre d'or ne remplacaient pas un
-# vrai montage complet, et beaucoup de souvenirs restaient hors du heros (curated,
-# quelques minutes) pour un mariage avec beaucoup de participation.
+# Le film heros est retire du produit (29/09) : n'apportait pas assez face a
+# l'integrale + au teaser, et compliquait le pipeline (voir
+# _render_movie_with_remotion_pipeline) pour un livrable dont l'organisateur ne
+# se servait pas. "hero" reste un choix valide ici si jamais reactive un jour.
 MEMORA_MOVIE_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_MOVIE_DELIVERABLES", "hero,teaser,full").split(",")
+    for part in os.getenv("MEMORA_MOVIE_DELIVERABLES", "teaser,full").split(",")
     if part.strip()
 }
 # Coupes calees sur le tempo : le levier principal du "monte comme un pro".
@@ -574,18 +574,18 @@ MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MU
 MEMORA_REMOTION_VOICE_VOLUME = float(os.getenv("MEMORA_REMOTION_VOICE_VOLUME", "0.30"))
 # Livrables rendus par Remotion quand le provider est "remotion". Doit rester un
 # sous-ensemble de MEMORA_MOVIE_DELIVERABLES (produire un livrable hors de cette
-# liste n'a aucun effet). Defaut aligne : heros + teaser.
+# liste n'a aucun effet).
 MEMORA_REMOTION_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "hero,teaser,full").split(",")
+    for part in os.getenv("MEMORA_REMOTION_DELIVERABLES", "teaser,full").split(",")
     if part.strip()
 }
 # Livrables qui gardent le son des videos des invites (rires, voeux, musique de
-# la salle), avec la musique duckee par-dessus. Par defaut les trois : le son
+# la salle), avec la musique duckee par-dessus. Par defaut les deux : le son
 # des invites EST l'emotion du souvenir. Mettre "" pour un montage muet.
 MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES = {
     part.strip()
-    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "hero,teaser,full").split(",")
+    for part in os.getenv("MEMORA_REMOTION_GUEST_AUDIO_DELIVERABLES", "teaser,full").split(",")
     if part.strip()
 }
 # Montage du livre d'or : tous les messages en entier, chacun precede d'un carton

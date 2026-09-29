@@ -387,13 +387,10 @@ services:
       - key: REMOTION_CONCURRENCY
         value: "2"
       - key: MEMORA_REMOTION_DELIVERABLES
-        value: hero,teaser,full
-      # Integrale reactivee (30/09) : trop de souvenirs restaient hors du heros
-      # (curated, quelques minutes) pour un gros mariage. Plafond genereux
-      # (MEMORA_MOVIE_FULL_DURATION_SECONDS, 45 min) plutot que retirer le
-      # livrable — voir aussi MEMORA_MOVIE_MAX_PER_GUEST["full"].
+        value: teaser,full
+      # Heros retire du produit (29/09) : ne reste que teaser + integrale.
       - key: MEMORA_MOVIE_DELIVERABLES
-        value: hero,teaser,full
+        value: teaser,full
       - key: MEMORA_REMOTION_TIMEOUT_SECONDS
         value: "14400"
 
