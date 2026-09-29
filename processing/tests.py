@@ -2529,6 +2529,101 @@ class GeneratedMovieAdminActionTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.PROCESSING)
         self.assertEqual(movie.progress_percent, 42)
 
+    def test_cancel_renders_action_flags_processing_movies_only(self):
+        active = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PROCESSING)
+        idle = GeneratedMovie.objects.create(
+            event=Event.objects.create(
+                organizer=self.organizer,
+                title="Mariage Admin Idle",
+                event_type=self.event_type,
+                event_date=date(2026, 7, 8),
+            ),
+            status=GeneratedMovie.Status.COMPLETED,
+        )
+        self.client.login(username="admin", password="secret")
+
+        self.client.post(
+            reverse("admin:processing_generatedmovie_changelist"),
+            {"action": "cancel_renders", "_selected_action": [active.pk, idle.pk]},
+        )
+
+        active.refresh_from_db()
+        idle.refresh_from_db()
+        self.assertTrue(active.cancel_requested)
+        self.assertFalse(idle.cancel_requested)
+
+    def test_regenerate_only_teaser_action_leaves_hero_and_full_untouched(self):
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/hero.mp4",
+            full_file="events/x/movies/full.mp4",
+            teaser_file="events/x/movies/teaser.mp4",
+        )
+        self.client.login(username="admin", password="secret")
+
+        self.client.post(
+            reverse("admin:processing_generatedmovie_changelist"),
+            {"action": "regenerate_only_teaser", "_selected_action": [movie.pk]},
+        )
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertFalse(movie.teaser_file)
+        self.assertTrue(movie.final_file)
+        self.assertTrue(movie.full_file)
+        self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "teaser")
+
+
+class QueueOnlyDeliverableRegenerationTests(TestCase):
+    def setUp(self):
+        organizer = get_user_model().objects.create_user(
+            username="organizer-only-deliverable",
+            password="secret",
+        )
+        event_type = EventType.objects.get(code="wedding")
+        self.event = Event.objects.create(
+            organizer=organizer,
+            title="Mariage Only Deliverable",
+            event_type=event_type,
+            event_date=date(2026, 7, 8),
+        )
+
+    def test_clears_only_the_requested_deliverable(self):
+        from processing.services import queue_only_deliverable_regeneration
+
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            final_file="events/x/movies/hero.mp4",
+            full_file="events/x/movies/full.mp4",
+        )
+
+        queue_only_deliverable_regeneration(movie, "full")
+
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertTrue(movie.final_file)
+        self.assertFalse(movie.full_file)
+        self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "full")
+
+    def test_raises_on_unknown_deliverable(self):
+        from processing.services import queue_only_deliverable_regeneration
+
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.COMPLETED)
+
+        with self.assertRaises(ValueError):
+            queue_only_deliverable_regeneration(movie, "bloopers")
+
+    def test_raises_when_a_render_is_genuinely_active(self):
+        from processing.services import queue_only_deliverable_regeneration
+
+        movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PROCESSING)
+        GeneratedMovie.objects.filter(pk=movie.pk).update(updated_at=timezone.now())
+
+        with self.assertRaises(ValueError):
+            queue_only_deliverable_regeneration(movie, "teaser")
+
 
 class GenerateScheduledMoviesCommandTests(TestCase):
     def setUp(self):

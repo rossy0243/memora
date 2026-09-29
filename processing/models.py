@@ -177,6 +177,11 @@ class GeneratedMovie(models.Model):
     # rendu Chrome headless en cours, qui peut durer plusieurs heures — sans ca,
     # rien ne permettait d'interrompre un rendu deja lance.
     cancel_requested = models.BooleanField(default=False)
+    # Debut de la tentative de rendu EN COURS (distinct de created_at, qui date de
+    # la premiere creation de la ligne — reutilisee d'une tentative a l'autre).
+    # Sert uniquement a afficher un temps ecoule fiable (admin, diagnostics) ; un
+    # rendu Chrome headless peut durer plusieurs heures sans autre repere clair.
+    processing_started_at = models.DateTimeField(blank=True, null=True)
     generated_at = models.DateTimeField(blank=True, null=True)
     organizer_notified_at = models.DateTimeField(blank=True, null=True)
     duration = models.DurationField(blank=True, null=True)

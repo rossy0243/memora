@@ -543,6 +543,63 @@ def create_event_movie_job(event, allow_retry=False):
     )
 
 
+# Champ fichier (et duree associee, s'il y en a une) par livrable — utilise par
+# queue_only_deliverable_regeneration ci-dessous.
+_DELIVERABLE_FIELDS = {
+    "hero": ("final_file", None),
+    "full": ("full_file", "full_duration"),
+    "teaser": ("teaser_file", "teaser_duration"),
+}
+
+
+def queue_only_deliverable_regeneration(movie, deliverable):
+    """Remet un seul livrable en attente (heros/integrale/teaser), sans toucher
+    aux deux autres — utilise par le bouton "Regenerer le teaser" (page medias)
+    et par les actions admin equivalentes. Ne traite pas la demande tout de
+    suite : le prochain passage du cron (process_pending_movies) s'en charge,
+    un rendu Chrome headless prenant potentiellement plusieurs dizaines de
+    minutes a plusieurs heures.
+
+    Leve ValueError si `deliverable` est inconnu, ou si un rendu est deja
+    reellement actif sur ce film (voir _movie_is_busy)."""
+    if deliverable not in _DELIVERABLE_FIELDS:
+        raise ValueError(f"Livrable inconnu : {deliverable}")
+
+    stale_before = timezone.now() - timedelta(minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES)
+    is_busy = movie.status == GeneratedMovie.Status.PENDING or (
+        movie.status == GeneratedMovie.Status.PROCESSING and movie.updated_at > stale_before
+    )
+    if is_busy:
+        raise ValueError("Un rendu est deja en cours ou en attente pour ce film.")
+
+    file_field, duration_field = _DELIVERABLE_FIELDS[deliverable]
+    update_fields = [
+        "status",
+        "error_logs",
+        "progress_percent",
+        "progress_message",
+        file_field,
+        "edit_decision_data",
+        "updated_at",
+    ]
+    movie.status = GeneratedMovie.Status.PENDING
+    movie.error_logs = ""
+    movie.progress_percent = 0
+    movie.progress_message = ""
+    setattr(movie, file_field, None)
+    if duration_field:
+        setattr(movie, duration_field, None)
+        update_fields.append(duration_field)
+    # Le cron traite ce film generiquement (process_generated_movie(movie), sans
+    # argument), sans savoir que cette demande ne concerne QUE ce livrable —
+    # transporte l'intention via le film lui-meme plutot que par un parametre
+    # d'appel, pour que les autres livrables ne soient jamais retouches, meme
+    # s'ils sont vides pour une tout autre raison (ex. reste d'un plantage).
+    movie.edit_decision_data["only_deliverable"] = deliverable
+    movie.save(update_fields=update_fields)
+    return movie
+
+
 def get_pending_movie_jobs(limit=None, include_processing=False):
     stale_processing_before = timezone.now() - timedelta(
         minutes=settings.MEMORA_MOVIE_PROCESSING_STALE_MINUTES
@@ -633,6 +690,7 @@ def process_generated_movie(movie, only_deliverable=None):
         return movie
 
     movie.status = GeneratedMovie.Status.PROCESSING
+    movie.processing_started_at = timezone.now()
     movie.progress_percent = max(movie.progress_percent, 22)
     movie.progress_message = "Preparation du plan de montage."
     soundtrack = choose_movie_soundtrack(event, uploads)
@@ -649,6 +707,7 @@ def process_generated_movie(movie, only_deliverable=None):
     movie.save(
         update_fields=[
             "status",
+            "processing_started_at",
             "progress_percent",
             "progress_message",
             "render_provider",

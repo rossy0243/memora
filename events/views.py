@@ -23,6 +23,7 @@ from processing.services import (
     get_event_movie_schedule_at,
     get_event_zip_filename,
     iter_event_zip_chunks,
+    queue_only_deliverable_regeneration,
 )
 from uploads.models import GuestUpload, UploadCategory
 
@@ -538,47 +539,22 @@ def _movie_is_busy(movie):
 @login_required
 @require_POST
 def regenerate_teaser(request, pk):
-    """Relance uniquement le teaser (voir GeneratedMovie.teaser_file), avec la
-    selection manuelle courante (GuestUpload.is_selected_for_teaser). Ne touche
-    ni au heros ni a l'integrale : reste en attente pour le prochain passage du
-    cron plutot que de traiter la demande dans la requete web (le rendu prend
-    plusieurs dizaines de minutes)."""
+    """Relance uniquement le teaser, avec la selection manuelle courante
+    (GuestUpload.is_selected_for_teaser). Ne touche ni au heros ni a l'integrale :
+    reste en attente pour le prochain passage du cron plutot que de traiter la
+    demande dans la requete web (le rendu prend plusieurs dizaines de minutes)."""
     event = get_object_or_404(Event, pk=pk, organizer=request.user)
     movie = event.generated_movies.order_by("-created_at").first()
     if not movie:
         messages.error(request, "Aucun film souvenir n'a encore ete genere pour cet evenement.")
         return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
 
-    if _movie_is_busy(movie):
-        messages.error(
-            request,
-            "Un rendu est deja en cours ou en attente pour ce film — reessayez une fois termine.",
-        )
+    try:
+        queue_only_deliverable_regeneration(movie, "teaser")
+    except ValueError as exc:
+        messages.error(request, str(exc))
         return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
 
-    movie.status = GeneratedMovie.Status.PENDING
-    movie.error_logs = ""
-    movie.progress_percent = 0
-    movie.progress_message = ""
-    movie.teaser_file = None
-    movie.teaser_duration = None
-    # Le cron (process_pending_movies) traite ce film generiquement, sans savoir
-    # que cette demande ne concerne QUE le teaser — transporte l'intention via le
-    # film lui-meme (voir process_generated_movie) pour que le heros/l'integrale
-    # ne soient jamais retouches, meme s'ils sont vides pour une autre raison.
-    movie.edit_decision_data["only_deliverable"] = "teaser"
-    movie.save(
-        update_fields=[
-            "status",
-            "error_logs",
-            "progress_percent",
-            "progress_message",
-            "teaser_file",
-            "teaser_duration",
-            "edit_decision_data",
-            "updated_at",
-        ]
-    )
     messages.success(
         request,
         "Le teaser va etre regenere avec la selection actuelle, d'ici quelques minutes "
