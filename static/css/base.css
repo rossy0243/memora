@@ -2018,6 +2018,30 @@ h2 {
   background: rgba(223, 231, 221, 0.72);
 }
 
+.movie-deliverables {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.movie-deliverables li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  font-size: 0.85rem;
+}
+
+.movie-deliverables li > span:first-child {
+  font-weight: 700;
+}
+
 .section-heading {
   display: grid;
   gap: 14px;

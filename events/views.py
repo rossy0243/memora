@@ -271,6 +271,7 @@ class EventMediaListView(OrganizerEventMixin, ListView):
                 "selected_movie_filter": self.selected_movie_filter,
                 "selected_moderation_status": self.selected_moderation_status,
                 "teaser_regeneration_available": bool(latest_movie) and not _movie_is_busy(latest_movie),
+                "full_regeneration_available": bool(latest_movie) and not _movie_is_busy(latest_movie),
                 **_media_selection_summary(self.event),
             }
         )
@@ -551,7 +552,33 @@ def regenerate_teaser(request, pk):
     messages.success(
         request,
         "Le teaser va etre regenere avec la selection actuelle, d'ici quelques minutes "
-        "(le heros et l'integrale ne sont pas touches).",
+        "(l'integrale n'est pas touchee).",
+    )
+    return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+
+@login_required
+@require_POST
+def regenerate_full(request, pk):
+    """Relance uniquement l'integrale, avec la selection manuelle courante
+    (GuestUpload.is_selected_for_movie). Ne touche pas au teaser — meme logique
+    que regenerate_teaser."""
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    movie = event.generated_movies.order_by("-created_at").first()
+    if not movie:
+        messages.error(request, "Aucun film souvenir n'a encore ete genere pour cet evenement.")
+        return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+    try:
+        queue_only_deliverable_regeneration(movie, "full")
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
+
+    messages.success(
+        request,
+        "L'integrale va etre regeneree avec la selection actuelle, d'ici quelques minutes "
+        "(le teaser n'est pas touche).",
     )
     return redirect(reverse("events:media_list", kwargs={"pk": event.pk}))
 
@@ -631,14 +658,20 @@ def download_event_movie(request, pk):
     if not movie:
         raise Http404("Film souvenir indisponible.")
 
-    # ?v=full / ?v=teaser : les declinaisons, servies de la meme facon rapide.
-    variants = {"full": (movie.full_file, "integrale"), "teaser": (movie.teaser_file, "teaser")}
+    # ?v=full / ?v=teaser / ?v=teaser-light : les declinaisons, servies de la
+    # meme facon rapide. La version legere retombe sur le teaser HD si son
+    # encodage 720p a echoue (best-effort, voir processing.services).
+    variants = {
+        "full": (movie.full_file, "integrale"),
+        "teaser": (movie.teaser_file, "teaser"),
+        "teaser-light": (movie.teaser_light_file or movie.teaser_file, "teaser-leger"),
+    }
     field, suffix = variants.get(request.GET.get("v"), (None, ""))
     if field:
         base = _movie_download_filename(event, movie).rsplit(".", 1)[0]
         return download_response(field, f"{base}-{suffix}.mp4")
 
-    return download_response(movie.final_file, _movie_download_filename(event, movie))
+    return download_response(movie.primary_file, _movie_download_filename(event, movie))
 
 
 def get_movie_panel_context(event):
@@ -777,18 +810,19 @@ def _get_latest_movie(event):
 
 
 def _get_ready_movie(event):
-    return (
-        event.generated_movies.filter(
-            status=GeneratedMovie.Status.COMPLETED,
-            final_file__isnull=False,
-        )
-        .exclude(final_file="")
-        .order_by("-generated_at", "-created_at")
-        .first()
-    )
+    """Le dernier film COMPLETED avec au moins un livrable exploitable — teaser
+    et/ou integrale depuis le retrait du heros (29/09), final_file reste
+    supporte pour les films generes avant ce retrait."""
+    for movie in event.generated_movies.filter(status=GeneratedMovie.Status.COMPLETED).order_by(
+        "-generated_at", "-created_at"
+    ):
+        if movie.has_ready_deliverable:
+            return movie
+    return None
 
 
 def _movie_download_filename(event, movie):
     base_name = slugify(event.couple_name or event.title) or "film-souvenir"
-    extension = movie.final_file.name.rsplit(".", 1)[-1] if "." in movie.final_file.name else "mp4"
+    primary = movie.primary_file
+    extension = primary.name.rsplit(".", 1)[-1] if primary and "." in primary.name else "mp4"
     return f"memora-{base_name}.{extension}"

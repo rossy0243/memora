@@ -39,6 +39,14 @@ class EventPostStatusTests(TestCase):
 
         self.assertEqual(_event_post_status(event, self.today)["label"], "Film prêt")
 
+    def test_completed_movie_without_hero_is_still_ready(self):
+        """Le heros est retire du produit (29/09) : l'integrale et/ou le teaser
+        suffisent a marquer le film comme pret."""
+        movie = GeneratedMovie(status=GeneratedMovie.Status.COMPLETED, teaser_file="events/x/movies/teaser.mp4")
+        event = self._build_event(self.today - timedelta(days=1), latest_movie=movie)
+
+        self.assertEqual(_event_post_status(event, self.today)["label"], "Film prêt")
+
     def test_processing_movie(self):
         movie = GeneratedMovie(status=GeneratedMovie.Status.PROCESSING)
         event = self._build_event(self.today - timedelta(days=1), latest_movie=movie)

@@ -99,7 +99,7 @@ def _build_earnings_panel(request, profile):
 
 def _event_post_status(event, today):
     latest_movie = event.latest_movie
-    if latest_movie and latest_movie.status == GeneratedMovie.Status.COMPLETED and latest_movie.final_file:
+    if latest_movie and latest_movie.status == GeneratedMovie.Status.COMPLETED and latest_movie.has_ready_deliverable:
         return {"label": "Film prêt", "class": "status-pill--active"}
     if latest_movie and latest_movie.status == GeneratedMovie.Status.PROCESSING:
         return {"label": "Film en cours", "class": ""}

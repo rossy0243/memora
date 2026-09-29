@@ -16,7 +16,7 @@
     {% endif %}
   </div>
 
-  {% if latest_movie and latest_movie.final_file and latest_movie.status != "processing" %}
+  {% if latest_movie and latest_movie.has_ready_deliverable and latest_movie.status != "processing" %}
     <div class="movie-progress movie-progress--complete">
       <div class="movie-progress__meta">
         <span>{{ latest_movie.progress_message|default:"Votre film souvenir est prêt." }}</span>
@@ -26,19 +26,33 @@
         <span style="width: 100%"></span>
       </div>
     </div>
-    <video class="movie-preview" src="{{ latest_movie.final_file.url }}" controls preload="metadata"></video>
+    <video class="movie-preview" src="{{ latest_movie.preview_file.url }}" controls preload="metadata"></video>
     <div class="quick-actions">
       <a class="button button--primary" href="{{ movie_page_url }}">Ouvrir le film</a>
-      <a class="button button--secondary button--compact" href="{{ latest_movie.final_file.url }}" download>Télécharger</a>
+      <a class="button button--secondary button--compact" href="{{ latest_movie.primary_file.url }}" download>Télécharger</a>
     </div>
-    {% if latest_movie.full_file or latest_movie.teaser_file %}
-      <p class="muted-copy movie-versions__hint">
-        Également disponible :
-        {% if latest_movie.full_file %}<a href="{{ latest_movie.full_file.url }}" download>version intégrale</a>{% endif %}
-        {% if latest_movie.full_file and latest_movie.teaser_file %} · {% endif %}
-        {% if latest_movie.teaser_file %}<a href="{{ latest_movie.teaser_file.url }}" download>teaser vertical</a>{% endif %}
-      </p>
-    {% endif %}
+    <ul class="movie-deliverables">
+      <li>
+        <span>Intégrale</span>
+        {% if latest_movie.full_file %}
+          <a href="{{ latest_movie.full_file.url }}" download>Télécharger{% if latest_movie.full_duration %} ({{ latest_movie.full_duration }}){% endif %}</a>
+        {% else %}
+          <span class="muted-copy">Non générée</span>
+        {% endif %}
+      </li>
+      <li>
+        <span>Teaser</span>
+        {% if latest_movie.teaser_file %}
+          <a href="{{ latest_movie.teaser_file.url }}" download>HD</a>
+          {% if latest_movie.teaser_light_file %} · <a href="{{ latest_movie.teaser_light_file.url }}" download>Léger (4G)</a>{% endif %}
+        {% else %}
+          <span class="muted-copy">Non généré</span>
+        {% endif %}
+      </li>
+    </ul>
+    <p class="muted-copy movie-versions__hint">
+      <a href="{% url 'events:media_list' event.pk %}">Choisir les souvenirs et régénérer l'intégrale ou le teaser</a>
+    </p>
   {% elif latest_movie %}
     <div class="movie-progress {% if latest_movie.status == 'failed' %}movie-progress--failed{% endif %}">
       <div class="movie-progress__meta">

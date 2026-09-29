@@ -28,11 +28,11 @@
     <section class="movie-ready-layout">
       <article class="movie-ready-player-card">
         <div class="movie-ready-player-shell">
-          <video class="movie-ready-player" src="{{ ready_movie.final_file.url }}" controls playsinline preload="metadata"></video>
+          <video class="movie-ready-player" src="{{ ready_movie.preview_file.url }}" controls playsinline preload="metadata"></video>
         </div>
         <div class="movie-ready-actions">
           {% if is_public_movie_page %}
-            <a class="button button--primary" href="{{ ready_movie.final_file.url }}" download>Télécharger le film</a>
+            <a class="button button--primary" href="{{ ready_movie.primary_file.url }}" download>Télécharger le film</a>
           {% else %}
             <a class="button button--primary" href="{{ movie_download_url }}">Télécharger le film</a>
           {% endif %}
@@ -59,7 +59,12 @@
                     <strong>Teaser vertical</strong>
                     <span>Format mobile, pensé pour le partage{% if ready_movie.teaser_duration %}, {{ ready_movie.teaser_duration }}{% endif %}.</span>
                   </div>
-                  <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_file.url }}{% else %}{{ movie_download_url }}?v=teaser{% endif %}" {% if is_public_movie_page %}download{% endif %}>Télécharger</a>
+                  <div class="quick-actions">
+                    <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_file.url }}{% else %}{{ movie_download_url }}?v=teaser{% endif %}" {% if is_public_movie_page %}download{% endif %}>HD</a>
+                    {% if ready_movie.teaser_light_file %}
+                      <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_light_file.url }}{% else %}{{ movie_download_url }}?v=teaser-light{% endif %}" {% if is_public_movie_page %}download{% endif %}>Léger (4G)</a>
+                    {% endif %}
+                  </div>
                 </article>
               {% endif %}
             </div>

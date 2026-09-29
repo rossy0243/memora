@@ -36,15 +36,18 @@ class Command(BaseCommand):
             self.stdout.write(f"Film #{movie.pk} - {movie.event.title}: {status}.")
 
     def _get_movies(self, limit):
+        # Un film pret n'a plus forcement de heros (retire du produit le 29/09) :
+        # teaser et/ou integrale suffisent (has_ready_deliverable). Le filtrage sur
+        # ce critere se fait cote Python, le volume de films en attente de
+        # notification restant negligeable.
         queryset = (
             GeneratedMovie.objects.filter(
                 status=GeneratedMovie.Status.COMPLETED,
-                final_file__isnull=False,
                 organizer_notified_at__isnull=True,
                 event__organizer__email__gt="",
             )
-            .exclude(final_file="")
             .select_related("event", "event__organizer")
             .order_by("generated_at", "pk")
         )
-        return list(queryset[:limit])
+        movies = [movie for movie in queryset if movie.has_ready_deliverable]
+        return movies[:limit]

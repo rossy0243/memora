@@ -58,13 +58,22 @@
 
   <p class="media-selection-summary" id="media-teaser-summary">{% include "events/partials/teaser_duration_summary.html" %}</p>
 
-  {% if teaser_regeneration_available %}
-    <form method="post" action="{% url 'events:regenerate_teaser' event.pk %}">
-      {% csrf_token %}
-      <button class="button button--secondary button--compact" type="submit">Regenerer le teaser avec cette selection</button>
-    </form>
-  {% else %}
-    <p class="muted-copy">Regeneration du teaser indisponible pour l'instant (un rendu est deja en cours).</p>
+  <div class="quick-actions">
+    {% if full_regeneration_available %}
+      <form method="post" action="{% url 'events:regenerate_full' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--secondary button--compact" type="submit">Regenerer l'integrale avec cette selection</button>
+      </form>
+    {% endif %}
+    {% if teaser_regeneration_available %}
+      <form method="post" action="{% url 'events:regenerate_teaser' event.pk %}">
+        {% csrf_token %}
+        <button class="button button--secondary button--compact" type="submit">Regenerer le teaser avec cette selection</button>
+      </form>
+    {% endif %}
+  </div>
+  {% if not teaser_regeneration_available and not full_regeneration_available %}
+    <p class="muted-copy">Regeneration indisponible pour l'instant (un rendu est deja en cours).</p>
   {% endif %}
 
   {% if uploads %}

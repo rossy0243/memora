@@ -170,7 +170,7 @@ class Command(BaseCommand):
         movies = (
             GeneratedMovie.objects.filter(media_purged=False)
             .select_related("event")
-            .only("id", "final_file", "full_file", "teaser_file", "event__event_date")
+            .only("id", "final_file", "full_file", "teaser_file", "teaser_light_file", "event__event_date")
         )
         for movie in list(movies):
             if movie.event.event_date > cutoff:
@@ -179,12 +179,12 @@ class Command(BaseCommand):
                 purged += 1
                 continue
             ok = True
-            for field in ("final_file", "full_file", "teaser_file"):
+            for field in ("final_file", "full_file", "teaser_file", "teaser_light_file"):
                 ok = self._clear_field(movie, field, "film") and ok
             if not ok:
                 continue
             movie.media_purged = True
-            movie.save(update_fields=["final_file", "full_file", "teaser_file", "media_purged"])
+            movie.save(update_fields=["final_file", "full_file", "teaser_file", "teaser_light_file", "media_purged"])
             purged += 1
 
         montages = (

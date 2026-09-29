@@ -17,6 +17,7 @@ from django.utils.text import slugify
 from uploads.models import GuestUpload
 
 from .analysis import analyze_event_media
+from .guestbook_montage import _video_encode_args
 from .models import GeneratedMovie, MediaAnalysis
 from .runway import (
     build_runway_montage_payload,
@@ -590,6 +591,11 @@ def queue_only_deliverable_regeneration(movie, deliverable):
     if duration_field:
         setattr(movie, duration_field, None)
         update_fields.append(duration_field)
+    if deliverable == "teaser":
+        # La version legere est liee au teaser HD : sans ca, l'ancienne trainerait,
+        # perimee, jusqu'a ce que le nouveau rendu la remplace (ou echoue a le faire).
+        movie.teaser_light_file = None
+        update_fields.append("teaser_light_file")
     # Le cron traite ce film generiquement (process_generated_movie(movie), sans
     # argument), sans savoir que cette demande ne concerne QUE ce livrable —
     # transporte l'intention via le film lui-meme plutot que par un parametre
@@ -1716,9 +1722,24 @@ def _render_movie_with_remotion_pipeline(
                 getattr(movie, file_field).save(Path(variant_path).name, File(variant_file), save=False)
             seconds = sum(_estimated_movie_clip_duration(upload) for upload in variant_uploads)
             setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
+            update_fields = [file_field, duration_field, "edit_decision_data", "updated_at"]
+            if deliverable == "teaser":
+                # Version legere, cense circuler entre invites (4G) : un echec ici
+                # ne doit jamais faire perdre le teaser HD deja rendu.
+                light_path = temp_path / f"memora_{_clean_name(event.title)}_teaser_light.mp4"
+                try:
+                    _encode_teaser_light(variant_path, light_path, ffmpeg_binary)
+                    with light_path.open("rb") as light_file:
+                        movie.teaser_light_file.save(light_path.name, File(light_file), save=False)
+                    update_fields.append("teaser_light_file")
+                except Exception:
+                    logger.warning(
+                        "Teaser light encode failed movie=%s event=%s", movie.pk, event.pk, exc_info=True
+                    )
+                    Path(light_path).unlink(missing_ok=True)
             # Commit immediat : si le process meurt pendant le livrable suivant,
             # celui-ci reste acquis plutot que d'etre refait pour rien.
-            movie.save(update_fields=[file_field, duration_field, "edit_decision_data", "updated_at"])
+            movie.save(update_fields=update_fields)
         except MovieGenerationCancelled:
             raise
         except Exception as exc:
@@ -1962,6 +1983,41 @@ def _run_ffmpeg(command):
     if result.returncode != 0:
         details = "\n".join(part for part in [result.stdout, result.stderr] if part)
         raise RuntimeError(details or f"FFmpeg a echoue avec le code {result.returncode}")
+
+
+# Teaser vertical : "720p" mobile se mesure en largeur (portrait), pas en hauteur
+# comme le montage du livre d'or (paysage). Memes CRF/debit : suffisants pour un
+# format court destine a circuler entre invites en 4G.
+TEASER_LIGHT_WIDTH = 720
+TEASER_LIGHT_CRF = 27
+TEASER_LIGHT_MAX_KBPS = 1800
+
+
+def _encode_teaser_light(source, destination, ffmpeg_binary):
+    """Version 720p legere du teaser pour le telephone (4G, forfait limite) —
+    c'est ce livrable qui est cense circuler entre invites. Echec non bloquant :
+    voir l'appelant, qui ne doit jamais perdre le teaser HD pour autant."""
+    encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
+    _run_ffmpeg(
+        [
+            ffmpeg_binary,
+            "-y",
+            "-i",
+            str(source),
+            "-vf",
+            f"scale={TEASER_LIGHT_WIDTH}:-2",
+            *_video_encode_args(encoder, crf=TEASER_LIGHT_CRF, max_kbps=TEASER_LIGHT_MAX_KBPS),
+            "-c:a",
+            "aac",
+            "-b:a",
+            "96k",
+            "-ac",
+            "2",
+            "-movflags",
+            "+faststart",
+            str(destination),
+        ]
+    )
 
 
 def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_binary):

@@ -157,6 +157,14 @@ class GeneratedMovie(models.Model):
         blank=True,
         null=True,
     )
+    # Version 720p legere du teaser, pour le telephone (4G, forfait limite) : c'est
+    # ce livrable qui est cense circuler entre invites. Optionnelle : un echec
+    # d'encodage ne doit jamais faire perdre le teaser HD deja rendu.
+    teaser_light_file = models.FileField(
+        upload_to=generated_movie_upload_path,
+        blank=True,
+        null=True,
+    )
     full_duration = models.DurationField(blank=True, null=True)
     teaser_duration = models.DurationField(blank=True, null=True)
     render_provider = models.CharField(max_length=40, default="ffmpeg")
@@ -201,6 +209,30 @@ class GeneratedMovie(models.Model):
 
     def __str__(self):
         return f"Film souvenir - {self.event} ({self.get_status_display()})"
+
+    @property
+    def has_ready_deliverable(self):
+        """Au moins un livrable exploitable (integrale et/ou teaser depuis le
+        retrait du heros le 29/09 ; final_file reste supporte si le heros a ete
+        reactive, voir MEMORA_MOVIE_DELIVERABLES)."""
+        return bool(self.teaser_file or self.full_file or self.final_file)
+
+    @property
+    def primary_file(self):
+        """Livrable de reference pour le telechargement par defaut (bouton
+        « Telecharger » sans variante precisee) : l'integrale d'abord, le vrai
+        souvenir complet, puis le teaser, puis le heros pour les films generes
+        avant son retrait du produit. Teaser (HD/leger) et integrale restent
+        toujours accessibles separement (voir les liens dedies)."""
+        return self.full_file or self.teaser_file or self.final_file
+
+    @property
+    def preview_file(self):
+        """Livrable a lire en ligne (lecteur video de la page film) : la version
+        legere du teaser d'abord, pour un aperçu rapide en 4G — meme logique que
+        GuestBookMovie.light_file pour le livre d'or — puis le teaser HD,
+        l'integrale et enfin le heros (films generes avant son retrait)."""
+        return self.teaser_light_file or self.teaser_file or self.full_file or self.final_file
 
 
 class MediaAnalysis(models.Model):

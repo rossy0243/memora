@@ -54,8 +54,8 @@ def film_reminders_due(today=None):
         deletion = deliverable_deletion_date(event)
         if not (deletion - timedelta(days=settings.MEMORA_DELIVERABLE_REMINDER_DAYS) <= today < deletion):
             continue
-        movie = event.generated_movies.filter(status=GeneratedMovie.Status.COMPLETED, media_purged=False).exclude(final_file="").first()
-        if movie:
+        movies = event.generated_movies.filter(status=GeneratedMovie.Status.COMPLETED, media_purged=False)
+        if any(movie.has_ready_deliverable for movie in movies):
             yield event, deletion
 
 

@@ -854,6 +854,53 @@ class MovieGenerationServiceTests(TestCase):
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch("processing.services.render_movie_with_remotion")
+    def test_teaser_gets_a_light_version_for_mobile(self, render_remotion, run_ffmpeg, _which):
+        """Le teaser est cense circuler entre invites en 4G (voir point 3 de la
+        mise a niveau post-mariage) : une version 720p legere est encodee juste
+        apres le teaser HD, meme logique que GuestBookMovie.light_file."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"teaser-light-bytes")
+
+        movie = generate_event_movie(self.event)
+
+        self.assertTrue(movie.teaser_file.name)
+        self.assertTrue(movie.teaser_light_file.name)
+        with movie.teaser_light_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"teaser-light-bytes")
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg", side_effect=RuntimeError("ffmpeg indisponible"))
+    @patch("processing.services.render_movie_with_remotion")
+    def test_teaser_light_encode_failure_does_not_lose_the_hd_teaser(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        """L'encodage 720p est un bonus best-effort : son echec ne doit jamais
+        faire perdre le teaser HD deja rendu, ni faire echouer le film."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertTrue(movie.teaser_file.name)
+        self.assertFalse(movie.teaser_light_file.name)
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
     def test_only_deliverable_carried_via_edit_decision_data(self, render_remotion, run_ffmpeg, _which):
         """La page medias (regenerate_teaser) ne peut pas passer only_deliverable en
         argument a process_generated_movie(movie) — le cron l'appelle

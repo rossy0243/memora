@@ -923,6 +923,31 @@ class EventViewTests(TestCase):
         self.assertContains(response, reverse("events:movie_ready", kwargs={"pk": event.pk}))
         self.assertContains(response, "100%")
 
+    def test_event_detail_displays_movie_ready_without_hero(self):
+        """Le heros est retire du produit (29/09) : un film COMPLETED avec
+        seulement l'integrale et/ou le teaser doit quand meme s'afficher comme
+        pret sur la page evenement."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Sans Heros",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            full_file="events/reception-film-sans-heros/movies/integrale.mp4",
+            teaser_file="events/reception-film-sans-heros/movies/teaser.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertContains(response, "Ouvrir le film")
+        self.assertContains(response, "100%")
+        self.assertNotContains(response, "Non générée")
+        self.assertNotContains(response, "Non généré")
+
     def test_owner_can_view_ready_movie_page(self):
         event = Event.objects.create(
             organizer=self.user,
@@ -947,6 +972,34 @@ class EventViewTests(TestCase):
         self.assertContains(response, "Lien de partage")
         self.assertContains(response, event.public_access_key)
         self.assertContains(response, reverse("events:download_movie", kwargs={"pk": event.pk}))
+
+    def test_owner_can_view_ready_movie_page_without_hero(self):
+        """Meme page, sans heros : l'integrale et le teaser (avec sa version
+        legere) doivent s'afficher, la lecture en ligne utilisant le teaser
+        leger pour un chargement rapide (meme logique que le livre d'or)."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Pret Sans Heros",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+            couple_name="Camille & Noe",
+        )
+        movie = GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            full_file="events/reception-film-pret-sans-heros/movies/integrale.mp4",
+            teaser_file="events/reception-film-pret-sans-heros/movies/teaser.mp4",
+            teaser_light_file="events/reception-film-pret-sans-heros/movies/teaser-leger.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:movie_ready", kwargs={"pk": event.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Votre film est prêt")
+        self.assertContains(response, movie.teaser_light_file.url)
+        self.assertContains(response, "Léger (4G)")
+        self.assertContains(response, "Version intégrale")
 
     def test_owner_movie_page_shows_pending_state_when_movie_is_not_ready(self):
         event = Event.objects.create(
@@ -1059,7 +1112,10 @@ class EventViewTests(TestCase):
         self.assertEqual(response["Content-Disposition"], 'attachment; filename="memora-camille-noe.mp4"')
         self.assertEqual(b"".join(response.streaming_content), b"movie-bytes")
 
-    def test_owner_can_download_the_teaser_variant_and_unknown_variants_fall_back_to_the_film(self):
+    def test_owner_can_download_the_teaser_variant_and_unknown_variants_fall_back_to_the_full_movie(self):
+        """Le heros est retire du produit (29/09) : par defaut (aucune variante
+        precisee), c'est desormais l'integrale qui sert de reference — le vrai
+        souvenir complet — le teaser restant accessible via ?v=teaser."""
         event = Event.objects.create(
             organizer=self.user,
             title="Reception Film Variantes",
@@ -1067,14 +1123,14 @@ class EventViewTests(TestCase):
             event_type=self.event_type,
             event_date=date(2026, 7, 8),
         )
-        for name, content in (("film.mp4", b"film-bytes"), ("teaser.mp4", b"teaser-bytes")):
+        for name, content in (("integrale.mp4", b"integrale-bytes"), ("teaser.mp4", b"teaser-bytes")):
             path = Path(TEST_MEDIA_ROOT) / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
         GeneratedMovie.objects.create(
             event=event,
             status=GeneratedMovie.Status.COMPLETED,
-            final_file="film.mp4",
+            full_file="integrale.mp4",
             teaser_file="teaser.mp4",
         )
         self.client.login(username="owner", password="secret")
@@ -1085,7 +1141,32 @@ class EventViewTests(TestCase):
 
         self.assertEqual(b"".join(teaser.streaming_content), b"teaser-bytes")
         self.assertIn("teaser", teaser["Content-Disposition"])
-        self.assertEqual(b"".join(unknown.streaming_content), b"film-bytes")
+        self.assertEqual(b"".join(unknown.streaming_content), b"integrale-bytes")
+
+    def test_owner_can_download_the_light_teaser_variant(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Teaser Leger",
+            couple_name="Camille & Noe",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        for name, content in (("teaser.mp4", b"teaser-hd-bytes"), ("teaser-leger.mp4", b"teaser-leger-bytes")):
+            path = Path(TEST_MEDIA_ROOT) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            teaser_file="teaser.mp4",
+            teaser_light_file="teaser-leger.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+        url = reverse("events:download_movie", kwargs={"pk": event.pk})
+
+        light = self.client.get(url, {"v": "teaser-light"})
+
+        self.assertEqual(b"".join(light.streaming_content), b"teaser-leger-bytes")
 
     def test_event_detail_displays_automatic_movie_schedule(self):
         event = Event.objects.create(
@@ -1449,6 +1530,29 @@ class EventViewTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         self.assertFalse(movie.teaser_file)
         self.assertTrue(movie.final_file)  # heros non touche
+
+    def test_owner_can_regenerate_full_when_movie_is_idle(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Regenere Integrale",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        movie = GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            full_file="events/x/movies/old_integrale.mp4",
+            teaser_file="events/x/movies/teaser.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.post(reverse("events:regenerate_full", kwargs={"pk": event.pk}))
+
+        self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
+        movie.refresh_from_db()
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
+        self.assertFalse(movie.full_file)
+        self.assertTrue(movie.teaser_file)  # teaser non touche
 
     def test_owner_cannot_regenerate_teaser_while_a_fresh_render_is_active(self):
         event = Event.objects.create(

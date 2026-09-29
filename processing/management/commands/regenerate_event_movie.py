@@ -87,6 +87,9 @@ class Command(BaseCommand):
             if duration_field:
                 setattr(movie, duration_field, None)
                 update_fields.append(duration_field)
+            if only == "teaser":
+                movie.teaser_light_file = None
+                update_fields.append("teaser_light_file")
         elif not options["include_processing"]:
             # Regeneration volontaire (pas une reprise apres crash) : on repart
             # de zero sur les trois livrables. Sans ca, le pipeline (voir
@@ -97,9 +100,12 @@ class Command(BaseCommand):
             movie.final_file = None
             movie.full_file = None
             movie.teaser_file = None
+            movie.teaser_light_file = None
             movie.full_duration = None
             movie.teaser_duration = None
-            update_fields += ["final_file", "full_file", "teaser_file", "full_duration", "teaser_duration"]
+            update_fields += [
+                "final_file", "full_file", "teaser_file", "teaser_light_file", "full_duration", "teaser_duration",
+            ]
 
         movie.save(update_fields=update_fields)
 
