@@ -117,22 +117,6 @@
       </dl>
     </article>
 
-    <article class="detail-panel">
-      <h3>Derniers souvenirs</h3>
-      {% if latest_uploads %}
-        <div class="latest-media-list">
-          {% for upload in latest_uploads|slice:":5" %}
-            <a class="latest-media-row" href="{{ upload.media_file.url }}">
-              <span>{{ upload.category.label }}</span>
-              <strong>{{ upload.original_filename }}</strong>
-              <small>{{ upload.get_media_type_display }} - {{ upload.uploaded_at }}</small>
-            </a>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p class="muted-copy">Aucun souvenir reçu pour le moment.</p>
-      {% endif %}
-    </article>
   </div>
 
   <section class="media-dashboard">
@@ -145,8 +129,7 @@
         {% if has_guestbook %}
           <a class="button button--secondary" href="{% url 'events:guestbook_messages' event.pk %}">Livre d'or</a>
         {% endif %}
-        <a class="button button--secondary" href="{% url 'events:media_list' event.pk %}">Voir tous les médias</a>
-        <a class="button button--primary" href="{% url 'events:download_zip' event.pk %}" title="Tous les fichiers originaux, plus le livre d'or">Télécharger tous les souvenirs</a>
+        <a class="button button--primary" href="{% url 'events:media_list' event.pk %}">Voir tous les médias</a>
       </div>
     </div>
 

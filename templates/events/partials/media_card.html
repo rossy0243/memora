@@ -37,7 +37,7 @@
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
           <button class="button {% if upload.is_selected_for_movie %}button--secondary{% else %}button--primary{% endif %} button--compact" type="submit">
-            {% if upload.is_selected_for_movie %}Retirer du film{% else %}Garder pour le film{% endif %}
+            {% if upload.is_selected_for_movie %}Retirer de l'intégrale{% else %}Garder pour l'intégrale{% endif %}
           </button>
         </form>
         <form method="post" action="{% url 'events:toggle_teaser_selection' event.pk upload.pk %}" data-media-action>

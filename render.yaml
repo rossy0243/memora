@@ -236,13 +236,13 @@ services:
         value: /app/assets/music
       - &env_music_volume
         key: MEMORA_MOVIE_MUSIC_VOLUME
-        value: "0.80"
+        value: "0.70"
       - &env_voice_volume
         key: MEMORA_MOVIE_VOICE_VOLUME
-        value: "0.18"
+        value: "0.30"
       - &env_ducked_music_volume
         key: MEMORA_MOVIE_DUCKED_MUSIC_VOLUME
-        value: "0.80"
+        value: "0.70"
 
   - type: cron
     name: memora-schedule-movies

@@ -564,11 +564,14 @@ MEMORA_REMOTION_TIMEOUT_SECONDS = env_int("MEMORA_REMOTION_TIMEOUT_SECONDS", 180
 # qui descendait pendant les passages avec voix) est donc neutralise par defaut : la meme
 # valeur des deux cotes annule l'effet, sans retirer le mecanisme (utile si un evenement
 # demande un jour l'ancien equilibre voix-en-avant).
-MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.85"))
-MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.85"))
-# Volume de la voix des invites dans les clips gardes (heros/integrale/teaser) : volontairement
-# bas, la musique doit dominer et la voix s'entendre "a peine", en toile de fond.
-MEMORA_REMOTION_VOICE_VOLUME = float(os.getenv("MEMORA_REMOTION_VOICE_VOLUME", "0.18"))
+# Rehausse le 29/09 (0.85/0.18 -> 0.70/0.30) : sur le premier vrai mariage, la voix des
+# invites etait totalement inaudible ("a peine" s'est revele etre "pas du tout" a l'usage).
+# La musique reste nettement dominante, mais la voix doit maintenant s'entendre un minimum.
+MEMORA_REMOTION_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_MUSIC_VOLUME", "0.70"))
+MEMORA_REMOTION_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_REMOTION_DUCKED_MUSIC_VOLUME", "0.70"))
+# Volume de la voix des invites dans les clips gardes (integrale/teaser) : bas, la musique
+# doit dominer, mais desormais audible en toile de fond plutot qu'imperceptible.
+MEMORA_REMOTION_VOICE_VOLUME = float(os.getenv("MEMORA_REMOTION_VOICE_VOLUME", "0.30"))
 # Livrables rendus par Remotion quand le provider est "remotion". Doit rester un
 # sous-ensemble de MEMORA_MOVIE_DELIVERABLES (produire un livrable hors de cette
 # liste n'a aucun effet). Defaut aligne : heros + teaser.
@@ -635,7 +638,8 @@ MEMORA_RUNWAY_PROMPT = os.getenv(
     ),
 )
 MEMORA_MOVIE_MUSIC_DIR = os.getenv("MEMORA_MOVIE_MUSIC_DIR", str(BASE_DIR / "assets" / "music"))
-# Meme philosophie que cote Remotion (voir plus haut) : musique dominante, voix en arriere-plan.
-MEMORA_MOVIE_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_MUSIC_VOLUME", "0.80"))
-MEMORA_MOVIE_VOICE_VOLUME = float(os.getenv("MEMORA_MOVIE_VOICE_VOLUME", "0.18"))
-MEMORA_MOVIE_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_DUCKED_MUSIC_VOLUME", "0.80"))
+# Meme philosophie que cote Remotion (voir plus haut) : musique dominante, voix en arriere-plan,
+# rehaussee le 29/09 (0.80/0.18 -> 0.70/0.30) suite au premier vrai mariage (voix inaudible).
+MEMORA_MOVIE_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_MUSIC_VOLUME", "0.70"))
+MEMORA_MOVIE_VOICE_VOLUME = float(os.getenv("MEMORA_MOVIE_VOICE_VOLUME", "0.30"))
+MEMORA_MOVIE_DUCKED_MUSIC_VOLUME = float(os.getenv("MEMORA_MOVIE_DUCKED_MUSIC_VOLUME", "0.70"))

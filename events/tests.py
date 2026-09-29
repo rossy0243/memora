@@ -741,14 +741,13 @@ class EventViewTests(TestCase):
         self.assertContains(response, "AMOUR2026")
         self.assertContains(response, event.public_access_key)
         self.assertContains(response, "Tous les souvenirs")
-        # Plus de tableau de vignettes en bas de page : il allongeait la page a chaque souvenir et doublait la liste
-        # « Derniers souvenirs ». L'organisateur garde « Voir tous les médias » et le ZIP.
+        # Plus de tableau de vignettes en bas de page, ni de liste "Derniers souvenirs"
+        # (retiree, redondante avec la page medias) ni de ZIP global (retire aussi) :
+        # l'organisateur garde seulement « Voir tous les médias ».
         self.assertNotContains(response, "media-tile")
         self.assertContains(response, "Voir tous les médias")
-        self.assertContains(response, "Derniers souvenirs")
-        self.assertContains(response, "photo.jpg")
-        self.assertContains(response, "video.mp4")
-        self.assertNotContains(response, "deleted.jpg")
+        self.assertNotContains(response, "Derniers souvenirs")
+        self.assertNotContains(response, "Télécharger tous les souvenirs")
         self.assertEqual(response.context["media_stats"]["total"], 2)
         self.assertEqual(response.context["media_stats"]["photos"], 1)
         self.assertEqual(response.context["media_stats"]["videos"], 1)
@@ -1337,11 +1336,11 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Photos et videos envoyees par les invites.")
-        self.assertContains(response, "1 media selectionne pour le film souvenir.")
+        self.assertContains(response, "1 media selectionne pour l'intégrale.")
         self.assertContains(response, "photo.jpg")
         self.assertContains(response, "video.mp4")
-        self.assertContains(response, "Retirer du film")
-        self.assertContains(response, "Garder pour le film")
+        self.assertContains(response, "Retirer de l'intégrale")
+        self.assertContains(response, "Garder pour l'intégrale")
         self.assertContains(response, "Accepte")
         self.assertNotContains(response, "deleted.jpg")
         self.assertNotContains(response, "rejected.jpg")
@@ -1586,7 +1585,7 @@ class EventViewTests(TestCase):
         self.assertContains(response, "8s sur")
 
     def test_ajax_toggle_returns_updated_card_when_still_in_filter(self):
-        """Le clic « Garder pour le film » doit mettre a jour la carte sur place
+        """Le clic « Garder pour l'intégrale » doit mettre a jour la carte sur place
         (pas de rechargement complet) quand le media reste visible dans le filtre actif."""
         event = Event.objects.create(
             organizer=self.user,
@@ -1616,7 +1615,7 @@ class EventViewTests(TestCase):
         data = response.json()
         self.assertEqual(data["action"], "replace")
         self.assertEqual(data["upload_id"], upload.pk)
-        self.assertIn("Retirer du film", data["html"])
+        self.assertIn("Retirer de l'intégrale", data["html"])
         self.assertIn("1 media", data["movie_summary_html"])
 
     def test_ajax_reject_removes_card_from_accepted_only_filter(self):

@@ -116,16 +116,9 @@ class EventDetailView(OrganizerEventMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        latest_uploads = (
-            self.object.guest_uploads.filter(is_deleted=False)
-            .exclude(moderation_status=GuestUpload.ModerationStatus.REJECTED)
-            .select_related("category")
-            .order_by("-uploaded_at", "-pk")[:8]
-        )
 
         context.update(
             {
-                "latest_uploads": latest_uploads,
                 "public_event_url": self.request.build_absolute_uri(self.object.get_public_url()),
                 "event_qr_code_url": reverse("events:qr_code", kwargs={"pk": self.object.pk}),
                 "qr_kit_url": reverse("events:qr_kit", kwargs={"pk": self.object.pk}),
