@@ -948,6 +948,31 @@ class EventViewTests(TestCase):
         self.assertNotContains(response, "Non générée")
         self.assertNotContains(response, "Non généré")
 
+    def test_event_detail_shows_progress_while_a_targeted_regeneration_is_queued(self):
+        """Regression : pendant une regeneration ciblee (ex. « Regenerer le
+        teaser »), le film passe par le statut PENDING avant que le cron ne le
+        prenne en charge. Comme l'autre livrable (ici l'integrale) reste present,
+        has_ready_deliverable restait vrai et affichait a tort le film comme
+        « pret a 100% » au lieu de la barre de progression."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Regen En Attente",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.PENDING,
+            full_file="events/reception-regen-en-attente/movies/integrale.mp4",
+            progress_percent=0,
+        )
+        self.client.login(username="owner", password="secret")
+
+        response = self.client.get(reverse("events:detail", kwargs={"pk": event.pk}))
+
+        self.assertNotContains(response, "100%")
+        self.assertContains(response, "Cette section se met à jour automatiquement.")
+
     def test_owner_can_view_ready_movie_page(self):
         event = Event.objects.create(
             organizer=self.user,
