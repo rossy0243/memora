@@ -677,12 +677,13 @@ def download_event_movie(request, pk):
     if not movie:
         raise Http404("Film souvenir indisponible.")
 
-    # ?v=full / ?v=teaser / ?v=teaser-light : les declinaisons, servies de la
-    # meme facon rapide. La version legere retombe sur le teaser HD si son
-    # encodage 720p a echoue (best-effort, voir processing.services).
+    # ?v=full / ?v=teaser / ?v=full-light / ?v=teaser-light : les declinaisons,
+    # servies de la meme facon rapide. Les versions legeres retombent sur le
+    # fichier HD si leur encodage 720p a echoue (best-effort, voir processing.services).
     variants = {
         "full": (movie.full_file, "integrale"),
         "teaser": (movie.teaser_file, "teaser"),
+        "full-light": (movie.full_light_file or movie.full_file, "integrale-legere"),
         "teaser-light": (movie.teaser_light_file or movie.teaser_file, "teaser-leger"),
     }
     field, suffix = variants.get(request.GET.get("v"), (None, ""))

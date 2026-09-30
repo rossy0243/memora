@@ -151,6 +151,14 @@ class GeneratedMovie(models.Model):
         blank=True,
         null=True,
     )
+    # Version 720p legere de l'integrale, pour le telephone (4G, forfait limite).
+    # Optionnelle : un echec d'encodage ne doit jamais faire perdre l'integrale
+    # HD deja rendue (voir teaser_light_file, meme logique).
+    full_light_file = models.FileField(
+        upload_to=generated_movie_upload_path,
+        blank=True,
+        null=True,
+    )
     # Teaser vertical 9:16, pense pour le partage sur mobile et les reseaux.
     teaser_file = models.FileField(
         upload_to=generated_movie_upload_path,
@@ -230,9 +238,16 @@ class GeneratedMovie(models.Model):
     def preview_file(self):
         """Livrable a lire en ligne (lecteur video de la page film) : la version
         legere du teaser d'abord, pour un aperçu rapide en 4G — meme logique que
-        GuestBookMovie.light_file pour le livre d'or — puis le teaser HD,
-        l'integrale et enfin le heros (films generes avant son retrait)."""
-        return self.teaser_light_file or self.teaser_file or self.full_file or self.final_file
+        GuestBookMovie.light_file pour le livre d'or — puis le teaser HD, la
+        version legere de l'integrale, l'integrale HD et enfin le heros (films
+        generes avant son retrait)."""
+        return (
+            self.teaser_light_file
+            or self.teaser_file
+            or self.full_light_file
+            or self.full_file
+            or self.final_file
+        )
 
 
 class MediaAnalysis(models.Model):

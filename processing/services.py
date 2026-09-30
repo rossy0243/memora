@@ -591,11 +591,12 @@ def queue_only_deliverable_regeneration(movie, deliverable):
     if duration_field:
         setattr(movie, duration_field, None)
         update_fields.append(duration_field)
-    if deliverable == "teaser":
-        # La version legere est liee au teaser HD : sans ca, l'ancienne trainerait,
+    _, light_field = _LIGHT_ENCODERS.get(deliverable, (None, None))
+    if light_field:
+        # La version legere est liee au fichier HD : sans ca, l'ancienne trainerait,
         # perimee, jusqu'a ce que le nouveau rendu la remplace (ou echoue a le faire).
-        movie.teaser_light_file = None
-        update_fields.append("teaser_light_file")
+        setattr(movie, light_field, None)
+        update_fields.append(light_field)
     # Le cron traite ce film generiquement (process_generated_movie(movie), sans
     # argument), sans savoir que cette demande ne concerne QUE ce livrable —
     # transporte l'intention via le film lui-meme plutot que par un parametre
@@ -1723,18 +1724,19 @@ def _render_movie_with_remotion_pipeline(
             seconds = sum(_estimated_movie_clip_duration(upload) for upload in variant_uploads)
             setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
             update_fields = [file_field, duration_field, "edit_decision_data", "updated_at"]
-            if deliverable == "teaser":
-                # Version legere, cense circuler entre invites (4G) : un echec ici
-                # ne doit jamais faire perdre le teaser HD deja rendu.
-                light_path = temp_path / f"memora_{_clean_name(event.title)}_teaser_light.mp4"
+            light_encoder, light_field = _LIGHT_ENCODERS.get(deliverable, (None, None))
+            if light_encoder:
+                # Version legere (4G, forfait limite) : un echec ici ne doit
+                # jamais faire perdre le fichier HD deja rendu.
+                light_path = temp_path / f"memora_{_clean_name(event.title)}_{deliverable}_light.mp4"
                 try:
-                    _encode_teaser_light(variant_path, light_path, ffmpeg_binary)
+                    light_encoder(variant_path, light_path, ffmpeg_binary)
                     with light_path.open("rb") as light_file:
-                        movie.teaser_light_file.save(light_path.name, File(light_file), save=False)
-                    update_fields.append("teaser_light_file")
+                        getattr(movie, light_field).save(light_path.name, File(light_file), save=False)
+                    update_fields.append(light_field)
                 except Exception:
                     logger.warning(
-                        "Teaser light encode failed movie=%s event=%s", movie.pk, event.pk, exc_info=True
+                        "%s light encode failed movie=%s event=%s", deliverable, movie.pk, event.pk, exc_info=True
                     )
                     Path(light_path).unlink(missing_ok=True)
             # Commit immediat : si le process meurt pendant le livrable suivant,
@@ -1985,18 +1987,21 @@ def _run_ffmpeg(command):
         raise RuntimeError(details or f"FFmpeg a echoue avec le code {result.returncode}")
 
 
-# Teaser vertical : "720p" mobile se mesure en largeur (portrait), pas en hauteur
-# comme le montage du livre d'or (paysage). Memes CRF/debit : suffisants pour un
-# format court destine a circuler entre invites en 4G.
+# Version legere (4G, forfait limite), commune au teaser et a l'integrale : memes
+# CRF/debit, suffisants pour un fichier destine a circuler/se telecharger vite. Le
+# filtre de mise a l'echelle differe selon l'orientation : le teaser est vertical
+# (la largeur fixe la resolution), l'integrale est paysage comme le montage du
+# livre d'or (la hauteur la fixe).
+LIGHT_CRF = 27
+LIGHT_MAX_KBPS = 1800
 TEASER_LIGHT_WIDTH = 720
-TEASER_LIGHT_CRF = 27
-TEASER_LIGHT_MAX_KBPS = 1800
+FULL_LIGHT_HEIGHT = 720
 
 
-def _encode_teaser_light(source, destination, ffmpeg_binary):
-    """Version 720p legere du teaser pour le telephone (4G, forfait limite) —
-    c'est ce livrable qui est cense circuler entre invites. Echec non bloquant :
-    voir l'appelant, qui ne doit jamais perdre le teaser HD pour autant."""
+def _encode_light_version(source, destination, ffmpeg_binary, scale_filter):
+    """Encodage 720p leger partage par le teaser et l'integrale. Echec non
+    bloquant : voir l'appelant, qui ne doit jamais perdre le fichier HD deja
+    rendu pour autant."""
     encoder = settings.MEMORA_MOVIE_VIDEO_ENCODER
     _run_ffmpeg(
         [
@@ -2005,8 +2010,8 @@ def _encode_teaser_light(source, destination, ffmpeg_binary):
             "-i",
             str(source),
             "-vf",
-            f"scale={TEASER_LIGHT_WIDTH}:-2",
-            *_video_encode_args(encoder, crf=TEASER_LIGHT_CRF, max_kbps=TEASER_LIGHT_MAX_KBPS),
+            scale_filter,
+            *_video_encode_args(encoder, crf=LIGHT_CRF, max_kbps=LIGHT_MAX_KBPS),
             "-c:a",
             "aac",
             "-b:a",
@@ -2018,6 +2023,25 @@ def _encode_teaser_light(source, destination, ffmpeg_binary):
             str(destination),
         ]
     )
+
+
+def _encode_teaser_light(source, destination, ffmpeg_binary):
+    """Version 720p legere du teaser (portrait) — c'est ce livrable qui est cense
+    circuler entre invites."""
+    _encode_light_version(source, destination, ffmpeg_binary, f"scale={TEASER_LIGHT_WIDTH}:-2")
+
+
+def _encode_full_light(source, destination, ffmpeg_binary):
+    """Version 720p legere de l'integrale (paysage), pour le telechargement en 4G."""
+    _encode_light_version(source, destination, ffmpeg_binary, f"scale=-2:{FULL_LIGHT_HEIGHT}")
+
+
+# Associe chaque declinaison a sa version legere (fonction d'encodage, champ
+# FileField). "hero" n'en a pas : retire du produit, voir MEMORA_MOVIE_DELIVERABLES.
+_LIGHT_ENCODERS = {
+    "teaser": (_encode_teaser_light, "teaser_light_file"),
+    "full": (_encode_full_light, "full_light_file"),
+}
 
 
 def _apply_soundtrack_if_available(input_path, output_path, soundtrack, ffmpeg_binary):

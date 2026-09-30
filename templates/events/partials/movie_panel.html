@@ -35,7 +35,8 @@
       <li>
         <span>Intégrale</span>
         {% if latest_movie.full_file %}
-          <a href="{{ latest_movie.full_file.url }}" download>Télécharger{% if latest_movie.full_duration %} ({{ latest_movie.full_duration }}){% endif %}</a>
+          <a href="{{ latest_movie.full_file.url }}" download>HD{% if latest_movie.full_duration %} ({{ latest_movie.full_duration }}){% endif %}</a>
+          {% if latest_movie.full_light_file %} · <a href="{{ latest_movie.full_light_file.url }}" download>Léger (4G)</a>{% endif %}
         {% else %}
           <span class="muted-copy">Non générée</span>
         {% endif %}

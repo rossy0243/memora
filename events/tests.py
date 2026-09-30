@@ -1168,6 +1168,31 @@ class EventViewTests(TestCase):
 
         self.assertEqual(b"".join(light.streaming_content), b"teaser-leger-bytes")
 
+    def test_owner_can_download_the_light_full_variant(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Integrale Legere",
+            couple_name="Camille & Noe",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        for name, content in (("integrale.mp4", b"integrale-hd-bytes"), ("integrale-legere.mp4", b"integrale-legere-bytes")):
+            path = Path(TEST_MEDIA_ROOT) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            full_file="integrale.mp4",
+            full_light_file="integrale-legere.mp4",
+        )
+        self.client.login(username="owner", password="secret")
+        url = reverse("events:download_movie", kwargs={"pk": event.pk})
+
+        light = self.client.get(url, {"v": "full-light"})
+
+        self.assertEqual(b"".join(light.streaming_content), b"integrale-legere-bytes")
+
     def test_event_detail_displays_automatic_movie_schedule(self):
         event = Event.objects.create(
             organizer=self.user,

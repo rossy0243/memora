@@ -136,6 +136,7 @@ class GeneratedMovieAdmin(admin.ModelAdmin):
             movie.full_file = None
             movie.teaser_file = None
             movie.teaser_light_file = None
+            movie.full_light_file = None
             movie.full_duration = None
             movie.teaser_duration = None
             movie.save(
@@ -148,6 +149,7 @@ class GeneratedMovieAdmin(admin.ModelAdmin):
                     "full_file",
                     "teaser_file",
                     "teaser_light_file",
+                    "full_light_file",
                     "full_duration",
                     "teaser_duration",
                     "updated_at",

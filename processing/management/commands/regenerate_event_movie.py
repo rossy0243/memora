@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from events.models import Event
 from processing.models import GeneratedMovie
-from processing.services import process_generated_movie
+from processing.services import _LIGHT_ENCODERS, process_generated_movie
 
 
 class Command(BaseCommand):
@@ -87,9 +87,10 @@ class Command(BaseCommand):
             if duration_field:
                 setattr(movie, duration_field, None)
                 update_fields.append(duration_field)
-            if only == "teaser":
-                movie.teaser_light_file = None
-                update_fields.append("teaser_light_file")
+            _, light_field = _LIGHT_ENCODERS.get(only, (None, None))
+            if light_field:
+                setattr(movie, light_field, None)
+                update_fields.append(light_field)
         elif not options["include_processing"]:
             # Regeneration volontaire (pas une reprise apres crash) : on repart
             # de zero sur les trois livrables. Sans ca, le pipeline (voir
@@ -101,10 +102,12 @@ class Command(BaseCommand):
             movie.full_file = None
             movie.teaser_file = None
             movie.teaser_light_file = None
+            movie.full_light_file = None
             movie.full_duration = None
             movie.teaser_duration = None
             update_fields += [
-                "final_file", "full_file", "teaser_file", "teaser_light_file", "full_duration", "teaser_duration",
+                "final_file", "full_file", "teaser_file", "teaser_light_file", "full_light_file",
+                "full_duration", "teaser_duration",
             ]
 
         movie.save(update_fields=update_fields)

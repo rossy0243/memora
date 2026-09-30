@@ -167,10 +167,11 @@ class Command(BaseCommand):
         (GuestBookMovie). Les lignes restent comme pierres tombales."""
         purged = 0
 
+        movie_file_fields = ("final_file", "full_file", "full_light_file", "teaser_file", "teaser_light_file")
         movies = (
             GeneratedMovie.objects.filter(media_purged=False)
             .select_related("event")
-            .only("id", "final_file", "full_file", "teaser_file", "teaser_light_file", "event__event_date")
+            .only("id", "event__event_date", *movie_file_fields)
         )
         for movie in list(movies):
             if movie.event.event_date > cutoff:
@@ -179,12 +180,12 @@ class Command(BaseCommand):
                 purged += 1
                 continue
             ok = True
-            for field in ("final_file", "full_file", "teaser_file", "teaser_light_file"):
+            for field in movie_file_fields:
                 ok = self._clear_field(movie, field, "film") and ok
             if not ok:
                 continue
             movie.media_purged = True
-            movie.save(update_fields=["final_file", "full_file", "teaser_file", "teaser_light_file", "media_purged"])
+            movie.save(update_fields=[*movie_file_fields, "media_purged"])
             purged += 1
 
         montages = (

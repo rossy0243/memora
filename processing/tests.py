@@ -901,6 +901,53 @@ class MovieGenerationServiceTests(TestCase):
     @patch("processing.services.shutil.which", return_value="ffmpeg")
     @patch("processing.services._run_ffmpeg")
     @patch("processing.services.render_movie_with_remotion")
+    def test_full_gets_a_light_version_for_mobile(self, render_remotion, run_ffmpeg, _which):
+        """L'integrale aussi doit pouvoir se telecharger vite en 4G : une version
+        720p legere est encodee juste apres l'integrale HD, meme logique que le
+        teaser (et GuestBookMovie.light_file pour le livre d'or)."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+        run_ffmpeg.side_effect = lambda command: Path(command[-1]).write_bytes(b"full-light-bytes")
+
+        movie = generate_event_movie(self.event)
+
+        self.assertTrue(movie.full_file.name)
+        self.assertTrue(movie.full_light_file.name)
+        with movie.full_light_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"full-light-bytes")
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg", side_effect=RuntimeError("ffmpeg indisponible"))
+    @patch("processing.services.render_movie_with_remotion")
+    def test_full_light_encode_failure_does_not_lose_the_hd_full(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        """L'encodage 720p est un bonus best-effort : son echec ne doit jamais
+        faire perdre l'integrale HD deja rendue, ni faire echouer le film."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+
+        movie = generate_event_movie(self.event)
+
+        self.assertEqual(movie.status, GeneratedMovie.Status.COMPLETED)
+        self.assertTrue(movie.full_file.name)
+        self.assertFalse(movie.full_light_file.name)
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
     def test_only_deliverable_carried_via_edit_decision_data(self, render_remotion, run_ffmpeg, _which):
         """La page medias (regenerate_teaser) ne peut pas passer only_deliverable en
         argument a process_generated_movie(movie) — le cron l'appelle
@@ -2716,6 +2763,7 @@ class QueueOnlyDeliverableRegenerationTests(TestCase):
             status=GeneratedMovie.Status.COMPLETED,
             final_file="events/x/movies/hero.mp4",
             full_file="events/x/movies/full.mp4",
+            full_light_file="events/x/movies/full-light.mp4",
         )
 
         queue_only_deliverable_regeneration(movie, "full")
@@ -2724,7 +2772,25 @@ class QueueOnlyDeliverableRegenerationTests(TestCase):
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         self.assertTrue(movie.final_file)
         self.assertFalse(movie.full_file)
+        # La version legere est liee au fichier HD : elle doit repartir avec lui.
+        self.assertFalse(movie.full_light_file)
         self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "full")
+
+    def test_clears_the_teaser_light_version_alongside_the_teaser(self):
+        from processing.services import queue_only_deliverable_regeneration
+
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.COMPLETED,
+            teaser_file="events/x/movies/teaser.mp4",
+            teaser_light_file="events/x/movies/teaser-light.mp4",
+        )
+
+        queue_only_deliverable_regeneration(movie, "teaser")
+
+        movie.refresh_from_db()
+        self.assertFalse(movie.teaser_file)
+        self.assertFalse(movie.teaser_light_file)
 
     def test_raises_on_unknown_deliverable(self):
         from processing.services import queue_only_deliverable_regeneration
