@@ -1578,7 +1578,9 @@ class EventViewTests(TestCase):
         self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
-        self.assertFalse(movie.teaser_file)
+        # L'ancien teaser reste en ligne jusqu'a ce que le nouveau soit pret :
+        # l'organisateur ne doit jamais se retrouver sans rien pendant la regeneration.
+        self.assertTrue(movie.teaser_file)
         self.assertTrue(movie.final_file)  # heros non touche
 
     def test_owner_can_regenerate_full_when_movie_is_idle(self):
@@ -1601,7 +1603,8 @@ class EventViewTests(TestCase):
         self.assertRedirects(response, reverse("events:media_list", kwargs={"pk": event.pk}))
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
-        self.assertFalse(movie.full_file)
+        # L'ancienne integrale reste en ligne jusqu'a ce que la nouvelle soit prete.
+        self.assertTrue(movie.full_file)
         self.assertTrue(movie.teaser_file)  # teaser non touche
 
     def test_owner_cannot_regenerate_teaser_while_a_fresh_render_is_active(self):

@@ -973,6 +973,72 @@ class MovieGenerationServiceTests(TestCase):
         deliverables = [call.kwargs.get("deliverable") for call in render_remotion.call_args_list]
         self.assertEqual(deliverables, ["teaser"])
 
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion")
+    def test_only_deliverable_forces_redo_and_replaces_old_file_on_success(
+        self, render_remotion, run_ffmpeg, _which
+    ):
+        """queue_only_deliverable_regeneration ne vide plus le fichier avant le
+        rendu (l'organisateur garde l'ancien pendant toute la regeneration) : le
+        pipeline doit donc forcer le nouveau rendu de CE livrable precis, meme si
+        son fichier est deja present, puis supprimer l'ancien fichier du stockage
+        une fois le nouveau confirme enregistre."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+        old_name = "events/x/movies/old_teaser.mp4"
+        old_path = Path(TEST_MEDIA_ROOT) / old_name
+        old_path.parent.mkdir(parents=True, exist_ok=True)
+        old_path.write_bytes(b"old-teaser-bytes")
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            teaser_file=old_name,
+        )
+
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+            Path(output_path).write_bytes(b"new-teaser-bytes")
+            return Path(output_path)
+
+        render_remotion.side_effect = create_remotion_output
+
+        processed = process_generated_movie(movie, only_deliverable="teaser")
+
+        render_remotion.assert_called_once()
+        self.assertNotEqual(processed.teaser_file.name, old_name)
+        with processed.teaser_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"new-teaser-bytes")
+        self.assertFalse(old_path.exists())
+
+    @override_settings(MEMORA_MOVIE_RENDER_PROVIDER="remotion")
+    @patch("processing.services.shutil.which", return_value="ffmpeg")
+    @patch("processing.services._run_ffmpeg")
+    @patch("processing.services.render_movie_with_remotion", side_effect=RuntimeError("Remotion KO"))
+    @patch("processing.services.build_movie_variant", return_value=None)
+    def test_only_deliverable_keeps_old_file_when_regeneration_fails(
+        self, build_variant, render_remotion, run_ffmpeg, _which
+    ):
+        """Si le nouveau rendu echoue completement (Remotion et le repli ffmpeg),
+        l'organisateur ne doit pas se retrouver sans rien : l'ancien fichier
+        reste en place."""
+        self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
+        old_name = "events/x/movies/old_teaser.mp4"
+        old_path = Path(TEST_MEDIA_ROOT) / old_name
+        old_path.parent.mkdir(parents=True, exist_ok=True)
+        old_path.write_bytes(b"old-teaser-bytes")
+        movie = GeneratedMovie.objects.create(
+            event=self.event,
+            status=GeneratedMovie.Status.PROCESSING,
+            teaser_file=old_name,
+        )
+
+        processed = process_generated_movie(movie, only_deliverable="teaser")
+
+        self.assertEqual(processed.teaser_file.name, old_name)
+        self.assertTrue(old_path.exists())
+        with processed.teaser_file.open("rb") as fh:
+            self.assertEqual(fh.read(), b"old-teaser-bytes")
+
     @override_settings(
         MEMORA_MOVIE_RENDER_PROVIDER="remotion",
         MEMORA_MOVIE_DELIVERABLES={"hero", "full", "teaser"},
@@ -2735,7 +2801,8 @@ class GeneratedMovieAdminActionTests(TestCase):
 
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
-        self.assertFalse(movie.teaser_file)
+        # L'ancien teaser reste en ligne jusqu'au nouveau rendu reussi.
+        self.assertTrue(movie.teaser_file)
         self.assertTrue(movie.final_file)
         self.assertTrue(movie.full_file)
         self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "teaser")
@@ -2755,7 +2822,11 @@ class QueueOnlyDeliverableRegenerationTests(TestCase):
             event_date=date(2026, 7, 8),
         )
 
-    def test_clears_only_the_requested_deliverable(self):
+    def test_only_marks_the_requested_deliverable_without_erasing_it(self):
+        """L'ancien fichier (et sa version legere) reste en ligne pendant toute la
+        regeneration : l'organisateur ne doit jamais se retrouver sans rien tant
+        que le nouveau rendu n'est pas confirme (voir _render_movie_with_
+        remotion_pipeline, qui force le nouveau rendu malgre le fichier present)."""
         from processing.services import queue_only_deliverable_regeneration
 
         movie = GeneratedMovie.objects.create(
@@ -2771,12 +2842,11 @@ class QueueOnlyDeliverableRegenerationTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         self.assertTrue(movie.final_file)
-        self.assertFalse(movie.full_file)
-        # La version legere est liee au fichier HD : elle doit repartir avec lui.
-        self.assertFalse(movie.full_light_file)
+        self.assertTrue(movie.full_file)
+        self.assertTrue(movie.full_light_file)
         self.assertEqual(movie.edit_decision_data.get("only_deliverable"), "full")
 
-    def test_clears_the_teaser_light_version_alongside_the_teaser(self):
+    def test_teaser_light_version_stays_online_alongside_the_teaser(self):
         from processing.services import queue_only_deliverable_regeneration
 
         movie = GeneratedMovie.objects.create(
@@ -2789,8 +2859,8 @@ class QueueOnlyDeliverableRegenerationTests(TestCase):
         queue_only_deliverable_regeneration(movie, "teaser")
 
         movie.refresh_from_db()
-        self.assertFalse(movie.teaser_file)
-        self.assertFalse(movie.teaser_light_file)
+        self.assertTrue(movie.teaser_file)
+        self.assertTrue(movie.teaser_light_file)
 
     def test_raises_on_unknown_deliverable(self):
         from processing.services import queue_only_deliverable_regeneration
@@ -3066,9 +3136,10 @@ class RegenerateEventMovieCommandTests(TestCase):
     @patch("processing.management.commands.regenerate_event_movie.process_generated_movie")
     def test_only_flag_regenerates_a_single_deliverable(self, process_generated_movie):
         """--only teaser : livrer une correction ciblee (ex. nouvelle selection
-        manuelle) sans retoucher a un heros/integrale deja bons — voir
-        _render_movie_with_remotion_pipeline, qui saute un livrable dont le fichier
-        est deja present."""
+        manuelle) sans retoucher a un heros/integrale deja bons. Le teaser actuel
+        n'est pas efface par la commande elle-meme : il reste en ligne jusqu'a ce
+        que _render_movie_with_remotion_pipeline le remplace par un nouveau rendu
+        reussi (force malgre sa presence, voir only_deliverable)."""
         movie = GeneratedMovie.objects.create(
             event=self.event,
             status=GeneratedMovie.Status.COMPLETED,
@@ -3083,7 +3154,8 @@ class RegenerateEventMovieCommandTests(TestCase):
         movie.refresh_from_db()
         self.assertEqual(movie.final_file.name, "events/x/movies/old_hero.mp4")
         self.assertEqual(movie.full_file.name, "events/x/movies/old_full.mp4")
-        self.assertFalse(movie.teaser_file)
+        self.assertEqual(movie.teaser_file.name, "events/x/movies/old_teaser.mp4")
+        self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
         process_generated_movie.assert_called_once_with(movie, only_deliverable="teaser")
         self.assertEqual(movie.status, GeneratedMovie.Status.PENDING)
 

@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from events.models import Event
 from processing.models import GeneratedMovie
-from processing.services import _LIGHT_ENCODERS, process_generated_movie
+from processing.services import process_generated_movie
 
 
 class Command(BaseCommand):
@@ -73,25 +73,13 @@ class Command(BaseCommand):
         movie.progress_message = ""
 
         only = options["only"]
-        if only:
-            # Cible un seul livrable : on ne vide que son fichier (et sa duree s'il
-            # en a une), les deux autres restent tels quels pour que le pipeline les
-            # saute (voir _render_movie_with_remotion_pipeline).
-            file_field, duration_field = {
-                "hero": ("final_file", None),
-                "full": ("full_file", "full_duration"),
-                "teaser": ("teaser_file", "teaser_duration"),
-            }[only]
-            setattr(movie, file_field, None)
-            update_fields.append(file_field)
-            if duration_field:
-                setattr(movie, duration_field, None)
-                update_fields.append(duration_field)
-            _, light_field = _LIGHT_ENCODERS.get(only, (None, None))
-            if light_field:
-                setattr(movie, light_field, None)
-                update_fields.append(light_field)
-        elif not options["include_processing"]:
+        # Cible un seul livrable (--only) : son fichier actuel (et sa version
+        # legere) n'est PAS efface ici, il reste en ligne pendant toute la
+        # regeneration et n'est remplace qu'en cas de succes (voir
+        # _render_movie_with_remotion_pipeline, qui force le nouveau rendu de ce
+        # livrable precis meme si un fichier existe deja). Les deux autres
+        # livrables restent, eux, intouches.
+        if not only and not options["include_processing"]:
             # Regeneration volontaire (pas une reprise apres crash) : on repart
             # de zero sur les trois livrables. Sans ca, le pipeline (voir
             # _render_movie_with_remotion_pipeline) sauterait un livrable deja

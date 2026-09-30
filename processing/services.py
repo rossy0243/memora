@@ -573,13 +573,11 @@ def queue_only_deliverable_regeneration(movie, deliverable):
     if is_busy:
         raise ValueError("Un rendu est deja en cours ou en attente pour ce film.")
 
-    file_field, duration_field = _DELIVERABLE_FIELDS[deliverable]
     update_fields = [
         "status",
         "error_logs",
         "progress_percent",
         "progress_message",
-        file_field,
         "edit_decision_data",
         "updated_at",
     ]
@@ -587,21 +585,15 @@ def queue_only_deliverable_regeneration(movie, deliverable):
     movie.error_logs = ""
     movie.progress_percent = 0
     movie.progress_message = ""
-    setattr(movie, file_field, None)
-    if duration_field:
-        setattr(movie, duration_field, None)
-        update_fields.append(duration_field)
-    _, light_field = _LIGHT_ENCODERS.get(deliverable, (None, None))
-    if light_field:
-        # La version legere est liee au fichier HD : sans ca, l'ancienne trainerait,
-        # perimee, jusqu'a ce que le nouveau rendu la remplace (ou echoue a le faire).
-        setattr(movie, light_field, None)
-        update_fields.append(light_field)
+    # Le fichier (et sa version legere) actuellement en ligne n'est PAS efface ici :
+    # l'organisateur doit pouvoir continuer a le voir/le telecharger pendant toute
+    # la regeneration, qui peut prendre des dizaines de minutes a plusieurs heures.
+    # Il n'est remplace qu'en cas de succes (voir _render_movie_with_remotion_pipeline,
+    # qui force le nouveau rendu de ce livrable precis meme si un fichier existe deja).
     # Le cron traite ce film generiquement (process_generated_movie(movie), sans
     # argument), sans savoir que cette demande ne concerne QUE ce livrable —
     # transporte l'intention via le film lui-meme plutot que par un parametre
-    # d'appel, pour que les autres livrables ne soient jamais retouches, meme
-    # s'ils sont vides pour une tout autre raison (ex. reste d'un plantage).
+    # d'appel.
     movie.edit_decision_data["only_deliverable"] = deliverable
     movie.save(update_fields=update_fields)
     return movie
@@ -1111,6 +1103,25 @@ def _clean_name(value):
     return cleaned or "Evenement"
 
 
+def _delete_old_deliverable_file(movie, field_name, old_name):
+    """Supprime l'ancien fichier d'un livrable une fois le nouveau confirme
+    enregistre (voir queue_only_deliverable_regeneration : l'ancien reste en
+    ligne pendant toute la regeneration, sans ca chaque regeneration laisse un
+    fichier orphelin sur R2)."""
+    if not old_name:
+        return
+    current = getattr(movie, field_name)
+    if current and current.name == old_name:
+        return
+    try:
+        current.storage.delete(old_name)
+    except Exception:
+        logger.warning(
+            "Old deliverable file not deleted movie=%s field=%s name=%s",
+            movie.pk, field_name, old_name, exc_info=True,
+        )
+
+
 def _estimated_movie_clip_duration(upload):
     if upload.media_type == GuestUpload.MediaType.IMAGE:
         return settings.MEMORA_MOVIE_IMAGE_DURATION_SECONDS
@@ -1559,7 +1570,7 @@ def _render_movie_with_remotion_pipeline(
         # settings.MEMORA_REMOTION_DELIVERABLES le contenait encore par erreur.
         remotion_data["deliverables"]["hero"] = {"ok": True, "skipped": True, "reason": "not_configured"}
         movie.render_provider = "remotion"
-    elif movie.final_file:
+    elif movie.final_file and only_deliverable != "hero":
         logger.info(
             "Remotion hero skipped (already rendered) movie=%s event=%s", movie.pk, event.pk
         )
@@ -1608,12 +1619,16 @@ def _render_movie_with_remotion_pipeline(
         movie.edit_decision_data["badge"] = {**_build_badge_data(event), "applied": False, "replaced_by": "remotion-watermark"}
 
         _update_movie_progress(movie, 80, "Enregistrement de la vidéo finale.")
+        # Capture avant remplacement : une regeneration ciblee du heros le laisse
+        # en ligne jusqu'ici (voir queue_only_deliverable_regeneration).
+        old_hero_name = movie.final_file.name or None
         with hero_path.open("rb") as output_file:
             movie.final_file.save(hero_path.name, File(output_file), save=False)
         # Commit immediat (pas seulement le gros save() final du pipeline) : si le
         # process meurt pendant l'integrale juste apres, le heros deja rendu reste
         # acquis pour la prochaine tentative au lieu d'etre refait pour rien.
         movie.save(update_fields=["final_file", "render_provider", "edit_decision_data", "updated_at"])
+        _delete_old_deliverable_file(movie, "final_file", old_hero_name)
 
     if not settings.MEMORA_MOVIE_VARIANTS_ENABLED:
         return True
@@ -1649,8 +1664,13 @@ def _render_movie_with_remotion_pipeline(
             if cancel_check and cancel_check():
                 raise MovieGenerationCancelled("Rendu Remotion : annule par l'organisateur.")
             # Meme filet que le heros ci-dessus : un livrable deja rendu lors
-            # d'une tentative precedente de ce cycle n'est pas refait.
-            if getattr(movie, file_field):
+            # d'une tentative precedente de ce cycle n'est pas refait — sauf s'il
+            # s'agit justement du livrable cible d'une regeneration ciblee
+            # (only_deliverable), qui doit toujours repartir de zero meme si
+            # l'ancien fichier est encore en ligne (voir queue_only_deliverable_
+            # regeneration : il n'est plus efface avant le rendu, l'organisateur
+            # y a acces jusqu'a ce que le nouveau soit pret).
+            if getattr(movie, file_field) and deliverable != only_deliverable:
                 logger.info(
                     "Remotion variant skipped (already rendered) movie=%s event=%s label=%s",
                     movie.pk,
@@ -1719,12 +1739,19 @@ def _render_movie_with_remotion_pipeline(
                 )
                 if not variant_path:
                     continue
+            # Capture le nom de l'ancien fichier AVANT de le remplacer : une
+            # regeneration ciblee (only_deliverable) le laisse en ligne jusqu'ici
+            # (voir queue_only_deliverable_regeneration), il ne doit etre
+            # supprime du stockage qu'une fois le nouveau confirme enregistre.
+            old_file_name = getattr(movie, file_field).name or None
+            light_encoder, light_field = _LIGHT_ENCODERS.get(deliverable, (None, None))
+            old_light_name = getattr(movie, light_field).name or None if light_field else None
+
             with Path(variant_path).open("rb") as variant_file:
                 getattr(movie, file_field).save(Path(variant_path).name, File(variant_file), save=False)
             seconds = sum(_estimated_movie_clip_duration(upload) for upload in variant_uploads)
             setattr(movie, duration_field, timedelta(seconds=min(seconds, max_duration)))
             update_fields = [file_field, duration_field, "edit_decision_data", "updated_at"]
-            light_encoder, light_field = _LIGHT_ENCODERS.get(deliverable, (None, None))
             if light_encoder:
                 # Version legere (4G, forfait limite) : un echec ici ne doit
                 # jamais faire perdre le fichier HD deja rendu.
@@ -1739,9 +1766,20 @@ def _render_movie_with_remotion_pipeline(
                         "%s light encode failed movie=%s event=%s", deliverable, movie.pk, event.pk, exc_info=True
                     )
                     Path(light_path).unlink(missing_ok=True)
+                    if old_light_name:
+                        # La HD vient d'etre remplacee : l'ancienne version legere
+                        # ne correspond plus a rien, mieux vaut l'effacer que la
+                        # laisser perimee a cote du nouveau fichier HD.
+                        setattr(movie, light_field, None)
+                        update_fields.append(light_field)
             # Commit immediat : si le process meurt pendant le livrable suivant,
             # celui-ci reste acquis plutot que d'etre refait pour rien.
             movie.save(update_fields=update_fields)
+            # Le nouveau fichier est confirme enregistre : l'ancien peut disparaitre
+            # du stockage (sinon chaque regeneration laisse un fichier orphelin).
+            _delete_old_deliverable_file(movie, file_field, old_file_name)
+            if light_field:
+                _delete_old_deliverable_file(movie, light_field, old_light_name)
         except MovieGenerationCancelled:
             raise
         except Exception as exc:
