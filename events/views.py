@@ -663,6 +663,9 @@ def public_movie_share(request, slug, access_key):
             "event": event,
             "latest_movie": ready_movie,
             "ready_movie": ready_movie,
+            "movie_download_url": reverse(
+                "public_movie_download", kwargs={"slug": event.slug, "access_key": event.public_access_key}
+            ),
             "public_movie_url": request.build_absolute_uri(event.get_public_movie_url()),
             "share_title": f"Film souvenir Memora - {event.title}",
             "is_public_movie_page": True,
@@ -670,17 +673,17 @@ def public_movie_share(request, slug, access_key):
     )
 
 
-@login_required
-def download_event_movie(request, pk):
-    event = get_object_or_404(Event, pk=pk, organizer=request.user)
-    movie = _get_ready_movie(event)
-    if not movie:
-        raise Http404("Film souvenir indisponible.")
+def _movie_download_response(request, event, movie):
+    """Sert un livrable precis (?v=...) ou, a defaut, movie.primary_file.
 
-    # ?v=full / ?v=teaser / ?v=full-light / ?v=teaser-light : les declinaisons,
-    # servies de la meme facon rapide. Les versions legeres retombent sur le
-    # fichier HD si leur encodage 720p a echoue (best-effort, voir processing.services).
+    Toujours servi via une vue (jamais un lien direct vers le stockage) : la
+    redirection signee de download_response() impose un vrai telechargement
+    (Content-Disposition: attachment), ce qu'un lien direct avec l'attribut
+    HTML `download` ne garantit pas de maniere fiable sur mobile. Les versions
+    legeres retombent sur le fichier HD si leur encodage 720p a echoue
+    (best-effort, voir processing.services)."""
     variants = {
+        "hero": (movie.final_file, "film"),
         "full": (movie.full_file, "integrale"),
         "teaser": (movie.teaser_file, "teaser"),
         "full-light": (movie.full_light_file or movie.full_file, "integrale-legere"),
@@ -691,7 +694,30 @@ def download_event_movie(request, pk):
         base = _movie_download_filename(event, movie).rsplit(".", 1)[0]
         return download_response(field, f"{base}-{suffix}.mp4")
 
+    if not movie.primary_file:
+        raise Http404("Film souvenir indisponible.")
     return download_response(movie.primary_file, _movie_download_filename(event, movie))
+
+
+@login_required
+def download_event_movie(request, pk):
+    event = get_object_or_404(Event, pk=pk, organizer=request.user)
+    # Le dernier film, pas seulement un film COMPLETED : un livrable precis (ex.
+    # l'integrale) peut etre deja pret alors que le film regenere un autre
+    # (ex. le teaser) est toujours en cours — voir le bloc "deja disponible
+    # pendant que le reste se termine" du panneau evenement.
+    movie = _get_latest_movie(event)
+    if not movie:
+        raise Http404("Film souvenir indisponible.")
+    return _movie_download_response(request, event, movie)
+
+
+def public_movie_download(request, slug, access_key):
+    event = get_object_or_404(Event, slug=slug, public_access_key=access_key, payment_status=Event.PaymentStatus.PAID)
+    movie = _get_ready_movie(event)
+    if not movie:
+        raise Http404("Film souvenir indisponible.")
+    return _movie_download_response(request, event, movie)
 
 
 def get_movie_panel_context(event):
@@ -702,6 +728,7 @@ def get_movie_panel_context(event):
         "movie_schedule_at": get_event_movie_schedule_at(event),
         "movie_status_url": reverse("events:movie_status", kwargs={"pk": event.pk}),
         "movie_page_url": reverse("events:movie_ready", kwargs={"pk": event.pk}),
+        "movie_download_url": reverse("events:download_movie", kwargs={"pk": event.pk}),
         "movie_is_live": bool(
             latest_movie
             and latest_movie.status in {"pending", "processing"}

@@ -29,14 +29,14 @@
     <video class="movie-preview" src="{{ latest_movie.preview_file.url }}" controls preload="metadata"></video>
     <div class="quick-actions">
       <a class="button button--primary" href="{{ movie_page_url }}">Ouvrir le film</a>
-      <a class="button button--secondary button--compact" href="{{ latest_movie.primary_file.url }}" download>Télécharger</a>
+      <a class="button button--secondary button--compact" href="{{ movie_download_url }}" download>Télécharger</a>
     </div>
     <ul class="movie-deliverables">
       <li>
         <span>Intégrale</span>
         {% if latest_movie.full_file %}
-          <a href="{{ latest_movie.full_file.url }}" download>HD{% if latest_movie.full_duration %} ({{ latest_movie.full_duration }}){% endif %}</a>
-          {% if latest_movie.full_light_file %} · <a href="{{ latest_movie.full_light_file.url }}" download>Léger (4G)</a>{% endif %}
+          <a href="{{ movie_download_url }}?v=full" download>HD{% if latest_movie.full_duration %} ({{ latest_movie.full_duration }}){% endif %}</a>
+          {% if latest_movie.full_light_file %} · <a href="{{ movie_download_url }}?v=full-light" download>Léger (4G)</a>{% endif %}
         {% else %}
           <span class="muted-copy">Non générée</span>
         {% endif %}
@@ -44,8 +44,8 @@
       <li>
         <span>Teaser</span>
         {% if latest_movie.teaser_file %}
-          <a href="{{ latest_movie.teaser_file.url }}" download>HD</a>
-          {% if latest_movie.teaser_light_file %} · <a href="{{ latest_movie.teaser_light_file.url }}" download>Léger (4G)</a>{% endif %}
+          <a href="{{ movie_download_url }}?v=teaser" download>HD</a>
+          {% if latest_movie.teaser_light_file %} · <a href="{{ movie_download_url }}?v=teaser-light" download>Léger (4G)</a>{% endif %}
         {% else %}
           <span class="muted-copy">Non généré</span>
         {% endif %}
@@ -75,11 +75,11 @@
       {% if latest_movie.final_file or latest_movie.full_file or latest_movie.teaser_file %}
         <p class="muted-copy movie-versions__hint">
           Déjà disponible pendant que le reste se termine :
-          {% if latest_movie.final_file %}<a href="{{ latest_movie.final_file.url }}" download>film</a>{% endif %}
+          {% if latest_movie.final_file %}<a href="{{ movie_download_url }}?v=hero" download>film</a>{% endif %}
           {% if latest_movie.final_file and latest_movie.full_file %} · {% endif %}
-          {% if latest_movie.full_file %}<a href="{{ latest_movie.full_file.url }}" download>intégrale</a>{% endif %}
+          {% if latest_movie.full_file %}<a href="{{ movie_download_url }}?v=full" download>intégrale</a>{% endif %}
           {% if latest_movie.teaser_file and latest_movie.final_file or latest_movie.teaser_file and latest_movie.full_file %} · {% endif %}
-          {% if latest_movie.teaser_file %}<a href="{{ latest_movie.teaser_file.url }}" download>teaser</a>{% endif %}
+          {% if latest_movie.teaser_file %}<a href="{{ movie_download_url }}?v=teaser" download>teaser</a>{% endif %}
         </p>
       {% endif %}
       <form method="post" action="{% url 'events:cancel_movie_generation' event.pk %}">

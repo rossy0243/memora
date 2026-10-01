@@ -18,7 +18,7 @@
       <div class="dashboard-command-actions">
         <a class="button button--secondary" href="{% url 'events:detail' event.pk %}">Retour dashboard</a>
         {% if ready_movie %}
-          <a class="button button--primary" href="{{ movie_download_url }}">Télécharger</a>
+          <a class="button button--primary" href="{{ movie_download_url }}" download>Télécharger</a>
         {% endif %}
       </div>
     {% endif %}
@@ -31,11 +31,7 @@
           <video class="movie-ready-player" src="{{ ready_movie.preview_file.url }}" controls playsinline preload="metadata"></video>
         </div>
         <div class="movie-ready-actions">
-          {% if is_public_movie_page %}
-            <a class="button button--primary" href="{{ ready_movie.primary_file.url }}" download>Télécharger le film</a>
-          {% else %}
-            <a class="button button--primary" href="{{ movie_download_url }}">Télécharger le film</a>
-          {% endif %}
+          <a class="button button--primary" href="{{ movie_download_url }}" download>Télécharger le film</a>
           <button class="button button--secondary" type="button" data-share-url="{{ public_movie_url }}" data-share-title="{{ share_title }}">Partager</button>
         </div>
 
@@ -51,9 +47,9 @@
                     <span>Tous les souvenirs retenus{% if ready_movie.full_duration %}, {{ ready_movie.full_duration }}{% endif %}.</span>
                   </div>
                   <div class="quick-actions">
-                    <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.full_file.url }}{% else %}{{ movie_download_url }}?v=full{% endif %}" {% if is_public_movie_page %}download{% endif %}>HD</a>
+                    <a class="button button--secondary button--compact" href="{{ movie_download_url }}?v=full" download>HD</a>
                     {% if ready_movie.full_light_file %}
-                      <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.full_light_file.url }}{% else %}{{ movie_download_url }}?v=full-light{% endif %}" {% if is_public_movie_page %}download{% endif %}>Léger (4G)</a>
+                      <a class="button button--secondary button--compact" href="{{ movie_download_url }}?v=full-light" download>Léger (4G)</a>
                     {% endif %}
                   </div>
                 </article>
@@ -65,9 +61,9 @@
                     <span>Format mobile, pensé pour le partage{% if ready_movie.teaser_duration %}, {{ ready_movie.teaser_duration }}{% endif %}.</span>
                   </div>
                   <div class="quick-actions">
-                    <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_file.url }}{% else %}{{ movie_download_url }}?v=teaser{% endif %}" {% if is_public_movie_page %}download{% endif %}>HD</a>
+                    <a class="button button--secondary button--compact" href="{{ movie_download_url }}?v=teaser" download>HD</a>
                     {% if ready_movie.teaser_light_file %}
-                      <a class="button button--secondary button--compact" href="{% if is_public_movie_page %}{{ ready_movie.teaser_light_file.url }}{% else %}{{ movie_download_url }}?v=teaser-light{% endif %}" {% if is_public_movie_page %}download{% endif %}>Léger (4G)</a>
+                      <a class="button button--secondary button--compact" href="{{ movie_download_url }}?v=teaser-light" download>Léger (4G)</a>
                     {% endif %}
                   </div>
                 </article>

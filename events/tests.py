@@ -1112,6 +1112,80 @@ class EventViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_public_movie_share_links_route_through_the_download_view(self):
+        """Un lien direct vers le stockage avec l'attribut HTML download n'est
+        pas fiable sur mobile (l'attribut est ignore pour un fichier sur un
+        autre domaine, ex. R2) : les liens de la page publique doivent passer
+        par public_movie_download, qui impose un vrai telechargement."""
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Partage Mobile",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            full_file="events/x/movies/full.mp4",
+            teaser_file="events/x/movies/teaser.mp4",
+            teaser_light_file="events/x/movies/teaser-leger.mp4",
+        )
+        download_url = reverse(
+            "public_movie_download", kwargs={"slug": event.slug, "access_key": event.public_access_key}
+        )
+
+        response = self.client.get(
+            reverse("public_movie", kwargs={"slug": event.slug, "access_key": event.public_access_key})
+        )
+
+        self.assertContains(response, download_url)
+        self.assertContains(response, f"{download_url}?v=teaser-light")
+
+    def test_public_movie_download_serves_the_requested_variant(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Telechargement Public",
+            couple_name="Camille & Noe",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        for name, content in (("teaser.mp4", b"teaser-hd-bytes"), ("teaser-leger.mp4", b"teaser-leger-bytes")):
+            path = Path(TEST_MEDIA_ROOT) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.COMPLETED,
+            teaser_file="teaser.mp4",
+            teaser_light_file="teaser-leger.mp4",
+        )
+        download_url = reverse(
+            "public_movie_download", kwargs={"slug": event.slug, "access_key": event.public_access_key}
+        )
+
+        light = self.client.get(download_url, {"v": "teaser-light"})
+
+        self.assertEqual(b"".join(light.streaming_content), b"teaser-leger-bytes")
+        self.assertIn("attachment", light["Content-Disposition"])
+
+    def test_public_movie_download_requires_a_ready_movie(self):
+        event = Event.objects.create(
+            organizer=self.user,
+            title="Reception Film Telechargement Non Pret",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        self.mark_paid(event)
+        GeneratedMovie.objects.create(event=event, status=GeneratedMovie.Status.PROCESSING)
+
+        response = self.client.get(
+            reverse("public_movie_download", kwargs={"slug": event.slug, "access_key": event.public_access_key})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_owner_can_download_ready_movie(self):
         event = Event.objects.create(
             organizer=self.user,

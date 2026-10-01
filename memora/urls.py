@@ -3,7 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from events.views import public_event_preview, public_movie_share
+from events.views import public_event_preview, public_movie_download, public_movie_share
 from guestbook.views import remote_capture as guestbook_remote_capture
 
 
@@ -14,6 +14,11 @@ urlpatterns = [
     path("evenements/", include("events.urls")),
     path("livre-dor/", include("guestbook.urls")),
     path("e/<slug:slug>/<slug:access_key>/film/", public_movie_share, name="public_movie"),
+    path(
+        "e/<slug:slug>/<slug:access_key>/film/telecharger/",
+        public_movie_download,
+        name="public_movie_download",
+    ),
     # Avant le catch-all <access_key> ci-dessous : lien non secret (verrouille par un code a usage
     # unique, voir guestbook.views.remote_capture), donne aux proches qui ne peuvent pas etre presents.
     path("e/<slug:slug>/proches/", guestbook_remote_capture, name="guestbook_remote_capture"),
