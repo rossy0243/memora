@@ -119,7 +119,10 @@ def guest_upload_thanks(request, slug, access_key):
     upcoming = upcoming_event_response(request, event)
     if upcoming:
         return upcoming
-    if not has_guest_access(request, event):
+    # Mode immersion (point 10) : meme exemption que guest_upload_create, sinon
+    # l'agent se retrouve renvoye vers la page publique juste apres son envoi,
+    # faute du code d'acces invite qu'il n'a pas a ressaisir.
+    if not is_assigned_agent(request.user, event) and not has_guest_access(request, event):
         return redirect(event.get_public_url())
     return render(request, "uploads/guest_upload_thanks.html", {"event": event})
 

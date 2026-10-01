@@ -70,7 +70,14 @@ def plan_interest_redirect(request, code):
     if configuration.whatsapp_link:
         return redirect(f"{configuration.whatsapp_link}?{urlencode({'text': message})}")
     if configuration.effective_support_email:
-        return redirect(f"mailto:{configuration.effective_support_email}?{urlencode({'subject': f'Formule {plan.label}'})}")
+        # redirect()/HttpResponseRedirect refusent les schemas hors http(s)/ftp
+        # (DisallowedRedirect) : une redirection vers mailto: doit construire la
+        # reponse 302 a la main, Location comprise.
+        response = HttpResponse(status=302)
+        response["Location"] = (
+            f"mailto:{configuration.effective_support_email}?{urlencode({'subject': f'Formule {plan.label}'})}"
+        )
+        return response
     messages.error(request, "Contactez Memora pour choisir cette formule.")
     return redirect(reverse("core:home"))
 

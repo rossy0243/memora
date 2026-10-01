@@ -1593,6 +1593,12 @@ def _render_movie_with_remotion_pipeline(
             )
 
         try:
+            if "hero" not in settings.MEMORA_REMOTION_DELIVERABLES:
+                # Heros reactive (MEMORA_MOVIE_DELIVERABLES) mais hors perimetre
+                # Remotion (MEMORA_REMOTION_DELIVERABLES) : mode hybride herite,
+                # le heros part sur le pipeline ffmpeg historique (voir plus bas),
+                # les autres livrables tentant quand meme Remotion individuellement.
+                raise RuntimeError("livrable hors perimetre Remotion (config)")
             render_movie_with_remotion(
                 event,
                 uploads,

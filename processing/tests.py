@@ -629,7 +629,7 @@ class MovieGenerationServiceTests(TestCase):
     def test_generate_event_movie_uses_remotion_when_flagged(self, render_remotion, run_ffmpeg, _which):
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -739,7 +739,7 @@ class MovieGenerationServiceTests(TestCase):
         et le teaser sont rendus."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -769,7 +769,7 @@ class MovieGenerationServiceTests(TestCase):
         le contient encore par erreur — seul MEMORA_MOVIE_DELIVERABLES fait foi."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -795,7 +795,7 @@ class MovieGenerationServiceTests(TestCase):
         compris, a chaque nouvelle tentative."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -829,7 +829,7 @@ class MovieGenerationServiceTests(TestCase):
         relancer un rendu de plusieurs heures sur l'integrale."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -860,7 +860,7 @@ class MovieGenerationServiceTests(TestCase):
         apres le teaser HD, meme logique que GuestBookMovie.light_file."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
             return Path(output_path)
 
@@ -885,7 +885,7 @@ class MovieGenerationServiceTests(TestCase):
         faire perdre le teaser HD deja rendu, ni faire echouer le film."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
             return Path(output_path)
 
@@ -907,7 +907,7 @@ class MovieGenerationServiceTests(TestCase):
         teaser (et GuestBookMovie.light_file pour le livre d'or)."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
             return Path(output_path)
 
@@ -932,7 +932,7 @@ class MovieGenerationServiceTests(TestCase):
         faire perdre l'integrale HD deja rendue, ni faire echouer le film."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(f"{deliverable}-bytes".encode())
             return Path(output_path)
 
@@ -954,7 +954,7 @@ class MovieGenerationServiceTests(TestCase):
         generiquement. L'intention transite donc par edit_decision_data."""
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -996,7 +996,7 @@ class MovieGenerationServiceTests(TestCase):
             teaser_file=old_name,
         )
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"new-teaser-bytes")
             return Path(output_path)
 
@@ -1052,7 +1052,7 @@ class MovieGenerationServiceTests(TestCase):
     ):
         self.create_upload("photo.jpg", GuestUpload.MediaType.IMAGE, selected=True)
 
-        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None):
+        def create_remotion_output(event, uploads, soundtrack, output_path, *, deliverable, progress_callback=None, cancel_check=None):
             Path(output_path).write_bytes(b"remotion-bytes")
             return Path(output_path)
 
@@ -3163,7 +3163,7 @@ class RegenerateEventMovieCommandTests(TestCase):
     def test_notify_email_sent_only_on_success(self, process_generated_movie):
         movie = GeneratedMovie.objects.create(event=self.event, status=GeneratedMovie.Status.PENDING)
 
-        def fail(m):
+        def fail(m, only_deliverable=None):
             m.status = GeneratedMovie.Status.FAILED
             m.error_logs = "boom"
             return m
@@ -3177,7 +3177,7 @@ class RegenerateEventMovieCommandTests(TestCase):
         movie.status = GeneratedMovie.Status.PENDING
         movie.save(update_fields=["status"])
 
-        def succeed(m):
+        def succeed(m, only_deliverable=None):
             m.status = GeneratedMovie.Status.COMPLETED
             return m
 

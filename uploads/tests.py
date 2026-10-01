@@ -316,11 +316,14 @@ class GuestUploadViewTests(TestCase):
         self.assertEqual(upload.moderation_status, GuestUpload.ModerationStatus.APPROVED)
         self.assertTrue(upload.session_key)
 
-    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1)
+    @override_settings(MEMORA_SESSION_UPLOAD_LIMIT=1, MEMORA_UPLOAD_COOLDOWN_SECONDS=0)
     def test_assigned_agent_is_exempt_from_the_session_upload_limit(self):
         """Mode immersion (point 10 de la mise a niveau post-mariage) : l'agent
         Memora affecte au livre d'or capture aussi des souvenirs comme un invite,
-        sans la limite de session (ici abaissee a 1 pour le test)."""
+        sans la limite de session (ici abaissee a 1 pour le test). Le delai
+        anti-spam entre deux envois (MEMORA_UPLOAD_COOLDOWN_SECONDS) est une
+        protection distincte, non concernee par ce point : desactive ici pour
+        isoler ce qui est reellement teste (l'exemption de la limite de session)."""
         agent = get_user_model().objects.create_user(username="agent-immersion", password="secret")
         AgentProfile.objects.create(user=agent)
         GuestBookAssignment.objects.create(event=self.event, agent=agent)
