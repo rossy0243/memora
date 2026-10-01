@@ -3717,7 +3717,10 @@ body.capture-review-open {
   }
 
   .dashboard-ops-grid {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    /* auto-fit, pas un partage fixe en 2 colonnes : une seule carte (ex. le
+       panneau "Parametres essentiels" seul sur la fiche evenement) remplit
+       alors toute la largeur au lieu de laisser un grand vide a cote. */
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   }
 
   .media-panels {
