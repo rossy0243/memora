@@ -1817,9 +1817,10 @@ h2 {
 .live-dashboard__quick {
   display: grid;
   gap: 16px;
-  /* Chaque bloc garde sa hauteur naturelle : sans cela, le bloc le plus court s'etirait a la hauteur de
-     l'aperçu du QR (vertical, comme une affiche) et repartissait ses lignes avec de grands vides. */
-  align-items: start;
+  /* "Acces invite" et "Film souvenir" font la meme hauteur (etirement par
+     defaut de la grille) : voir .public-share-panel ci-dessous pour eviter
+     que le bloc le plus court (QR) laisse un vide en bas une fois etire. */
+  align-items: stretch;
 }
 
 .quick-panel {
@@ -1854,7 +1855,10 @@ h2 {
 }
 
 .public-share-panel {
-  align-items: start;
+  /* Centre (plutot que "start") : une fois la carte etiree a la hauteur du
+     panneau "Film souvenir" (souvent plus haut), le contenu reste centre au
+     lieu de rester colle en haut avec un vide en bas. */
+  align-items: center;
 }
 
 .public-share-panel__body {
