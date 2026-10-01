@@ -2824,6 +2824,60 @@ class GuestTestAdminTests(TestCase):
         self.assertTrue(self.event.is_upcoming)
 
 
+class OperationsHealthAdminViewTests(TestCase):
+    """Page admin « Santé de la plateforme » : meme detection que l'alerte
+    automatique (core.operations.collect_issues), consultable a la demande."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(
+            username="admin-health", email="a@b.c", password="secret"
+        )
+        self.organizer = get_user_model().objects.create_user(username="orga-health", password="secret")
+        self.event_type = EventType.objects.get(code="wedding")
+        self.health_url = reverse("admin:events_event_health")
+
+    def test_requires_staff_login(self):
+        response = self.client.get(self.health_url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response["Location"])
+
+    def test_reports_no_issue_when_everything_is_healthy(self):
+        self.client.login(username="admin-health", password="secret")
+
+        response = self.client.get(self.health_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Aucun problème détecté actuellement.")
+
+    def test_lists_a_failed_movie(self):
+        event = Event.objects.create(
+            organizer=self.organizer,
+            title="Mariage Film En Echec",
+            event_type=self.event_type,
+            event_date=date(2026, 7, 8),
+        )
+        GeneratedMovie.objects.create(
+            event=event,
+            status=GeneratedMovie.Status.FAILED,
+            error_logs="FFmpeg introuvable",
+        )
+        self.client.login(username="admin-health", password="secret")
+
+        response = self.client.get(self.health_url)
+
+        self.assertContains(response, "Film en échec")
+        self.assertContains(response, "Mariage Film En Echec")
+
+    def test_changelist_links_to_the_health_page(self):
+        self.client.login(username="admin-health", password="secret")
+
+        response = self.client.get(reverse("admin:events_event_changelist"))
+
+        self.assertContains(response, self.health_url)
+        self.assertContains(response, "Santé de la plateforme")
+
+
 class PurgeEventMediaTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="owner-purge", password="secret")

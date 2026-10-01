@@ -1,0 +1,43 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Accueil</a>
+    &rsaquo; <a href="{% url 'admin:events_event_changelist' %}">Événements</a>
+    &rsaquo; Santé de la plateforme
+  </div>
+{% endblock %}
+
+{% block content %}
+  <p>
+    Tâche des films :
+    {% if film_cron_alive %}
+      <strong style="color: #2e7d32;">OK</strong>
+    {% else %}
+      <strong style="color: #c62828;">SILENCIEUSE</strong>
+    {% endif %}
+    — {{ film_cron_sentence }}.
+  </p>
+
+  {% if issues %}
+    <p>{{ issues|length }} problème{{ issues|pluralize }} détecté{{ issues|pluralize }} en ce moment (même détection que l'alerte automatique e-mail/WhatsApp, toutes les 15 min).</p>
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="text-align: left; border-bottom: 1px solid var(--hairline-color); padding: 8px 4px;">Problème</th>
+          <th style="text-align: left; border-bottom: 1px solid var(--hairline-color); padding: 8px 4px;">Détail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for issue in issues %}
+          <tr>
+            <td style="padding: 8px 4px; border-bottom: 1px solid var(--hairline-color); white-space: nowrap; vertical-align: top;">{{ issue.title }}</td>
+            <td style="padding: 8px 4px; border-bottom: 1px solid var(--hairline-color); white-space: pre-wrap;">{{ issue.detail }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p><strong style="color: #2e7d32;">Aucun problème détecté actuellement.</strong></p>
+  {% endif %}
+{% endblock %}

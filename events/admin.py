@@ -1,11 +1,12 @@
 from django.contrib import admin, messages
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from uploads.models import UploadCategory
 
+from core import operations
 from core.models import SiteConfiguration
 from guestbook.models import GuestBookAssignment
 
@@ -105,6 +106,7 @@ class EventAdmin(admin.ModelAdmin):
         "reopen_events",
     )
     change_form_template = "admin/events/event/change_form.html"
+    change_list_template = "admin/events/event/change_list.html"
     list_display = (
         "title",
         "organizer",
@@ -275,6 +277,11 @@ class EventAdmin(admin.ModelAdmin):
     def get_urls(self):
         custom = [
             path(
+                "sante/",
+                self.admin_site.admin_view(self.operations_health_view),
+                name="events_event_health",
+            ),
+            path(
                 "<path:object_id>/basculer-test-invites/",
                 self.admin_site.admin_view(require_POST(self.toggle_guest_test)),
                 name="events_event_toggle_guest_test",
@@ -286,6 +293,23 @@ class EventAdmin(admin.ModelAdmin):
             ),
         ]
         return custom + super().get_urls()
+
+    def operations_health_view(self, request):
+        """Vue d'ensemble des problemes actuellement detectes par core.operations
+        (film en echec/bloque/en retard, livre d'or en echec/bloque, tache des
+        films silencieuse) : la meme detection que le cron automatique
+        (toutes les 15 min) et les alertes e-mail/WhatsApp, mais consultable a
+        la demande sans attendre une alerte ni ouvrir un journal Render."""
+        issues = operations.collect_issues()
+        film_cron_alive, film_cron_sentence = operations.film_cron_status()
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Santé de la plateforme",
+            "issues": issues,
+            "film_cron_alive": film_cron_alive,
+            "film_cron_sentence": film_cron_sentence,
+        }
+        return render(request, "admin/events/operations_health.html", context)
 
     def toggle_guest_test(self, request, object_id):
         """Bouton de la fiche evenement : ouvre ou referme le test avant la date."""
