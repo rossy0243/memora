@@ -100,16 +100,12 @@
           <p class="plan-card__upsell">Livre d'or vidéo disponible à partir de Grand jour.</p>
         {% endif %}
         {% if plan.tagline %}<p class="plan-card__tagline">{{ plan.tagline }}</p>{% endif %}
-        {% if plan.requires_quote %}
-          {% if memora_whatsapp_link %}
-            <a class="button button--secondary" href="{{ memora_whatsapp_link }}" target="_blank" rel="noopener">Nous contacter</a>
-          {% elif memora_support_email %}
-            <a class="button button--secondary" href="mailto:{{ memora_support_email }}?subject=Devis%20{{ plan.label|urlencode }}">Nous contacter</a>
-          {% else %}
-            <p class="plan-card__tagline">Contactez Memora pour un devis.</p>
-          {% endif %}
+        {% if memora_whatsapp_link %}
+          <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{{ memora_whatsapp_link }}?text=Bonjour%2C%20je%20souhaite%20choisir%20la%20formule%20{{ plan.label|urlencode }}" target="_blank" rel="noopener">Choisir {{ plan.label }}</a>
+        {% elif memora_support_email %}
+          <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="mailto:{{ memora_support_email }}?subject=Formule%20{{ plan.label|urlencode }}">Choisir {{ plan.label }}</a>
         {% else %}
-          <a class="button {% if plan.is_default %}button--primary{% else %}button--secondary{% endif %}" href="{% url 'events:create' %}">Choisir {{ plan.label }}</a>
+          <p class="plan-card__tagline">Contactez Memora pour choisir cette formule.</p>
         {% endif %}
       </article>
       {% endfor %}
