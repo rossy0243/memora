@@ -10,7 +10,7 @@ from core import operations
 from core.models import SiteConfiguration
 from guestbook.models import GuestBookAssignment
 
-from .models import Event, EventPlan, EventType
+from .models import Event, EventPlan, EventType, PlanInterestClick
 from .services import (
     EventResetRefused,
     delete_event,
@@ -67,6 +67,23 @@ class EventPlanAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
+@admin.register(PlanInterestClick)
+class PlanInterestClickAdmin(admin.ModelAdmin):
+    """Volume d'interet par formule (clics « Choisir » avant renvoi vers
+    WhatsApp/e-mail) : seule trace disponible depuis que le choix d'une
+    formule ne passe plus par une inscription en ligne."""
+
+    list_display = ("plan", "created_at")
+    list_filter = ("plan",)
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(EventType)

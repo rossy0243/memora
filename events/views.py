@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -38,7 +39,7 @@ from .access import (
     reset_guest_access_failures,
     upcoming_event_response,
 )
-from .models import Event
+from .models import Event, EventPlan, PlanInterestClick
 from .qr_kit import build_preview_png, build_qr_kit_zip
 from .services import build_hourly_upload_breakdown, build_readiness_checklist
 
@@ -54,6 +55,24 @@ class OrganizerEventMixin(LoginRequiredMixin):
 
     def get_queryset(self):
         return Event.objects.filter(organizer=self.request.user)
+
+
+def plan_interest_redirect(request, code):
+    """Clic « Choisir <formule> » (page d'accueil) : enregistre l'interet pour
+    cette formule avant d'envoyer vers WhatsApp (ou e-mail a defaut). Le choix
+    d'une formule ne passe plus par une inscription en ligne (29/09) — ce clic
+    est la seule trace exploitable du volume d'interet par formule."""
+    plan = get_object_or_404(EventPlan, code=code, is_active=True)
+    PlanInterestClick.objects.create(plan=plan)
+
+    configuration = SiteConfiguration.current()
+    message = f"Bonjour, je souhaite choisir la formule {plan.label}"
+    if configuration.whatsapp_link:
+        return redirect(f"{configuration.whatsapp_link}?{urlencode({'text': message})}")
+    if configuration.effective_support_email:
+        return redirect(f"mailto:{configuration.effective_support_email}?{urlencode({'subject': f'Formule {plan.label}'})}")
+    messages.error(request, "Contactez Memora pour choisir cette formule.")
+    return redirect(reverse("core:home"))
 
 
 class EventCreateView(LoginRequiredMixin, CreateView):

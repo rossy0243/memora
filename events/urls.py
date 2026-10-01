@@ -6,6 +6,7 @@ from . import views
 app_name = "events"
 
 urlpatterns = [
+    path("formules/<slug:code>/choisir/", views.plan_interest_redirect, name="plan_interest"),
     path("nouveau/", views.EventCreateView.as_view(), name="create"),
     path("<int:pk>/", views.EventDetailView.as_view(), name="detail"),
     path("<int:pk>/medias/", views.EventMediaListView.as_view(), name="media_list"),

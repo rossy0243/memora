@@ -187,6 +187,22 @@ class EventPlan(models.Model):
         cache.delete(ACTIVE_PLANS_CACHE_KEY)
 
 
+class PlanInterestClick(models.Model):
+    """Une personne a clique « Choisir » sur une formule (page d'accueil), avant
+    d'etre envoyee vers WhatsApp/e-mail pour finaliser avec Memora. Le choix
+    d'une formule ne passant plus par une inscription en ligne (29/09), ce
+    clic est la seule trace de l'interet pour une formule donnee."""
+
+    plan = models.ForeignKey(EventPlan, on_delete=models.CASCADE, related_name="interest_clicks")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Clic {self.plan.label} - {self.created_at:%d/%m/%Y %H:%M}"
+
+
 class Event(models.Model):
     class PaymentStatus(models.TextChoices):
         PENDING = "pending", "En attente"

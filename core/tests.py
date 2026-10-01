@@ -69,19 +69,14 @@ class HomePageTests(TestCase):
         self.assertContains(response, "n'est jamais bloqué")
         self.assertContains(response, "Le plus choisi")
 
-    def test_home_plan_cta_opens_whatsapp_instead_of_signup(self):
+    def test_home_plan_cta_routes_through_the_tracked_redirect(self):
         """Choisir une formule ne doit plus demander de s'inscrire : le bouton
-        ouvre WhatsApp avec un message mentionnant la formule choisie. La
+        passe par le suivi de clic (events:plan_interest) avant WhatsApp. La
         creation generique d'evenement (hors choix d'une formule nommee) reste,
         elle, inchangee — voir le fallback sans formules actives."""
-        configuration = SiteConfiguration.current()
-        configuration.support_whatsapp = "+243842616570"
-        configuration.save()
-
         response = self.client.get(reverse("core:home"))
 
-        self.assertContains(response, "https://wa.me/243842616570?text=")
-        self.assertContains(response, "la%20formule%20Intime")
+        self.assertContains(response, reverse("events:plan_interest", args=["intime"]))
 
     def test_home_falls_back_to_single_price_without_plans(self):
         EventPlan.objects.update(is_active=False)

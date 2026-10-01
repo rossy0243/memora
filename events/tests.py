@@ -28,7 +28,7 @@ from processing.models import GeneratedMovie
 from uploads.models import GuestUpload, MomentTemplate, UploadCategory
 
 from .brand_assets import ASSETS
-from .models import Event, EventPlan, EventType
+from .models import Event, EventPlan, EventType, PlanInterestClick
 from .services import EventResetRefused, reset_event_content
 from .qr_kit import (
     brand_contact_items,
@@ -127,6 +127,59 @@ class EventPlanTests(TestCase):
             self._upload(event, index)
         message = get_upload_limit_error(event, "session-y", "10.0.0.2")
         self.assertIn("formule", message)
+
+
+class PlanInterestRedirectTests(TestCase):
+    """Clic « Choisir <formule> » (page d'accueil) : log l'interet puis renvoie
+    vers WhatsApp/e-mail, sans passer par l'inscription."""
+
+    def setUp(self):
+        self.plan = EventPlan.objects.create(
+            code="intime-interet", label="Intime", price_amount=4900,
+        )
+
+    def _redirect_url(self, code=None):
+        return reverse("events:plan_interest", args=[code or self.plan.code])
+
+    def test_click_is_logged_and_redirects_to_whatsapp(self):
+        configuration = SiteConfiguration.current()
+        configuration.support_whatsapp = "+243842616570"
+        configuration.save()
+
+        response = self.client.get(self._redirect_url())
+
+        self.assertEqual(PlanInterestClick.objects.filter(plan=self.plan).count(), 1)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith("https://wa.me/243842616570?text="))
+        self.assertIn("Intime", response["Location"])
+
+    def test_falls_back_to_email_without_whatsapp(self):
+        configuration = SiteConfiguration.current()
+        configuration.support_whatsapp = ""
+        configuration.support_email = "contact@memoracd.site"
+        configuration.save()
+
+        response = self.client.get(self._redirect_url())
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith("mailto:contact@memoracd.site?subject="))
+
+    def test_falls_back_to_home_without_any_contact_configured(self):
+        configuration = SiteConfiguration.current()
+        configuration.support_whatsapp = ""
+        configuration.support_email = ""
+        configuration.legal_contact_email = ""
+        configuration.save()
+
+        response = self.client.get(self._redirect_url(), follow=True)
+
+        self.assertRedirects(response, reverse("core:home"))
+        self.assertContains(response, "Contactez Memora pour choisir cette formule.")
+
+    def test_unknown_plan_code_404s(self):
+        response = self.client.get(self._redirect_url(code="formule-inconnue"))
+
+        self.assertEqual(response.status_code, 404)
 
 
 class EventModelTests(TestCase):
